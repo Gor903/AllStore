@@ -5,6 +5,8 @@ repos:
     rev: v6.0.0
     hooks:
       - id: trailing-whitespace
+        # два пробела в конце строки — это перенос строки в markdown, не мусор
+        args: [--markdown-linebreak-ext=md]
       - id: end-of-file-fixer
       - id: check-yaml
       - id: check-merge-conflict
