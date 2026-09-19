@@ -43,6 +43,11 @@ def test_rehash_is_requested_for_weaker_parameters() -> None:
     assert password_needs_rehash(hash_password("s3cret-password")) is False
 
 
+def test_rehash_is_requested_for_a_malformed_hash() -> None:
+    """A hash the library cannot parse must be replaced, not trusted."""
+    assert password_needs_rehash("not-a-hash") is True
+
+
 def test_generated_tokens_are_unique() -> None:
     tokens = {generate_token() for _ in range(100)}
 
