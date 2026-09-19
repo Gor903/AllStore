@@ -1,0 +1,23 @@
+@import "tailwindcss";
+
+/* Design tokens — the shared UI skeleton every storefront inherits. */
+@theme {
+  --color-brand: #2f6fed;
+  --color-brand-dark: #1e4fb8;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f5f6f8;
+  --color-ink: #12151c;
+  --color-ink-muted: #5b6270;
+  --color-success: #128a5b;
+  --color-danger: #c0392b;
+  --radius-card: 0.75rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  @theme {
+    --color-surface: #0e1116;
+    --color-surface-muted: #161b22;
+    --color-ink: #f2f4f8;
+    --color-ink-muted: #9aa3b2;
+  }
+}
