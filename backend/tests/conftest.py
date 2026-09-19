@@ -9,7 +9,7 @@ from sqlalchemy.pool import NullPool
 # Defaults let the suite run without a shell setup; CI and compose override them via env.
 _DEFAULTS = {
     "APP_ENV": "local",
-    "SECRET_KEY": "test-secret-not-for-real-use",
+    "SECRET_KEY": "test-secret-not-for-real-use-32-chars-min",
     "DATABASE_URL": "postgresql+asyncpg://allstore:allstore@localhost:5433/allstore",
     "S3_ENDPOINT_URL": "http://localhost:9000",
     "S3_ACCESS_KEY": "minioadmin",
@@ -29,6 +29,24 @@ async def client() -> AsyncIterator[AsyncClient]:
     from app.main import create_app
 
     app = create_app()
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as async_client:
+        yield async_client
+
+
+@pytest.fixture
+async def api_client(session: "AsyncSession") -> AsyncIterator[AsyncClient]:
+    """Client whose requests run inside the test transaction, so endpoints leave no rows behind."""
+    from app.db.session import get_session
+    from app.main import create_app
+
+    app = create_app()
+
+    async def _use_test_session() -> AsyncSession:
+        return session
+
+    app.dependency_overrides[get_session] = _use_test_session
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as async_client:

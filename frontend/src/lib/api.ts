@@ -1,11 +1,11 @@
+import type { components } from "@/lib/api-types";
 import { env } from "@/lib/env";
 
-export type BackendHealth = {
-  status: "ok";
-  env: string;
-};
+// Types come from the backend OpenAPI schema, see docs/adr/0004-api-types-generation.md
+export type BackendHealth = components["schemas"]["HealthResponse"];
+export type User = components["schemas"]["UserRead"];
+export type Business = components["schemas"]["BusinessRead"];
 
-/** Thin wrapper over fetch; generated OpenAPI types replace the hand-written ones later. */
 async function apiGet<T>(path: string): Promise<T> {
   const response = await fetch(`${env.apiUrl}${path}`, { cache: "no-store" });
   if (!response.ok) {

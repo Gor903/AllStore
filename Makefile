@@ -1,4 +1,4 @@
-.PHONY: up down logs ps rebuild migrate revision backend-check frontend-check check
+.PHONY: up down logs ps rebuild migrate revision api-types backend-check frontend-check check
 
 up: ## поднять весь локальный стек
 	docker compose up --build -d
@@ -28,3 +28,6 @@ frontend-check:
 	cd frontend && npm run lint && npm run format:check && npm run typecheck && npm test
 
 check: backend-check frontend-check
+
+api-types:
+	./scripts/gen-api-types.sh
