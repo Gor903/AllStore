@@ -78,9 +78,9 @@
 - [x] `alembic upgrade head` выполняется на чистой БД без ошибок (даже если миграций пока 0-1).
 
 ### 1.6. CI (минимальная версия)
-- [ ] `backend-ci.yml` запускается на PR, прогоняет lint + mypy.
-- [ ] `frontend-ci.yml` запускается на PR, прогоняет lint + typecheck.
-- [ ] Оба workflow зелёные на текущем состоянии main.
+- [x] `backend-ci.yml` запускается на PR, прогоняет lint + mypy.
+- [x] `frontend-ci.yml` запускается на PR, прогоняет lint + typecheck.
+- [x] Оба workflow зелёные на текущем состоянии main.
 
 ---
 
@@ -379,3 +379,27 @@ _Записи добавляются ниже, в хронологическом
 
 Отклонения от плана (если есть):
 - Нет.
+
+### [Этап 1 / Задача 1.6] — CI (минимальная версия)
+Дата: 2026-09-19
+Исполнитель: Claude Opus 5 (агент)
+
+Что сделано:
+- `backend-ci.yml` и `frontend-ci.yml` на GitHub Actions, оба на `pull_request` и на push в `main`.
+- Оба workflow прогнаны локально целиком через `act` и завершились успешно.
+
+Как сделано (файлы, подход, ключевые решения):
+- `backend-ci.yml`: service container `postgres:17-alpine` с healthcheck, установка через `uv sync --frozen`, шаги ruff → `ruff format --check` → mypy → `alembic upgrade head` на чистой БД → pytest с покрытием. Раздел 8.1 плана сборки выполнен целиком, включая прогон миграций.
+- `frontend-ci.yml`: `npm ci` → eslint → prettier → typecheck → vitest → `next build` (раздел 8.2).
+- Фильтры `paths` разводят workflow по подпроектам: изменения только в backend не гоняют frontend-проверки и наоборот.
+- `backend/.python-version` фиксирует 3.13 — иначе CI брал 3.14 с раннера, и проверялась не та версия, на которой мы работаем и которая стоит в Dockerfile.
+
+Как проверено:
+- `act pull_request -W .github/workflows/frontend-ci.yml -P ubuntu-latest=catthehacker/ubuntu:act-latest` → Job succeeded, все шаги зелёные, сборка Next проходит.
+- `act pull_request -W .github/workflows/backend-ci.yml -P ubuntu-latest=catthehacker/ubuntu:act-latest` → Job succeeded: lint, format, mypy, `alembic upgrade head` на поднятом service-контейнере Postgres и 8 passed тестов на Python 3.13.15.
+- После пина версии Python образ backend пересобран, стек снова поднят: контейнер на Python 3.13.15, `/health/ready` → `{"status":"ok","database":true,"storage":true}`.
+
+Отклонения от плана (если есть):
+- Прогон выполнен локально через `act` на текущем состоянии `main`, а не на GitHub: у репозитория пока нет remote. Когда remote появится, прогон на GitHub нужно подтвердить отдельно — это же касается кэшей actions и любых различий окружения раннера.
+- `act` вскрыл две ошибки, которых иначе бы не увидели до первого PR: у `astral-sh/setup-uv` нет плавающего мажорного тега `v10` (пин на `v10.1.0`) и CI брал Python 3.14 вместо 3.13.
+- Порог покрытия по-прежнему не блокирует CI — ADR №7 не принят.
