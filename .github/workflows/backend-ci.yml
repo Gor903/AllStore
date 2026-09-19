@@ -1,0 +1,70 @@
+name: backend-ci
+
+on:
+  pull_request:
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-ci.yml"
+
+defaults:
+  run:
+    working-directory: backend
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: allstore
+          POSTGRES_PASSWORD: allstore
+          POSTGRES_DB: allstore_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U allstore -d allstore_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      APP_ENV: local
+      SECRET_KEY: ci-secret
+      DATABASE_URL: postgresql+asyncpg://allstore:allstore@localhost:5432/allstore_test
+      S3_ENDPOINT_URL: http://localhost:9000
+      S3_ACCESS_KEY: ci
+      S3_SECRET_KEY: ci
+      S3_BUCKET: allstore-ci
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Format check
+        run: uv run ruff format --check .
+
+      - name: Typecheck
+        run: uv run mypy
+
+      - name: Apply migrations on a clean database
+        run: uv run alembic upgrade head
+
+      - name: Tests
+        run: uv run pytest --cov --cov-report=term-missing
