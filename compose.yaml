@@ -1,0 +1,5 @@
+name: allstore
+
+# Root entry point so `docker compose up` works from the repository root.
+include:
+  - path: infra/docker-compose.dev.yml
