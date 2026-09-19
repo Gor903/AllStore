@@ -1,6 +1,8 @@
 name: frontend-ci
 
 on:
+  # ручной запуск: фильтры paths молчат, когда в пуше нет подходящих изменений
+  workflow_dispatch:
   pull_request:
     paths:
       - "frontend/**"
