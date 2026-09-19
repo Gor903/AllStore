@@ -11,4 +11,10 @@ export const env = {
     process.env["NEXT_PUBLIC_API_URL"] ??
     "http://localhost:8080",
   baseDomain: process.env["NEXT_PUBLIC_BASE_DOMAIN"] ?? "allstore.am",
+  // must match access_cookie_name / csrf_cookie_name in backend settings
+  accessCookie: process.env["NEXT_PUBLIC_ACCESS_COOKIE"] ?? "allstore_access",
+  csrfCookie: process.env["NEXT_PUBLIC_CSRF_COOKIE"] ?? "allstore_csrf",
+  csrfHeader: "X-CSRF-Token",
 } as const;
+
+export const API_PREFIX = "/api/v1";
