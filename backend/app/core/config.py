@@ -27,6 +27,11 @@ class Settings(BaseSettings):
     db_echo: bool = False
     db_pool_size: int = 5
 
+    # argon2id parameters follow the OWASP recommendation, see docs/adr/0002-password-storage.md
+    argon2_time_cost: int = 2
+    argon2_memory_cost: int = 19456
+    argon2_parallelism: int = 1
+
     s3_endpoint_url: str
     s3_region: str = "us-east-1"
     s3_access_key: str

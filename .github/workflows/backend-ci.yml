@@ -46,7 +46,10 @@ jobs:
       S3_BUCKET: allstore-ci
 
     steps:
+      # fetch-depth: 0 — diff-cover сравнивает покрытие с базовой веткой
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       # setup-uv не держит плавающий мажорный тег — пин на точную версию
       - uses: astral-sh/setup-uv@v10.1.0
@@ -70,4 +73,11 @@ jobs:
         run: uv run alembic upgrade head
 
       - name: Tests
-        run: uv run pytest --cov --cov-report=term-missing
+        run: uv run pytest --cov --cov-report=term-missing --cov-report=xml
+
+      - name: Coverage on changed lines
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+        run: |
+          git fetch --no-tags origin "${BASE_REF}:refs/remotes/origin/${BASE_REF}" || true
+          uv run diff-cover coverage.xml --compare-branch="origin/${BASE_REF}" --fail-under=80
