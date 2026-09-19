@@ -86,4 +86,7 @@ markers = [
 
 [tool.coverage.run]
 source = ["app"]
+# SQLAlchemy async runs ORM internals in a greenlet; without this coverage loses the
+# trace function on the first switch and reports executed request code as uncovered
+concurrency = ["greenlet", "thread"]
 omit = ["app/main.py"]

@@ -1,6 +1,8 @@
+from datetime import UTC, datetime, timedelta
+
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -112,6 +114,56 @@ async def test_refresh_after_logout_is_refused(api_client: AsyncClient) -> None:
     await api_client.post("/api/v1/auth/logout", headers=headers)
     api_client.cookies.set(settings.refresh_cookie_name, refresh_cookie)
     api_client.cookies.set(settings.csrf_cookie_name, headers[settings.csrf_header_name])
+
+    response = await api_client.post("/api/v1/auth/refresh", headers=headers)
+
+    assert response.status_code == 401
+
+
+async def test_refresh_without_a_cookie_is_refused(api_client: AsyncClient) -> None:
+    settings = get_settings()
+    await register_buyer(api_client)
+    headers = csrf_headers(api_client)
+    api_client.cookies.delete(settings.refresh_cookie_name)
+
+    response = await api_client.post("/api/v1/auth/refresh", headers=headers)
+
+    assert response.status_code == 401
+
+
+async def test_refresh_with_an_unknown_token_is_refused(api_client: AsyncClient) -> None:
+    settings = get_settings()
+    await register_buyer(api_client)
+    api_client.cookies.set(settings.refresh_cookie_name, "token-that-was-never-issued")
+
+    response = await api_client.post("/api/v1/auth/refresh", headers=csrf_headers(api_client))
+
+    assert response.status_code == 401
+
+
+async def test_expired_refresh_token_is_refused(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    await register_buyer(api_client)
+    stored = (await session.execute(select(RefreshToken))).scalar_one()
+    stored.expires_at = datetime.now(UTC) - timedelta(seconds=1)
+    await session.flush()
+
+    response = await api_client.post("/api/v1/auth/refresh", headers=csrf_headers(api_client))
+
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "invalid_refresh_token"
+
+
+async def test_refresh_is_refused_after_the_account_is_deleted(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    """The token outlives the row only in this window; the service must not hand out a session."""
+    await register_buyer(api_client)
+    headers = csrf_headers(api_client)
+    stored = (await session.execute(select(RefreshToken))).scalar_one()
+    await session.execute(text("DELETE FROM users WHERE id = :id"), {"id": stored.user_id})
+    await session.flush()
 
     response = await api_client.post("/api/v1/auth/refresh", headers=headers)
 
