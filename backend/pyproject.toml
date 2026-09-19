@@ -10,9 +10,10 @@ dependencies = [
     "sqlalchemy[asyncio]>=2.0.36",
     "asyncpg>=0.30",
     "alembic>=1.14",
-    "pydantic>=2.10",
+    "pydantic[email]>=2.10",
     "pydantic-settings>=2.7",
     "boto3>=1.35",
+    "pyjwt>=2.10",
 ]
 
 [dependency-groups]
@@ -50,10 +51,16 @@ select = [
     "T20",  # no print
     "RUF",
 ]
-ignore = ["ANN401"]
+ignore = [
+    "ANN401",
+    # RUF001 targets strings: user-facing text is Russian by product decision.
+    # RUF002/RUF003 stay on — they keep docstrings and comments in English.
+    "RUF001",
+]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101"]
+# tests use literal credentials on purpose; S101 is the assert statement itself
+"tests/**" = ["S101", "S105", "S106", "S107"]
 "alembic/versions/*" = ["ANN", "D"]
 
 [tool.ruff.lint.isort]
@@ -64,7 +71,7 @@ python_version = "3.13"
 strict = true
 warn_unreachable = true
 plugins = ["pydantic.mypy"]
-files = ["app", "tests", "alembic"]
+files = ["app", "tests", "alembic", "scripts"]
 
 [[tool.mypy.overrides]]
 module = "alembic.*"

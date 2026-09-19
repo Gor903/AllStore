@@ -24,3 +24,11 @@ def test_secrets_are_not_exposed_in_repr() -> None:
     settings = Settings(_env_file=None)
 
     assert "test-secret-not-for-real-use" not in repr(settings)
+
+
+def test_short_secret_key_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    """HS256 signs with this key — a short one weakens every access token."""
+    monkeypatch.setenv("SECRET_KEY", "too-short")
+
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)

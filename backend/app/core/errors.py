@@ -28,6 +28,11 @@ class NotFoundError(AppError):
     status_code = status.HTTP_404_NOT_FOUND
 
 
+class AuthenticationError(AppError):
+    code = "authentication_failed"
+    status_code = status.HTTP_401_UNAUTHORIZED
+
+
 class PermissionDeniedError(AppError):
     code = "permission_denied"
     status_code = status.HTTP_403_FORBIDDEN

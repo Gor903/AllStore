@@ -6,11 +6,13 @@ on:
   pull_request:
     paths:
       - "backend/**"
+      - "scripts/gen-api-types.sh"
       - ".github/workflows/backend-ci.yml"
   push:
     branches: [main]
     paths:
       - "backend/**"
+      - "scripts/gen-api-types.sh"
       - ".github/workflows/backend-ci.yml"
 
 defaults:
@@ -38,7 +40,7 @@ jobs:
 
     env:
       APP_ENV: local
-      SECRET_KEY: ci-secret
+      SECRET_KEY: ci-secret-value-at-least-32-characters
       DATABASE_URL: postgresql+asyncpg://allstore:allstore@localhost:5432/allstore_test
       S3_ENDPOINT_URL: http://localhost:9000
       S3_ACCESS_KEY: ci
@@ -74,6 +76,13 @@ jobs:
 
       - name: Tests
         run: uv run pytest --cov --cov-report=term-missing --cov-report=xml
+
+      # схема меняется вместе с backend-кодом, поэтому падает тот PR, который её сменил
+      - name: Frontend API types are in sync
+        working-directory: ${{ github.workspace }}
+        run: |
+          ./scripts/gen-api-types.sh
+          git diff --exit-code -- frontend/src/lib/api-types.ts
 
       - name: Coverage on changed lines
         env:
