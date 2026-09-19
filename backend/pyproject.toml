@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "AllStore.am backend API"
 requires-python = ">=3.13"
 dependencies = [
+    "argon2-cffi>=23.1",
     "fastapi>=0.115",
     "uvicorn[standard]>=0.34",
     "sqlalchemy[asyncio]>=2.0.36",
@@ -16,6 +17,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "diff-cover>=9.2",
     "ruff>=0.9",
     "mypy>=1.14",
     "pytest>=8.3",
