@@ -11,8 +11,10 @@ from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 if TYPE_CHECKING:
     from app.models.business import Business
 
+# the pattern below encodes the same bounds — keep the three in step
+SUBDOMAIN_MIN_LENGTH = 3
 SUBDOMAIN_MAX_LENGTH = 63
-# a DNS label: lowercase, no leading or trailing hyphen, 3 to 63 characters
+# a DNS label: lowercase, no leading or trailing hyphen
 SUBDOMAIN_PATTERN = r"^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$"
 
 

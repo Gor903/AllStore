@@ -6,6 +6,38 @@ from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 MIN_SECRET_KEY_LENGTH = 32
 
+# names that must keep resolving to us, not to a storefront: infrastructure hosts, our own
+# routes, and the addresses mail and TLS tooling expects. Override per environment.
+DEFAULT_RESERVED_SUBDOMAINS = (
+    "admin",
+    "api",
+    "app",
+    "assets",
+    "auth",
+    "blog",
+    "cdn",
+    "dashboard",
+    "dev",
+    "docs",
+    "ftp",
+    "help",
+    "imap",
+    "internal",
+    "mail",
+    "mx",
+    "ns1",
+    "ns2",
+    "shop",
+    "smtp",
+    "staging",
+    "static",
+    "status",
+    "store",
+    "support",
+    "test",
+    "www",
+)
+
 
 class Settings(BaseSettings):
     """Environment configuration, validated at import time — see infra/env/backend.env.example."""
@@ -24,6 +56,9 @@ class Settings(BaseSettings):
     base_domain: str = "allstore.am"
     # NoDecode: keep the raw env string so the validator below can accept a comma-separated list
     cors_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
+    reserved_subdomains: Annotated[frozenset[str], NoDecode] = frozenset(
+        DEFAULT_RESERVED_SUBDOMAINS
+    )
 
     database_url: PostgresDsn
     db_echo: bool = False
@@ -64,6 +99,16 @@ class Settings(BaseSettings):
     def _split_origins(cls, value: object) -> object:
         if isinstance(value, str) and not value.startswith("["):
             return [item.strip() for item in value.split(",") if item.strip()]
+        return value
+
+    @field_validator("reserved_subdomains", mode="before")
+    @classmethod
+    def _split_reserved_subdomains(cls, value: object) -> object:
+        # compared against an already lowercased subdomain, so the env value is lowered too
+        if isinstance(value, str):
+            names = {item.strip().lower() for item in value.split(",") if item.strip()}
+            # an unset variable reaches us as an empty string — it must not free every name
+            return names or frozenset(DEFAULT_RESERVED_SUBDOMAINS)
         return value
 
     @property

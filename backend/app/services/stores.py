@@ -1,0 +1,62 @@
+from typing import Any
+
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.config import Settings
+from app.core.errors import ConflictError, PermissionDeniedError, ValidationFailedError
+from app.models import Business, BusinessStatus, Store
+from app.repositories import stores
+
+SUBDOMAIN_INDEX = "ix_stores_subdomain"
+
+
+class SubdomainReservedError(ValidationFailedError):
+    code = "subdomain_reserved"
+
+
+class SubdomainTakenError(ConflictError):
+    code = "subdomain_taken"
+
+
+class StoreAlreadyExistsError(ConflictError):
+    code = "store_already_exists"
+
+
+class BusinessNotEligibleError(PermissionDeniedError):
+    code = "business_not_eligible"
+
+
+def _on_subdomain(message: str) -> list[dict[str, Any]]:
+    """The shape FastAPI uses for validation errors, so the frontend files it under the field."""
+    return [{"loc": ["body", "subdomain"], "msg": message}]
+
+
+async def create_store(
+    session: AsyncSession, settings: Settings, business: Business, subdomain: str
+) -> Store:
+    if business.status in (BusinessStatus.SUSPENDED, BusinessStatus.BLOCKED):
+        raise BusinessNotEligibleError("Бизнес заблокирован, витрину создать нельзя")
+    if await stores.get_by_business(session, business.id) is not None:
+        raise StoreAlreadyExistsError("У этого бизнеса уже есть витрина")
+    if subdomain in settings.reserved_subdomains:
+        raise SubdomainReservedError(
+            "Этот адрес зарезервирован, выберите другой",
+            details=_on_subdomain("Адрес зарезервирован"),
+        )
+    if await stores.get_by_subdomain(session, subdomain) is not None:
+        raise _subdomain_taken()
+
+    try:
+        return await stores.add(session, Store(business_id=business.id, subdomain=subdomain))
+    except IntegrityError as exc:
+        # two sellers can clear the check above in the same moment; the unique index settles it
+        if SUBDOMAIN_INDEX not in str(exc.orig):
+            raise
+        raise _subdomain_taken() from exc
+
+
+def _subdomain_taken() -> SubdomainTakenError:
+    return SubdomainTakenError(
+        "Этот адрес уже занят, выберите другой", details=_on_subdomain("Адрес занят")
+    )
