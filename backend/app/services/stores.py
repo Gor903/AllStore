@@ -4,8 +4,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
-from app.core.errors import ConflictError, PermissionDeniedError, ValidationFailedError
-from app.models import Business, BusinessStatus, Store
+from app.core.errors import (
+    ConflictError,
+    NotFoundError,
+    PermissionDeniedError,
+    ValidationFailedError,
+)
+from app.models import Business, BusinessStatus, Store, StoreStatus
 from app.repositories import stores
 
 SUBDOMAIN_INDEX = "ix_stores_subdomain"
@@ -54,6 +59,23 @@ async def create_store(
         if SUBDOMAIN_INDEX not in str(exc.orig):
             raise
         raise _subdomain_taken() from exc
+
+
+def is_public(store: Store) -> bool:
+    """A storefront goes public only once a moderator has approved the business behind it.
+
+    The DRAFT → ACTIVE transition belongs to moderation (этап 5); until then a created
+    storefront resolves to nothing, which is what PR1 reserved the draft status for.
+    """
+    return store.status is StoreStatus.ACTIVE and store.business.status is BusinessStatus.ACTIVE
+
+
+async def get_public_store(session: AsyncSession, subdomain: str) -> Store:
+    """Missing and not-yet-public storefronts answer the same: 404 tells the visitor nothing."""
+    store = await stores.get_with_business_by_subdomain(session, subdomain)
+    if store is None or not is_public(store):
+        raise NotFoundError("Магазин не найден")
+    return store
 
 
 def _subdomain_taken() -> SubdomainTakenError:

@@ -140,6 +140,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/storefront": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Storefront By Host
+         * @description How a browser reaches a storefront: the subdomain it typed is the Host header.
+         */
+        get: operations["read_storefront_by_host_api_v1_storefront_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/storefront/{subdomain}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Storefront
+         * @description The same data addressed explicitly, for callers that cannot set a Host header.
+         *
+         *     Server-side rendering is one: Node's fetch replaces a Host header with the authority
+         *     of the URL it dials, and the frontend dials the backend over the internal network.
+         */
+        get: operations["read_storefront_api_v1_storefront__subdomain__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/stores": {
         parameters: {
             query?: never;
@@ -420,6 +463,29 @@ export interface components {
          * @enum {string}
          */
         StoreStatus: "draft" | "active" | "suspended" | "blocked";
+        /**
+         * StorefrontRead
+         * @description What a visitor may see. Nothing internal is listed here — not the legal name, not
+         *     the identifiers, not the moderation status — so the public page cannot leak them.
+         */
+        StorefrontRead: {
+            /** Banner Url */
+            banner_url: string | null;
+            /** Description */
+            description: string | null;
+            /** Display Name */
+            display_name: string;
+            /** Logo Url */
+            logo_url: string | null;
+            /** Primary Color */
+            primary_color: string | null;
+            /** Secondary Color */
+            secondary_color: string | null;
+            /** Subdomain */
+            subdomain: string;
+            /** Theme Id */
+            theme_id: string;
+        };
         /** UserRead */
         UserRead: {
             /**
@@ -694,6 +760,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SellerRegisterResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_storefront_by_host_api_v1_storefront_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorefrontRead"];
+                };
+            };
+        };
+    };
+    read_storefront_api_v1_storefront__subdomain__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subdomain: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorefrontRead"];
                 };
             };
             /** @description Validation Error */
