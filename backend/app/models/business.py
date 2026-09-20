@@ -9,6 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
+    from app.models.product import Product
     from app.models.store import Store
     from app.models.user import User
 
@@ -40,5 +41,8 @@ class Business(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     owner: Mapped["User"] = relationship(back_populates="business")
     store: Mapped["Store | None"] = relationship(
+        back_populates="business", cascade="all, delete-orphan"
+    )
+    products: Mapped[list["Product"]] = relationship(
         back_populates="business", cascade="all, delete-orphan"
     )
