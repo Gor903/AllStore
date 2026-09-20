@@ -1,4 +1,5 @@
 import uuid
+from decimal import Decimal
 
 import pytest
 from sqlalchemy import select, text
@@ -8,6 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import (
     Business,
     BusinessStatus,
+    Category,
+    CategoryStatus,
+    ModerationStatus,
+    Product,
+    ProductAvailability,
+    ProductImage,
+    PublicationStatus,
     RefreshToken,
     Store,
     StoreStatus,
@@ -42,6 +50,28 @@ async def make_business(session: AsyncSession, **overrides: object) -> Business:
     session.add(business)
     await session.flush()
     return business
+
+
+async def make_category(session: AsyncSession, **overrides: object) -> Category:
+    data: dict[str, object] = {"name": "Тест", "slug": f"test-{uuid.uuid4().hex}"}
+    data.update(overrides)
+    category = Category(**data)
+    session.add(category)
+    await session.flush()
+    return category
+
+
+async def make_product(session: AsyncSession, **overrides: object) -> Product:
+    if "business_id" not in overrides:
+        overrides["business_id"] = (await make_business(session)).id
+    if "category_id" not in overrides:
+        overrides["category_id"] = (await make_category(session)).id
+    data: dict[str, object] = {"name": "Кружка", "price": Decimal("1500.00")}
+    data.update(overrides)
+    product = Product(**data)
+    session.add(product)
+    await session.flush()
+    return product
 
 
 async def test_new_user_gets_buyer_role_and_active_status(session: AsyncSession) -> None:
@@ -220,3 +250,173 @@ async def test_deleting_a_user_removes_business_and_tokens(session: AsyncSession
     tokens = await session.execute(select(RefreshToken).where(RefreshToken.user_id == user.id))
     assert businesses.scalars().all() == []
     assert tokens.scalars().all() == []
+
+
+async def test_the_migration_seeds_the_starting_catalogue(session: AsyncSession) -> None:
+    """The seed rows are committed by `alembic upgrade`, so a fresh database has categories."""
+    top_level = await session.execute(select(Category).where(Category.parent_id.is_(None)))
+    electronics = await session.execute(select(Category).where(Category.slug == "electronics"))
+
+    parent = electronics.scalar_one()
+    children = await session.execute(select(Category).where(Category.parent_id == parent.id))
+    assert len(top_level.scalars().all()) >= 8
+    assert parent.status is CategoryStatus.ACTIVE
+    assert "smartphones" in {child.slug for child in children.scalars()}
+
+
+async def test_duplicate_category_slug_is_rejected(session: AsyncSession) -> None:
+    await make_category(session, slug="cups")
+
+    session.add(Category(name="Другая", slug="cups"))
+
+    with pytest.raises(IntegrityError):
+        await session.flush()
+
+
+@pytest.mark.parametrize(
+    "slug",
+    [
+        "Cups",  # uppercase
+        "my cups",  # space
+        "my_cups",  # underscore
+        "-cups",  # leading hyphen
+        "cups-",  # trailing hyphen
+        "my--cups",  # doubled hyphen
+        "",  # empty
+    ],
+)
+async def test_malformed_category_slug_is_rejected_by_the_database(
+    session: AsyncSession, slug: str
+) -> None:
+    session.add(Category(name="Тест", slug=slug))
+
+    with pytest.raises(IntegrityError):
+        await session.flush()
+
+
+async def test_deleting_a_parent_category_removes_its_children(session: AsyncSession) -> None:
+    parent = await make_category(session)
+    child = await make_category(session, parent_id=parent.id)
+
+    await session.execute(text("DELETE FROM categories WHERE id = :id"), {"id": parent.id})
+
+    remaining = await session.execute(select(Category).where(Category.id == child.id))
+    assert remaining.scalars().all() == []
+
+
+async def test_new_product_waits_for_moderation_and_stays_unpublished(
+    session: AsyncSession,
+) -> None:
+    product = await make_product(session)
+
+    assert product.moderation_status is ModerationStatus.PENDING
+    assert product.publication_status is PublicationStatus.DRAFT
+    assert product.availability_status is ProductAvailability.IN_STOCK
+    assert product.currency == "AMD"
+    assert product.stock_quantity == 0
+
+
+async def test_product_enums_are_stored_as_lowercase_values(session: AsyncSession) -> None:
+    product = await make_product(session, moderation_status=ModerationStatus.APPROVED)
+
+    stored = await session.execute(
+        text(
+            "SELECT moderation_status::text, publication_status::text FROM products WHERE id = :id"
+        ),
+        {"id": product.id},
+    )
+
+    assert stored.one() == ("approved", "draft")
+
+
+async def test_price_keeps_its_minor_units(session: AsyncSession) -> None:
+    """Numeric, not float: 19999.99 must come back as it went in, to the last lepton."""
+    product = await make_product(session, price=Decimal("19999.99"))
+
+    stored = await session.execute(select(Product.price).where(Product.id == product.id))
+
+    assert stored.scalar_one() == Decimal("19999.99")
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("price", Decimal("-1.00")),  # a negative price
+        ("stock_quantity", -1),  # a negative stock
+        ("currency", "amd"),  # not an ISO 4217 code
+        ("currency", "DRAM"),  # longer than three characters
+    ],
+)
+async def test_malformed_product_values_are_rejected_by_the_database(
+    session: AsyncSession, field: str, value: object
+) -> None:
+    business = await make_business(session)
+    category = await make_category(session)
+
+    session.add(
+        Product(
+            business_id=business.id,
+            category_id=category.id,
+            name="Кружка",
+            **{"price": Decimal("1500.00"), field: value},
+        )
+    )
+
+    with pytest.raises(DBAPIError):
+        await session.flush()
+
+
+async def test_a_category_in_use_cannot_be_deleted(session: AsyncSession) -> None:
+    """RESTRICT, not CASCADE: removing a category must never take products down with it."""
+    category = await make_category(session)
+    await make_product(session, category_id=category.id)
+
+    with pytest.raises(IntegrityError):
+        await session.execute(text("DELETE FROM categories WHERE id = :id"), {"id": category.id})
+
+
+async def test_deleting_a_business_removes_its_products(session: AsyncSession) -> None:
+    business = await make_business(session)
+    product = await make_product(session, business_id=business.id)
+
+    await session.execute(text("DELETE FROM businesses WHERE id = :id"), {"id": business.id})
+
+    remaining = await session.execute(select(Product).where(Product.id == product.id))
+    assert remaining.scalars().all() == []
+
+
+async def test_deleting_a_product_removes_its_images(session: AsyncSession) -> None:
+    product = await make_product(session)
+    session.add(ProductImage(product_id=product.id, image_url="https://cdn/1.jpg"))
+    await session.flush()
+
+    await session.execute(text("DELETE FROM products WHERE id = :id"), {"id": product.id})
+
+    images = await session.execute(
+        select(ProductImage).where(ProductImage.product_id == product.id)
+    )
+    assert images.scalars().all() == []
+
+
+async def test_images_are_read_back_in_gallery_order(session: AsyncSession) -> None:
+    product = await make_product(session)
+    session.add_all(
+        [
+            ProductImage(product_id=product.id, image_url="https://cdn/second.jpg", sort_order=2),
+            ProductImage(product_id=product.id, image_url="https://cdn/cover.jpg", sort_order=0),
+        ]
+    )
+    await session.flush()
+
+    await session.refresh(product, attribute_names=["images"])
+
+    assert [image.sort_order for image in product.images] == [0, 2]
+
+
+async def test_negative_sort_order_is_rejected(session: AsyncSession) -> None:
+    product = await make_product(session)
+
+    session.add(ProductImage(product_id=product.id, image_url="https://cdn/1.jpg", sort_order=-1))
+
+    with pytest.raises(IntegrityError):
+        await session.flush()
