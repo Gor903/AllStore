@@ -6,8 +6,11 @@ import { notFound } from "next/navigation";
 import { SiteHeader } from "@/components/SiteHeader";
 import { fetchCatalogProduct } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
+import { productUrl } from "@/lib/urls";
 
 export const dynamic = "force-dynamic";
+
+const DESCRIPTION_LENGTH = 160;
 
 const AVAILABILITY: Record<string, string> = {
   in_stock: "В наличии",
@@ -18,14 +21,30 @@ export async function generateMetadata({ params }: PageProps<"/p/[productId]">):
   const { productId } = await params;
   const product = await fetchCatalogProduct(productId);
   if (product === null) {
-    return { title: "Товар не найден" };
+    return { title: "Товар не найден", robots: { index: false } };
   }
+  // the first line of the description is what a search result shows
+  const description =
+    product.description?.slice(0, DESCRIPTION_LENGTH) ??
+    `${product.name} в магазине ${product.store.display_name}`;
+  const title = `${product.name} — ${product.store.display_name}`;
+  const cover = product.images[0];
+
   return {
-    title: `${product.name} — ${product.store.display_name}`,
-    // the first line of the description is what a search result shows
-    description:
-      product.description?.slice(0, 160) ??
-      `${product.name} в магазине ${product.store.display_name}`,
+    title,
+    description,
+    // a product lives on the marketplace domain and nowhere else
+    alternates: { canonical: productUrl(product.id) },
+    openGraph: {
+      type: "website",
+      title,
+      description,
+      url: productUrl(product.id),
+      images:
+        cover === undefined
+          ? undefined
+          : [{ url: cover.image_url, alt: cover.alt_text ?? product.name }],
+    },
   };
 }
 

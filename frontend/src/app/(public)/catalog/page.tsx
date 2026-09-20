@@ -13,6 +13,9 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Каталог",
   description: "Товары магазинов AllStore.am — поиск по названию и категориям.",
+  // every combination of filters is its own address; the bare catalogue is the one
+  // worth indexing, the rest point at it
+  alternates: { canonical: "/catalog" },
 };
 
 export default async function CatalogPage({ searchParams }: PageProps<"/catalog">) {

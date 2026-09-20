@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 
 import { SiteHeader } from "@/components/SiteHeader";
@@ -5,6 +6,13 @@ import { ProductCard } from "@/components/catalog/ProductCard";
 import { fetchCatalogProducts } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: { absolute: "AllStore.am — магазины Армении в одном каталоге" },
+  description:
+    "Каталог товаров армянских магазинов: поиск по категориям, витрина у каждого продавца, связь напрямую.",
+  alternates: { canonical: "/" },
+};
 
 const FRESH_COUNT = 8;
 

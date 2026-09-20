@@ -11,6 +11,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Магазины",
   description: "Магазины площадки AllStore.am.",
+  alternates: { canonical: "/stores" },
 };
 
 export default async function StoresPage({ searchParams }: PageProps<"/stores">) {

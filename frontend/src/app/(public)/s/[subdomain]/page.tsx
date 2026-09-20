@@ -6,18 +6,36 @@ import { Pagination } from "@/components/catalog/Pagination";
 import { ProductCard } from "@/components/catalog/ProductCard";
 import { PAGE_SIZE, fetchCatalogProducts, fetchStorefront } from "@/lib/api";
 import { parseCatalogQuery, toSearchParams } from "@/lib/catalog-query";
+import { storeUrl } from "@/lib/urls";
 
 export const dynamic = "force-dynamic";
+
+const DESCRIPTION_LENGTH = 160;
 
 export async function generateMetadata({ params }: PageProps<"/s/[subdomain]">): Promise<Metadata> {
   const { subdomain } = await params;
   const store = await fetchStorefront(subdomain);
   if (store === null) {
-    return { title: "Магазин не найден" };
+    return { title: "Магазин не найден", robots: { index: false } };
   }
+  const description =
+    store.description?.slice(0, DESCRIPTION_LENGTH) ??
+    `Магазин ${store.display_name} на AllStore.am`;
+  const banner = store.banner_url ?? store.logo_url;
+
   return {
     title: store.display_name,
-    description: store.description?.slice(0, 160) ?? `Магазин ${store.display_name} на AllStore.am`,
+    description,
+    // the shop is reachable both here and on its own subdomain; the subdomain is the
+    // address the seller was given, so that is the one a crawler is pointed at
+    alternates: { canonical: storeUrl(store.subdomain) },
+    openGraph: {
+      type: "website",
+      title: store.display_name,
+      description,
+      url: storeUrl(store.subdomain),
+      images: banner === null ? undefined : [{ url: banner, alt: store.display_name }],
+    },
   };
 }
 
