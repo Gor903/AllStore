@@ -9,6 +9,7 @@ export type Business = components["schemas"]["BusinessRead"];
 export type Storefront = components["schemas"]["StorefrontRead"];
 export type CatalogProduct = components["schemas"]["CatalogProductRead"];
 export type CatalogProductList = components["schemas"]["CatalogProductListResponse"];
+export type CatalogStore = components["schemas"]["CatalogStoreRead"];
 export type CatalogStoreList = components["schemas"]["CatalogStoreListResponse"];
 export type CategoryTree = components["schemas"]["CategoryTreeRead"];
 
@@ -45,9 +46,10 @@ export async function fetchStorefront(subdomain: string): Promise<Storefront | n
 /** null means the catalogue could not be read at all; an empty list is a valid answer. */
 export async function fetchCatalogProducts(
   query: CatalogQuery,
+  limit: number = PAGE_SIZE,
 ): Promise<CatalogProductList | null> {
   const params = catalogSearchParams(query);
-  params.set("limit", String(PAGE_SIZE));
+  params.set("limit", String(limit));
   try {
     return await apiGet<CatalogProductList>(`${API_PREFIX}/catalog/products?${params}`);
   } catch {
@@ -65,8 +67,11 @@ export async function fetchCatalogProduct(productId: string): Promise<CatalogPro
   }
 }
 
-export async function fetchCatalogStores(offset: number): Promise<CatalogStoreList | null> {
-  const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(offset) });
+export async function fetchCatalogStores(
+  offset: number,
+  limit: number = PAGE_SIZE,
+): Promise<CatalogStoreList | null> {
+  const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
   try {
     return await apiGet<CatalogStoreList>(`${API_PREFIX}/catalog/stores?${params}`);
   } catch {
