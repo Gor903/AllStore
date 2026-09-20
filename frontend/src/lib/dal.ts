@@ -4,8 +4,11 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
 
-import type { Business, User } from "@/lib/api";
+import type { Business, Product, ProductList, Store, User } from "@/lib/api";
 import { API_PREFIX, env } from "@/lib/env";
+
+// the cabinet shows the whole shelf at once; pagination arrives when a shop outgrows it
+const SELLER_PAGE_SIZE = 100;
 
 async function backendGet<T>(path: string): Promise<T | null> {
   const cookieHeader = (await cookies()).toString();
@@ -46,4 +49,17 @@ export async function requireRole(...roles: User["role"][]): Promise<User> {
 
 export async function getMyBusiness(): Promise<Business | null> {
   return backendGet<Business>("/users/me/business");
+}
+
+/** Null when the seller has not opened a storefront yet — the backend answers 404. */
+export async function getMyStore(): Promise<Store | null> {
+  return backendGet<Store>("/stores/me");
+}
+
+export async function getMyProducts(): Promise<ProductList | null> {
+  return backendGet<ProductList>(`/products?limit=${SELLER_PAGE_SIZE}`);
+}
+
+export async function getMyProduct(productId: string): Promise<Product | null> {
+  return backendGet<Product>(`/products/${encodeURIComponent(productId)}`);
 }

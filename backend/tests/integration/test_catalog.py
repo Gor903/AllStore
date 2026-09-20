@@ -415,3 +415,6 @@ async def test_the_category_tree_is_offered_to_the_visitor(api_client: AsyncClie
     assert len(tree) >= 8
     electronics = next(root for root in tree if root["slug"] == "electronics")
     assert "smartphones" in {child["slug"] for child in electronics["children"]}
+    # the id comes with it: a seller files a product under a category by id, not by slug
+    assert set(electronics) == {"id", "slug", "name", "children"}
+    assert uuid.UUID(electronics["children"][0]["id"])
