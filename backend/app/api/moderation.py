@@ -5,9 +5,13 @@ from fastapi import APIRouter, Depends, Query
 
 from app.deps.auth import SessionDep, require_csrf, require_role
 from app.models import User, UserRole
-from app.schemas.moderation import ProductRejectRequest
+from app.schemas.moderation import (
+    BusinessListResponse,
+    BusinessReviewRead,
+    ModerationReasonRequest,
+)
 from app.schemas.product import ProductListResponse, ProductRead
-from app.services import moderation_queue
+from app.services import business_moderation, moderation_queue
 
 router = APIRouter(prefix="/moderation", tags=["moderation"])
 
@@ -57,7 +61,7 @@ async def approve_product(
 )
 async def reject_product(
     product_id: uuid.UUID,
-    payload: ProductRejectRequest,
+    payload: ModerationReasonRequest,
     moderator: ModeratorUser,
     session: SessionDep,
 ) -> ProductRead:
@@ -89,3 +93,79 @@ async def publish_product(
     product = await moderation_queue.publish(session, moderator, product_id)
     await session.commit()
     return ProductRead.model_validate(product)
+
+
+@router.get("/businesses", response_model=BusinessListResponse)
+async def read_business_queue(
+    moderator: ModeratorUser,
+    session: SessionDep,
+    limit: Limit = DEFAULT_PAGE_SIZE,
+    offset: Offset = 0,
+) -> BusinessListResponse:
+    items, total = await business_moderation.list_pending(session, limit, offset)
+    return BusinessListResponse(
+        items=[BusinessReviewRead.from_business(item) for item in items],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.post(
+    "/businesses/{business_id}/approve",
+    response_model=BusinessReviewRead,
+    dependencies=[Depends(require_csrf)],
+)
+async def approve_business(
+    business_id: uuid.UUID, moderator: ModeratorUser, session: SessionDep
+) -> BusinessReviewRead:
+    """Admission: from here the storefront answers on its subdomain."""
+    business = await business_moderation.approve(session, moderator, business_id)
+    await session.commit()
+    return BusinessReviewRead.from_business(business)
+
+
+@router.post(
+    "/businesses/{business_id}/suspend",
+    response_model=BusinessReviewRead,
+    dependencies=[Depends(require_csrf)],
+)
+async def suspend_business(
+    business_id: uuid.UUID,
+    payload: ModerationReasonRequest,
+    moderator: ModeratorUser,
+    session: SessionDep,
+) -> BusinessReviewRead:
+    business = await business_moderation.suspend(session, moderator, business_id, payload.reason)
+    await session.commit()
+    return BusinessReviewRead.from_business(business)
+
+
+@router.post(
+    "/businesses/{business_id}/block",
+    response_model=BusinessReviewRead,
+    dependencies=[Depends(require_csrf)],
+)
+async def block_business(
+    business_id: uuid.UUID,
+    payload: ModerationReasonRequest,
+    moderator: ModeratorUser,
+    session: SessionDep,
+) -> BusinessReviewRead:
+    business = await business_moderation.block(session, moderator, business_id, payload.reason)
+    await session.commit()
+    return BusinessReviewRead.from_business(business)
+
+
+@router.post(
+    "/businesses/{business_id}/restore",
+    response_model=BusinessReviewRead,
+    dependencies=[Depends(require_csrf)],
+)
+async def restore_business(
+    business_id: uuid.UUID, moderator: ModeratorUser, session: SessionDep
+) -> BusinessReviewRead:
+    """A ban is a status, not a deletion, so it can be taken back."""
+    business = await business_moderation.restore(session, moderator, business_id)
+    await session.commit()
+    return BusinessReviewRead.from_business(business)

@@ -52,8 +52,13 @@ async def create_store(
     if await stores.get_by_subdomain(session, subdomain) is not None:
         raise _subdomain_taken()
 
+    # a storefront of an already admitted business goes live at once: nothing is left to
+    # check, and a draft here would wait for a moderation event that will never come
+    status = StoreStatus.ACTIVE if business.status is BusinessStatus.ACTIVE else StoreStatus.DRAFT
     try:
-        return await stores.add(session, Store(business_id=business.id, subdomain=subdomain))
+        return await stores.add(
+            session, Store(business_id=business.id, subdomain=subdomain, status=status)
+        )
     except IntegrityError as exc:
         # two sellers can clear the check above in the same moment; the unique index settles it
         if SUBDOMAIN_INDEX not in str(exc.orig):
