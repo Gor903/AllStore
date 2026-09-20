@@ -94,18 +94,24 @@ class CatalogStoreListResponse(BaseModel):
 
 
 class CategoryTreeRead(BaseModel):
+    """The reference book both sides read: a visitor filters by slug, a seller files a
+    product under an id. Neither is anybody's private data — the catalogue is the same
+    for everyone."""
+
+    id: uuid.UUID
     slug: str
     name: str
     children: list["CategoryTreeRead"]
 
     @classmethod
     def leaf(cls, category: Category) -> "CategoryTreeRead":
-        return cls(slug=category.slug, name=category.name, children=[])
+        return cls(id=category.id, slug=category.slug, name=category.name, children=[])
 
     @classmethod
     def from_root(cls, category: Category) -> "CategoryTreeRead":
         """Two levels, because two is what the repository loads — a third would lazy load."""
         return cls(
+            id=category.id,
             slug=category.slug,
             name=category.name,
             children=[cls.leaf(child) for child in category.children],

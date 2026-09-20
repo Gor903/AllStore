@@ -802,10 +802,20 @@ export interface components {
             /** Subdomain */
             subdomain: string;
         };
-        /** CategoryTreeRead */
+        /**
+         * CategoryTreeRead
+         * @description The reference book both sides read: a visitor filters by slug, a seller files a
+         *     product under an id. Neither is anybody's private data — the catalogue is the same
+         *     for everyone.
+         */
         CategoryTreeRead: {
             /** Children */
             children: components["schemas"]["CategoryTreeRead"][];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
             /** Name */
             name: string;
             /** Slug */

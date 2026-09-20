@@ -4,6 +4,7 @@ type FieldProps = {
   type?: string;
   required?: boolean;
   autoComplete?: string;
+  defaultValue?: string | number;
   error?: string | undefined;
 };
 
@@ -13,6 +14,7 @@ export function Field({
   type = "text",
   required = true,
   autoComplete,
+  defaultValue,
   error,
 }: FieldProps) {
   const errorId = `${name}-error`;
@@ -24,6 +26,7 @@ export function Field({
         type={type}
         required={required}
         autoComplete={autoComplete}
+        defaultValue={defaultValue}
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? errorId : undefined}
         className="rounded-lg border border-ink-muted/30 bg-surface px-3 py-2 outline-none focus:border-brand"
