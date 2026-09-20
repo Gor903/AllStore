@@ -3,6 +3,7 @@
 from app.models.auth import PasswordResetToken, RefreshToken
 from app.models.business import Business, BusinessStatus
 from app.models.category import Category, CategoryStatus
+from app.models.moderation import ModerationDecision, ModerationReview
 from app.models.product import (
     ModerationStatus,
     Product,
@@ -18,6 +19,8 @@ __all__ = [
     "BusinessStatus",
     "Category",
     "CategoryStatus",
+    "ModerationDecision",
+    "ModerationReview",
     "ModerationStatus",
     "PasswordResetToken",
     "Product",

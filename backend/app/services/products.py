@@ -10,10 +10,10 @@ from app.models import (
     Category,
     ModerationStatus,
     Product,
-    PublicationStatus,
 )
 from app.repositories import categories, products
 from app.schemas.product import ProductCreateRequest, ProductUpdateRequest
+from app.services import moderation
 
 # what a moderator judged; changing any of it invalidates the verdict, price and stock do not
 MODERATED_FIELDS = frozenset({"name", "description", "category_id"})
@@ -65,8 +65,7 @@ async def update_product(
         setattr(product, field, value)
     if MODERATED_FIELDS & changes.keys() and product.moderation_status is ModerationStatus.APPROVED:
         # the approved product is not the one on the shelf any more — back into the queue
-        product.moderation_status = ModerationStatus.PENDING
-        product.publication_status = PublicationStatus.DRAFT
+        moderation.submit_for_review(product)
 
     await session.flush()
     # updated_at is computed by the database on UPDATE, so the column comes back expired
@@ -80,7 +79,7 @@ async def archive_product(
     product = await get_owned_product(session, business_id, product_id)
     product.archived_at = datetime.now(UTC)
     # belt and braces: even a public query that forgets archived_at must not surface it
-    product.publication_status = PublicationStatus.HIDDEN
+    moderation.withdraw(product)
     await session.flush()
 
 

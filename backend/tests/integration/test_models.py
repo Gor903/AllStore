@@ -11,6 +11,8 @@ from app.models import (
     BusinessStatus,
     Category,
     CategoryStatus,
+    ModerationDecision,
+    ModerationReview,
     ModerationStatus,
     Product,
     ProductAvailability,
@@ -411,6 +413,95 @@ async def test_images_are_read_back_in_gallery_order(session: AsyncSession) -> N
     await session.refresh(product, attribute_names=["images"])
 
     assert [image.sort_order for image in product.images] == [0, 2]
+
+
+async def test_a_refusal_without_a_reason_is_rejected_by_the_database(
+    session: AsyncSession,
+) -> None:
+    """A refusal the seller cannot act on is not a refusal."""
+    product = await make_product(session)
+
+    session.add(ModerationReview(product_id=product.id, decision=ModerationDecision.REJECTED))
+
+    with pytest.raises(IntegrityError):
+        await session.flush()
+
+
+async def test_a_blank_reason_does_not_count_as_one(session: AsyncSession) -> None:
+    product = await make_product(session)
+
+    session.add(
+        ModerationReview(
+            product_id=product.id, decision=ModerationDecision.REJECTED, reason="   \n "
+        )
+    )
+
+    with pytest.raises(IntegrityError):
+        await session.flush()
+
+
+@pytest.mark.parametrize("decision", [ModerationDecision.APPROVED, ModerationDecision.HIDDEN])
+async def test_approval_and_hiding_need_no_reason(
+    session: AsyncSession, decision: ModerationDecision
+) -> None:
+    product = await make_product(session)
+
+    session.add(ModerationReview(product_id=product.id, decision=decision))
+
+    await session.flush()
+
+
+async def test_the_history_outlives_the_moderator(session: AsyncSession) -> None:
+    """An account may go; the record of what it decided may not."""
+    product = await make_product(session)
+    moderator = make_user(role=UserRole.MODERATOR)
+    session.add(moderator)
+    await session.flush()
+    review = ModerationReview(
+        product_id=product.id, moderator_id=moderator.id, decision=ModerationDecision.APPROVED
+    )
+    session.add(review)
+    await session.flush()
+
+    await session.execute(text("DELETE FROM users WHERE id = :id"), {"id": moderator.id})
+    await session.refresh(review)
+
+    assert review.moderator_id is None
+    assert review.decision is ModerationDecision.APPROVED
+
+
+async def test_the_newest_verdict_comes_first(session: AsyncSession) -> None:
+    product = await make_product(session)
+    session.add(
+        ModerationReview(
+            product_id=product.id,
+            decision=ModerationDecision.REJECTED,
+            reason="Фото не соответствует товару",
+            created_at=text("now() - interval '1 hour'"),
+        )
+    )
+    session.add(ModerationReview(product_id=product.id, decision=ModerationDecision.APPROVED))
+    await session.flush()
+
+    await session.refresh(product, attribute_names=["reviews"])
+
+    assert [review.decision for review in product.reviews] == [
+        ModerationDecision.APPROVED,
+        ModerationDecision.REJECTED,
+    ]
+
+
+async def test_deleting_a_product_removes_its_reviews(session: AsyncSession) -> None:
+    product = await make_product(session)
+    session.add(ModerationReview(product_id=product.id, decision=ModerationDecision.APPROVED))
+    await session.flush()
+
+    await session.execute(text("DELETE FROM products WHERE id = :id"), {"id": product.id})
+
+    reviews = await session.execute(
+        select(ModerationReview).where(ModerationReview.product_id == product.id)
+    )
+    assert reviews.scalars().all() == []
 
 
 async def test_negative_sort_order_is_rejected(session: AsyncSession) -> None:
