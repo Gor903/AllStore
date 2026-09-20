@@ -42,7 +42,18 @@ describe("proxy", () => {
   });
 
   it("runs on the root as well as the protected areas", () => {
-    expect(config.matcher).toEqual(["/", "/dashboard/:path*", "/admin/:path*"]);
+    expect(config.matcher).toEqual([
+      "/",
+      "/dashboard/:path*",
+      "/admin/:path*",
+      "/moderation/:path*",
+    ]);
+  });
+
+  it("sends an anonymous visitor away from the moderation queue", () => {
+    const response = proxy(request("/moderation", ""));
+
+    expect(response.headers.get("location")).toContain("/login");
   });
 });
 

@@ -73,6 +73,36 @@ async def test_the_queue_holds_products_awaiting_review(
     assert [item["id"] for item in body["items"]] == [first, second]
 
 
+async def test_the_queue_says_who_and_what_stands_behind_a_product(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    """A moderator cannot judge a category and a shop that arrive as identifiers."""
+    await register_seller(api_client, email=f"seller-{uuid.uuid4().hex}@example.com")
+    category = await seeded_category(session)
+    await api_client.post(
+        "/api/v1/stores", json={"subdomain": "cups"}, headers=csrf_headers(api_client)
+    )
+    await create_product(api_client, category.id)
+    await become_moderator(api_client, session)
+
+    item = (await api_client.get(QUEUE_URL)).json()["items"][0]
+
+    assert item["category_name"] == category.name
+    assert item["seller_name"] == "Тестовый магазин"
+    assert item["subdomain"] == "cups"
+
+
+async def test_a_seller_without_a_storefront_still_reaches_the_queue(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    await a_product_awaiting_review(api_client, session)
+    await become_moderator(api_client, session)
+
+    item = (await api_client.get(QUEUE_URL)).json()["items"][0]
+
+    assert item["subdomain"] is None
+
+
 async def test_the_queue_crosses_tenants(api_client: AsyncClient, session: AsyncSession) -> None:
     """The one role the isolation rule does not bind — a moderator sees every seller's work."""
     await a_product_awaiting_review(api_client, session, name="Товар А")

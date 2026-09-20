@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { LogoutButton } from "@/components/auth/LogoutButton";
 import { requireRole } from "@/lib/dal";
@@ -18,7 +19,15 @@ export default async function AdminPage() {
         <LogoutButton />
       </header>
       <p className="text-sm text-ink-muted">Вы вошли как {user.email}.</p>
-      <p className="text-sm text-ink-muted">Модерация товаров появится на этапе 5.</p>
+      <Link
+        href="/moderation"
+        className="self-start rounded-lg bg-brand px-4 py-2 font-medium text-white"
+      >
+        Очередь модерации
+      </Link>
+      <p className="text-sm text-ink-muted">
+        Управление пользователями и категориями появится позже.
+      </p>
     </main>
   );
 }

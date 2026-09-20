@@ -4,7 +4,8 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, StringConstraints
 
-from app.models import Business, BusinessStatus, StoreStatus
+from app.models import Business, BusinessStatus, Product, StoreStatus
+from app.schemas.product import ProductRead
 
 REASON_MAX_LENGTH = 1000
 
@@ -20,6 +21,32 @@ class ModerationReasonRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     reason: ModerationReason
+
+
+class ModerationProductRead(ProductRead):
+    """The seller's view of a product plus who and what stands behind it — a moderator
+    cannot judge a category and a shop that arrive as identifiers."""
+
+    category_name: str
+    seller_name: str
+    subdomain: str | None
+
+    @classmethod
+    def from_product(cls, product: Product) -> "ModerationProductRead":
+        store = product.business.store
+        return cls(
+            **ProductRead.model_validate(product).model_dump(),
+            category_name=product.category.name,
+            seller_name=product.business.display_name,
+            subdomain=None if store is None else store.subdomain,
+        )
+
+
+class ModerationProductListResponse(BaseModel):
+    items: list[ModerationProductRead]
+    total: int
+    limit: int
+    offset: int
 
 
 class BusinessReviewRead(BaseModel):
