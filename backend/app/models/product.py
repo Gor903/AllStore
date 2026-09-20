@@ -1,9 +1,10 @@
 import enum
 import uuid
+from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import CheckConstraint, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -89,6 +90,10 @@ class Product(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         index=True,
         nullable=False,
     )
+
+    # a seller removes a product by archiving it: the images, and later the moderation verdict
+    # and the order lines, keep the row they point at
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     business: Mapped["Business"] = relationship(back_populates="products")
     category: Mapped["Category"] = relationship(back_populates="products")
