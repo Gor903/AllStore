@@ -3,7 +3,12 @@
 from app.models.auth import PasswordResetToken, RefreshToken
 from app.models.business import Business, BusinessStatus
 from app.models.category import Category, CategoryStatus
-from app.models.moderation import ModerationDecision, ModerationReview
+from app.models.moderation import (
+    BusinessDecision,
+    BusinessModerationReview,
+    ModerationDecision,
+    ModerationReview,
+)
 from app.models.product import (
     ModerationStatus,
     Product,
@@ -16,6 +21,8 @@ from app.models.user import User, UserRole, UserStatus
 
 __all__ = [
     "Business",
+    "BusinessDecision",
+    "BusinessModerationReview",
     "BusinessStatus",
     "Category",
     "CategoryStatus",

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
+    from app.models.moderation import BusinessModerationReview
     from app.models.product import Product
     from app.models.store import Store
     from app.models.user import User
@@ -45,4 +46,10 @@ class Business(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     products: Mapped[list["Product"]] = relationship(
         back_populates="business", cascade="all, delete-orphan"
+    )
+    # newest first: what matters is the verdict in force now
+    reviews: Mapped[list["BusinessModerationReview"]] = relationship(
+        back_populates="business",
+        cascade="all, delete-orphan",
+        order_by="BusinessModerationReview.created_at.desc()",
     )
