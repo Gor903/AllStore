@@ -49,6 +49,6 @@ class Category(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         back_populates="children", remote_side="Category.id"
     )
     children: Mapped[list["Category"]] = relationship(
-        back_populates="parent", cascade="all, delete-orphan"
+        back_populates="parent", cascade="all, delete-orphan", order_by="Category.name"
     )
     products: Mapped[list["Product"]] = relationship(back_populates="category")
