@@ -3,6 +3,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { CatalogProduct, Storefront } from "@/lib/api";
 
+const host = { value: "cups.allstore.am" };
+
+vi.mock("next/headers", () => ({
+  headers: () => Promise.resolve(new Headers({ host: host.value })),
+}));
+
 vi.mock("@/lib/api", () => ({
   PAGE_SIZE: 24,
   fetchCatalogProduct: vi.fn(),
@@ -49,19 +55,28 @@ const storeProps = (subdomain: string) => ({
 });
 
 beforeEach(() => {
+  host.value = "cups.allstore.am";
   vi.mocked(fetchCatalogProduct).mockReset();
   vi.mocked(fetchCatalogProducts).mockReset();
   vi.mocked(fetchStorefront).mockReset();
 });
 
 describe("product page", () => {
-  it("renders the product on the server", async () => {
+  it("renders on the subdomain of the shop that sells it", async () => {
     vi.mocked(fetchCatalogProduct).mockResolvedValue(PRODUCT);
 
     render(await ProductPage(productProps(PRODUCT.id)));
 
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Кружка керамическая");
-    expect(screen.getByRole("link", { name: "Лавка кружек" })).toHaveAttribute("href", "/s/cups");
+    // the shop is where the visitor already is, so the link home stays relative
+    expect(screen.getAllByRole("link", { name: "Лавка кружек" })[0]).toHaveAttribute("href", "/");
+  });
+
+  it("moves the visitor into the shop when opened on the marketplace", async () => {
+    host.value = "allstore.am";
+    vi.mocked(fetchCatalogProduct).mockResolvedValue(PRODUCT);
+
+    await expect(ProductPage(productProps(PRODUCT.id))).rejects.toThrow();
   });
 
   it("is not found when the backend does not hand the product over", async () => {
@@ -85,7 +100,11 @@ describe("storefront page", () => {
     render(await StorefrontPage(storeProps("cups")));
 
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Лавка кружек");
-    expect(screen.getByText("Кружка керамическая")).toBeInTheDocument();
+    // inside its own shop a product card does not leave the host
+    expect(screen.getByRole("link", { name: /Кружка керамическая/u })).toHaveAttribute(
+      "href",
+      `/p/${PRODUCT.id}`,
+    );
   });
 
   it("says so when the shop has nothing on the shelf yet", async () => {
@@ -100,6 +119,13 @@ describe("storefront page", () => {
     render(await StorefrontPage(storeProps("cups")));
 
     expect(screen.getByText("В этом магазине пока нет товаров.")).toBeInTheDocument();
+  });
+
+  it("moves the visitor onto the subdomain when opened by path", async () => {
+    host.value = "allstore.am";
+    vi.mocked(fetchStorefront).mockResolvedValue(STORE);
+
+    await expect(StorefrontPage(storeProps("cups"))).rejects.toThrow();
   });
 
   it("is not found when the shop is not on the air", async () => {

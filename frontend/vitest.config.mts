@@ -5,6 +5,9 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     tsconfigPaths: true,
+    alias: {
+      "server-only": new URL("./tests/server-only.stub.ts", import.meta.url).pathname,
+    },
   },
   test: {
     environment: "jsdom",

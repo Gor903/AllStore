@@ -17,15 +17,17 @@ const PRODUCT: CatalogProduct = {
   created_at: "2026-09-21T00:00:00Z",
 };
 
-describe("ProductCard", () => {
-  it("links to the product by its own address", () => {
-    render(<ProductCard product={PRODUCT} />);
+const HREF = `https://cups.allstore.am/p/${PRODUCT.id}`;
 
-    expect(screen.getByRole("link")).toHaveAttribute("href", `/p/${PRODUCT.id}`);
+describe("ProductCard", () => {
+  it("links where the page told it to", () => {
+    render(<ProductCard product={PRODUCT} href={HREF} />);
+
+    expect(screen.getByRole("link")).toHaveAttribute("href", HREF);
   });
 
   it("shows the name, the price and whose shop it is", () => {
-    render(<ProductCard product={PRODUCT} />);
+    render(<ProductCard product={PRODUCT} href={HREF} />);
 
     expect(screen.getByRole("heading")).toHaveTextContent("Кружка керамическая");
     expect(screen.getByText(/1.500 ֏/u)).toBeInTheDocument();
@@ -33,21 +35,24 @@ describe("ProductCard", () => {
   });
 
   it("uses the alt text of the photo", () => {
-    render(<ProductCard product={PRODUCT} />);
+    render(<ProductCard product={PRODUCT} href={HREF} />);
 
     expect(screen.getByRole("img")).toHaveAccessibleName("Кружка спереди");
   });
 
   it("falls back to the product name when the photo has no alt text", () => {
     render(
-      <ProductCard product={{ ...PRODUCT, images: [{ ...PRODUCT.images[0]!, alt_text: null }] }} />,
+      <ProductCard
+        product={{ ...PRODUCT, images: [{ ...PRODUCT.images[0]!, alt_text: null }] }}
+        href={HREF}
+      />,
     );
 
     expect(screen.getByRole("img")).toHaveAccessibleName("Кружка керамическая");
   });
 
   it("says so when there is no photo at all", () => {
-    render(<ProductCard product={{ ...PRODUCT, images: [] }} />);
+    render(<ProductCard product={{ ...PRODUCT, images: [] }} href={HREF} />);
 
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
     expect(screen.getByText("Без фото")).toBeInTheDocument();

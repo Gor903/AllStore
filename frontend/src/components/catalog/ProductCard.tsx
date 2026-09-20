@@ -4,12 +4,18 @@ import Link from "next/link";
 import type { CatalogProduct } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
 
-export function ProductCard({ product }: { product: CatalogProduct }) {
+type ProductCardProps = {
+  product: CatalogProduct;
+  /** Built by the page: on the marketplace it leaves for the shop's subdomain. */
+  href: string;
+};
+
+export function ProductCard({ product, href }: ProductCardProps) {
   const cover = product.images[0];
 
   return (
     <Link
-      href={`/p/${product.id}`}
+      href={href}
       className="group flex flex-col overflow-hidden rounded-card border border-ink-muted/15 transition hover:border-brand/60"
     >
       <div className="relative aspect-square bg-surface-muted">

@@ -4,6 +4,8 @@ import Link from "next/link";
 import { SiteHeader } from "@/components/SiteHeader";
 import { ProductCard } from "@/components/catalog/ProductCard";
 import { fetchCatalogProducts } from "@/lib/api";
+import { currentSubdomain } from "@/lib/request-host";
+import { productHref } from "@/lib/urls";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +19,10 @@ export const metadata: Metadata = {
 const FRESH_COUNT = 8;
 
 export default async function HomePage() {
-  const page = await fetchCatalogProducts({ q: null, category: null, store: null, offset: 0 });
+  const [page, subdomain] = await Promise.all([
+    fetchCatalogProducts({ q: null, category: null, store: null, offset: 0 }),
+    currentSubdomain(),
+  ]);
   const fresh = page?.items.slice(0, FRESH_COUNT) ?? [];
 
   return (
@@ -53,7 +58,11 @@ export default async function HomePage() {
             </div>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
               {fresh.map((product) => (
-                <ProductCard key={product.id} product={product} />
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  href={productHref(product.store.subdomain, product.id, subdomain)}
+                />
               ))}
             </div>
           </section>

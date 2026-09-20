@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 
 import { SiteHeader } from "@/components/SiteHeader";
 import { Pagination } from "@/components/catalog/Pagination";
 import { PAGE_SIZE, fetchCatalogStores } from "@/lib/api";
 import { parseCatalogQuery, toSearchParams } from "@/lib/catalog-query";
+import { env } from "@/lib/env";
+import { storeUrl } from "@/lib/urls";
 
 export const dynamic = "force-dynamic";
 
@@ -32,17 +33,19 @@ export default async function StoresPage({ searchParams }: PageProps<"/stores">)
           <>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {page.items.map((store) => (
-                <Link
+                <a
                   key={store.subdomain}
-                  href={`/s/${encodeURIComponent(store.subdomain)}`}
+                  href={storeUrl(store.subdomain)}
                   className="flex flex-col gap-2 rounded-card border border-ink-muted/15 p-4 transition hover:border-brand/60"
                 >
                   <h2 className="text-lg font-medium">{store.display_name}</h2>
                   {store.description === null ? null : (
                     <p className="line-clamp-3 text-sm text-ink-muted">{store.description}</p>
                   )}
-                  <span className="mt-auto pt-2 text-sm text-ink-muted">{store.subdomain}</span>
-                </Link>
+                  <span className="mt-auto pt-2 text-sm text-ink-muted">
+                    {store.subdomain}.{env.baseDomain}
+                  </span>
+                </a>
               ))}
             </div>
             <Pagination

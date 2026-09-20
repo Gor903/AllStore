@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 
-import { SiteHeader } from "@/components/SiteHeader";
+import { StoreHeader } from "@/components/StoreHeader";
 import { fetchCatalogProduct } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
-import { productUrl } from "@/lib/urls";
+import { currentSubdomain } from "@/lib/request-host";
+import { productUrl, siteUrl } from "@/lib/urls";
 
 export const dynamic = "force-dynamic";
 
@@ -29,17 +30,18 @@ export async function generateMetadata({ params }: PageProps<"/p/[productId]">):
     `${product.name} в магазине ${product.store.display_name}`;
   const title = `${product.name} — ${product.store.display_name}`;
   const cover = product.images[0];
+  const canonical = productUrl(product.store.subdomain, product.id);
 
   return {
     title,
     description,
-    // a product lives on the marketplace domain and nowhere else
-    alternates: { canonical: productUrl(product.id) },
+    // the product belongs to the shop, and the shop lives on its own subdomain
+    alternates: { canonical },
     openGraph: {
       type: "website",
       title,
       description,
-      url: productUrl(product.id),
+      url: canonical,
       images:
         cover === undefined
           ? undefined
@@ -50,28 +52,35 @@ export async function generateMetadata({ params }: PageProps<"/p/[productId]">):
 
 export default async function ProductPage({ params }: PageProps<"/p/[productId]">) {
   const { productId } = await params;
-  const product = await fetchCatalogProduct(productId);
+  const [product, subdomain] = await Promise.all([
+    fetchCatalogProduct(productId),
+    currentSubdomain(),
+  ]);
   // a product that is not public answers exactly as one that does not exist
   if (product === null) {
     notFound();
+  }
+  // one address per product: opened anywhere else, it moves the visitor into the shop
+  if (subdomain !== product.store.subdomain) {
+    permanentRedirect(productUrl(product.store.subdomain, product.id));
   }
   const cover = product.images[0];
 
   return (
     <>
-      <SiteHeader />
+      <StoreHeader displayName={product.store.display_name} homeHref="/" />
       <main className="mx-auto flex max-w-5xl flex-col gap-6 px-6 py-8">
         <nav className="text-sm text-ink-muted">
-          <Link href="/catalog" className="hover:text-brand">
-            Каталог
-          </Link>
+          <a href={siteUrl("/catalog")} className="hover:text-brand">
+            Каталог AllStore.am
+          </a>
           {" / "}
-          <Link
-            href={`/catalog?category=${encodeURIComponent(product.category.slug)}`}
+          <a
+            href={siteUrl(`/catalog?category=${encodeURIComponent(product.category.slug)}`)}
             className="hover:text-brand"
           >
             {product.category.name}
-          </Link>
+          </a>
         </nav>
 
         <div className="grid gap-8 md:grid-cols-2">
@@ -123,10 +132,7 @@ export default async function ProductPage({ params }: PageProps<"/p/[productId]"
             )}
             <div className="mt-auto rounded-card border border-ink-muted/15 p-4">
               <p className="text-sm text-ink-muted">Продавец</p>
-              <Link
-                href={`/s/${encodeURIComponent(product.store.subdomain)}`}
-                className="text-lg font-medium hover:text-brand"
-              >
+              <Link href="/" className="text-lg font-medium hover:text-brand">
                 {product.store.display_name}
               </Link>
               <p className="mt-2 text-sm text-ink-muted">
