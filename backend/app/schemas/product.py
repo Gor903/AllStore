@@ -84,6 +84,8 @@ class ProductRead(BaseModel):
     availability_status: ProductAvailability
     moderation_status: ModerationStatus
     publication_status: PublicationStatus
+    # filled only while the product stands refused, see Product.rejection_reason
+    rejection_reason: str | None
     images: list[ProductImageRead]
     created_at: datetime
     updated_at: datetime

@@ -14,7 +14,8 @@ async def get_owned(
     """A product is looked up by owner and id together — never by id alone."""
     result = await session.execute(
         select(Product)
-        .options(selectinload(Product.images))
+        # reviews come with the product: the answer carries the reason of a refusal
+        .options(selectinload(Product.images), selectinload(Product.reviews))
         .where(
             Product.id == product_id,
             Product.business_id == business_id,
@@ -30,7 +31,8 @@ async def list_for_business(
     # id breaks the tie: two products created in the same millisecond must not swap pages
     result = await session.execute(
         select(Product)
-        .options(selectinload(Product.images))
+        # reviews come with the product: the answer carries the reason of a refusal
+        .options(selectinload(Product.images), selectinload(Product.reviews))
         .where(Product.business_id == business_id, Product.archived_at.is_(None))
         .order_by(Product.created_at.desc(), Product.id)
         .limit(limit)

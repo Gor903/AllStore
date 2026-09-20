@@ -34,9 +34,9 @@ async def create_product(
     # moderation and publication keep their model defaults: pending and draft, so the
     # product is invisible to buyers until a moderator has approved it
     product = await products.add(session, Product(business_id=business.id, **payload.model_dump()))
-    # the gallery is empty but has to be loaded: the response carries it, and a lazy load
-    # in the async session would have nowhere to run
-    await session.refresh(product, attribute_names=["images"])
+    # both collections are empty but have to be loaded: the response carries them, and a
+    # lazy load in the async session would have nowhere to run
+    await session.refresh(product, attribute_names=["images", "reviews"])
     return product
 
 
@@ -69,6 +69,17 @@ async def update_product(
 
     await session.flush()
     # updated_at is computed by the database on UPDATE, so the column comes back expired
+    await session.refresh(product, attribute_names=["updated_at"])
+    return product
+
+
+async def submit_product_for_review(
+    session: AsyncSession, business_id: uuid.UUID, product_id: uuid.UUID
+) -> Product:
+    """The seller sends a refused — or an already approved — product back into the queue."""
+    product = await get_owned_product(session, business_id, product_id)
+    moderation.submit_for_review(product)
+    await session.flush()
     await session.refresh(product, attribute_names=["updated_at"])
     return product
 

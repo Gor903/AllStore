@@ -18,6 +18,8 @@ class ModerationDecision(enum.StrEnum):
     APPROVED = "approved"
     REJECTED = "rejected"
     HIDDEN = "hidden"
+    # a hide taken back: the product returns to the shelf on the same approval as before
+    PUBLISHED = "published"
 
 
 class ModerationReview(UUIDPrimaryKeyMixin, Base):

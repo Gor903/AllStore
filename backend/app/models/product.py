@@ -9,6 +9,7 @@ from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.models.moderation import ModerationDecision
 
 if TYPE_CHECKING:
     from app.models.business import Business
@@ -109,6 +110,24 @@ class Product(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         cascade="all, delete-orphan",
         order_by="ModerationReview.created_at.desc()",
     )
+
+    @property
+    def rejection_reason(self) -> str | None:
+        """What the seller has to act on. Empty while the product has not been refused.
+
+        Reads the loaded history rather than a column of its own: the reason lives in the
+        verdict that carries it, and two copies of it would be one too many.
+        """
+        if self.moderation_status is not ModerationStatus.REJECTED:
+            return None
+        return next(
+            (
+                review.reason
+                for review in self.reviews
+                if review.decision is ModerationDecision.REJECTED
+            ),
+            None,
+        )
 
 
 class ProductImage(UUIDPrimaryKeyMixin, TimestampMixin, Base):
