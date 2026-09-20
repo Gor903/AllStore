@@ -3,6 +3,7 @@ from collections.abc import Sequence
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models import Product
 
@@ -12,7 +13,9 @@ async def get_owned(
 ) -> Product | None:
     """A product is looked up by owner and id together — never by id alone."""
     result = await session.execute(
-        select(Product).where(
+        select(Product)
+        .options(selectinload(Product.images))
+        .where(
             Product.id == product_id,
             Product.business_id == business_id,
             Product.archived_at.is_(None),
@@ -27,6 +30,7 @@ async def list_for_business(
     # id breaks the tie: two products created in the same millisecond must not swap pages
     result = await session.execute(
         select(Product)
+        .options(selectinload(Product.images))
         .where(Product.business_id == business_id, Product.archived_at.is_(None))
         .order_by(Product.created_at.desc(), Product.id)
         .limit(limit)

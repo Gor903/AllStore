@@ -1,17 +1,20 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
 
-from app.deps.auth import SessionDep, require_csrf
+from app.core import storage
+from app.deps.auth import SessionDep, SettingsDep, require_csrf
 from app.deps.business import CurrentBusiness
 from app.repositories import products as products_repo
 from app.schemas.product import (
     ProductCreateRequest,
+    ProductImageRead,
     ProductListResponse,
     ProductRead,
     ProductUpdateRequest,
 )
+from app.services import product_images as images_service
 from app.services import products as products_service
 
 router = APIRouter(prefix="/products", tags=["products"])
@@ -84,3 +87,44 @@ async def archive_product(
     """Archives rather than deletes — see app.services.products.archive_product."""
     await products_service.archive_product(session, business.id, product_id)
     await session.commit()
+
+
+@router.post(
+    "/{product_id}/images",
+    response_model=ProductImageRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_csrf)],
+)
+async def upload_product_image(
+    product_id: uuid.UUID,
+    business: CurrentBusiness,
+    settings: SettingsDep,
+    session: SessionDep,
+    file: Annotated[UploadFile, File()],
+    alt_text: Annotated[str | None, Form(max_length=255)] = None,
+) -> ProductImageRead:
+    image = await images_service.add_image(
+        session, settings, business.id, product_id, file, alt_text
+    )
+    await session.commit()
+    return ProductImageRead.model_validate(image)
+
+
+@router.delete(
+    "/{product_id}/images/{image_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_csrf)],
+)
+async def delete_product_image(
+    product_id: uuid.UUID,
+    image_id: uuid.UUID,
+    business: CurrentBusiness,
+    settings: SettingsDep,
+    session: SessionDep,
+) -> None:
+    key = await images_service.remove_image(session, settings, business.id, product_id, image_id)
+    await session.commit()
+    # only after the row is gone for good: a deleted object under a surviving row would
+    # show the buyer a broken picture, while a surviving object under no row costs storage
+    if key is not None:
+        await storage.delete_object(settings, key)

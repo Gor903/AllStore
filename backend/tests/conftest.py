@@ -1,5 +1,5 @@
 import os
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -51,6 +51,35 @@ async def api_client(session: "AsyncSession") -> AsyncIterator[AsyncClient]:
         transport=ASGITransport(app=app), base_url="http://test"
     ) as async_client:
         yield async_client
+
+
+@pytest.fixture
+def object_storage() -> Iterator[None]:
+    """A bucket backed by moto, so the real boto3 path runs without infrastructure.
+
+    moto hooks botocore by endpoint, so the bucket is addressed as AWS here instead of as
+    the MinIO of the dev stack. Everything above that line — the client, the upload, the
+    key, the deletion — is the code that runs in production.
+    """
+    from moto import mock_aws
+
+    from app.core.config import get_settings
+
+    previous = os.environ.get("S3_ENDPOINT_URL")
+    os.environ["S3_ENDPOINT_URL"] = "https://s3.us-east-1.amazonaws.com"
+    get_settings.cache_clear()
+    try:
+        with mock_aws():
+            from app.core.storage import build_s3_client
+
+            build_s3_client(get_settings()).create_bucket(Bucket=get_settings().s3_bucket)
+            yield
+    finally:
+        if previous is None:
+            del os.environ["S3_ENDPOINT_URL"]
+        else:
+            os.environ["S3_ENDPOINT_URL"] = previous
+        get_settings.cache_clear()
 
 
 @pytest.fixture

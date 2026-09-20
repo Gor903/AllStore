@@ -61,6 +61,15 @@ class ProductUpdateRequest(BaseModel):
         return self
 
 
+class ProductImageRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    image_url: str
+    sort_order: int
+    alt_text: str | None
+
+
 class ProductRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -75,6 +84,7 @@ class ProductRead(BaseModel):
     availability_status: ProductAvailability
     moderation_status: ModerationStatus
     publication_status: PublicationStatus
+    images: list[ProductImageRead]
     created_at: datetime
     updated_at: datetime
 

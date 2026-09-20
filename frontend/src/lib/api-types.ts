@@ -180,6 +180,40 @@ export interface paths {
         patch: operations["update_product_api_v1_products__product_id__patch"];
         trace?: never;
     };
+    "/api/v1/products/{product_id}/images": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload Product Image */
+        post: operations["upload_product_image_api_v1_products__product_id__images_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/products/{product_id}/images/{image_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Product Image */
+        delete: operations["delete_product_image_api_v1_products__product_id__images__image_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/storefront": {
         parameters: {
             query?: never;
@@ -335,6 +369,13 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** Body_upload_product_image_api_v1_products__product_id__images_post */
+        Body_upload_product_image_api_v1_products__product_id__images_post: {
+            /** Alt Text */
+            alt_text?: string | null;
+            /** File */
+            file: string;
+        };
         /** BusinessRead */
         BusinessRead: {
             /**
@@ -457,6 +498,20 @@ export interface components {
              */
             stock_quantity: number;
         };
+        /** ProductImageRead */
+        ProductImageRead: {
+            /** Alt Text */
+            alt_text: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Image Url */
+            image_url: string;
+            /** Sort Order */
+            sort_order: number;
+        };
         /** ProductListResponse */
         ProductListResponse: {
             /** Items */
@@ -495,6 +550,8 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Images */
+            images: components["schemas"]["ProductImageRead"][];
             moderation_status: components["schemas"]["ModerationStatus"];
             /** Name */
             name: string;
@@ -1069,6 +1126,71 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ProductRead"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_product_image_api_v1_products__product_id__images_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_product_image_api_v1_products__product_id__images_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductImageRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_product_image_api_v1_products__product_id__images__image_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product_id: string;
+                image_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

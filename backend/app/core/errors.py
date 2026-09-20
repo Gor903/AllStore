@@ -48,6 +48,11 @@ class ValidationFailedError(AppError):
     status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
 
 
+class PayloadTooLargeError(AppError):
+    code = "payload_too_large"
+    status_code = status.HTTP_413_CONTENT_TOO_LARGE
+
+
 def error_payload(
     code: str, message: str, details: list[dict[str, Any]] | None = None
 ) -> dict[str, Any]:
