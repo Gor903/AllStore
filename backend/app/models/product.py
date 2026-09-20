@@ -13,6 +13,7 @@ from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 if TYPE_CHECKING:
     from app.models.business import Business
     from app.models.category import Category
+    from app.models.moderation import ModerationReview
 
 # a price is money, never a float: Numeric keeps the minor units exact
 PRICE_PRECISION = 12
@@ -101,6 +102,12 @@ class Product(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         back_populates="product",
         cascade="all, delete-orphan",
         order_by="ProductImage.sort_order",
+    )
+    # newest first: what the seller needs is the verdict that is in force now
+    reviews: Mapped[list["ModerationReview"]] = relationship(
+        back_populates="product",
+        cascade="all, delete-orphan",
+        order_by="ModerationReview.created_at.desc()",
     )
 
 
