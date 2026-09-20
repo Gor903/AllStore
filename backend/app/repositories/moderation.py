@@ -5,7 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models import ModerationReview, ModerationStatus, Product
+from app.models import Business, ModerationReview, ModerationStatus, Product
 
 # The queries here deliberately do not filter by business_id: a moderator works across every
 # tenant, and that is the one role for which the isolation rule does not hold. Archived
@@ -15,7 +15,14 @@ from app.models import ModerationReview, ModerationStatus, Product
 async def get_for_review(session: AsyncSession, product_id: uuid.UUID) -> Product | None:
     result = await session.execute(
         select(Product)
-        .options(selectinload(Product.images), selectinload(Product.reviews))
+        # the category, the seller and the storefront come with it: a moderator judges a
+        # product, and a pair of identifiers is not something anyone can judge
+        .options(
+            selectinload(Product.images),
+            selectinload(Product.reviews),
+            selectinload(Product.category),
+            selectinload(Product.business).selectinload(Business.store),
+        )
         .where(Product.id == product_id, Product.archived_at.is_(None))
     )
     return result.scalar_one_or_none()
@@ -25,7 +32,14 @@ async def list_queue(session: AsyncSession, limit: int, offset: int) -> Sequence
     """Oldest first: whoever has waited longest is looked at first."""
     result = await session.execute(
         select(Product)
-        .options(selectinload(Product.images), selectinload(Product.reviews))
+        # the category, the seller and the storefront come with it: a moderator judges a
+        # product, and a pair of identifiers is not something anyone can judge
+        .options(
+            selectinload(Product.images),
+            selectinload(Product.reviews),
+            selectinload(Product.category),
+            selectinload(Product.business).selectinload(Business.store),
+        )
         .where(
             Product.moderation_status == ModerationStatus.PENDING,
             Product.archived_at.is_(None),

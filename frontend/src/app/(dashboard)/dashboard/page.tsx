@@ -47,6 +47,15 @@ export default async function DashboardPage() {
         </div>
       </dl>
 
+      {user.role === "moderator" || user.role === "admin" ? (
+        <Link
+          href="/moderation"
+          className="self-start rounded-lg bg-brand px-4 py-2 font-medium text-white"
+        >
+          Очередь модерации
+        </Link>
+      ) : null}
+
       {business === null ? null : (
         <section className="flex flex-col gap-3 rounded-card border border-ink-muted/20 p-4">
           <div>

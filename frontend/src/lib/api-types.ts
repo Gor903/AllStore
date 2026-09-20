@@ -854,6 +854,72 @@ export interface components {
             /** Message */
             message: string;
         };
+        /** ModerationProductListResponse */
+        ModerationProductListResponse: {
+            /** Items */
+            items: components["schemas"]["ModerationProductRead"][];
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /** Total */
+            total: number;
+        };
+        /**
+         * ModerationProductRead
+         * @description The seller's view of a product plus who and what stands behind it — a moderator
+         *     cannot judge a category and a shop that arrive as identifiers.
+         */
+        ModerationProductRead: {
+            availability_status: components["schemas"]["ProductAvailability"];
+            /**
+             * Business Id
+             * Format: uuid
+             */
+            business_id: string;
+            /**
+             * Category Id
+             * Format: uuid
+             */
+            category_id: string;
+            /** Category Name */
+            category_name: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Currency */
+            currency: string;
+            /** Description */
+            description: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Images */
+            images: components["schemas"]["ProductImageRead"][];
+            moderation_status: components["schemas"]["ModerationStatus"];
+            /** Name */
+            name: string;
+            /** Price */
+            price: string;
+            publication_status: components["schemas"]["PublicationStatus"];
+            /** Rejection Reason */
+            rejection_reason: string | null;
+            /** Seller Name */
+            seller_name: string;
+            /** Stock Quantity */
+            stock_quantity: number;
+            /** Subdomain */
+            subdomain: string | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
         /**
          * ModerationReasonRequest
          * @description A refusal the seller cannot act on is not a refusal, so the reason is required.
@@ -1693,7 +1759,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProductListResponse"];
+                    "application/json": components["schemas"]["ModerationProductListResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1724,7 +1790,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProductRead"];
+                    "application/json": components["schemas"]["ModerationProductRead"];
                 };
             };
             /** @description Validation Error */
@@ -1755,7 +1821,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProductRead"];
+                    "application/json": components["schemas"]["ModerationProductRead"];
                 };
             };
             /** @description Validation Error */
@@ -1786,7 +1852,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProductRead"];
+                    "application/json": components["schemas"]["ModerationProductRead"];
                 };
             };
             /** @description Validation Error */
@@ -1821,7 +1887,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProductRead"];
+                    "application/json": components["schemas"]["ModerationProductRead"];
                 };
             };
             /** @description Validation Error */

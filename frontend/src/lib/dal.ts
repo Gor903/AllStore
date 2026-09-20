@@ -4,7 +4,15 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
 
-import type { Business, Product, ProductList, Store, User } from "@/lib/api";
+import type {
+  Business,
+  BusinessList,
+  ModerationProductList,
+  Product,
+  ProductList,
+  Store,
+  User,
+} from "@/lib/api";
 import { API_PREFIX, env } from "@/lib/env";
 
 // the cabinet shows the whole shelf at once; pagination arrives when a shop outgrows it
@@ -62,4 +70,12 @@ export async function getMyProducts(): Promise<ProductList | null> {
 
 export async function getMyProduct(productId: string): Promise<Product | null> {
   return backendGet<Product>(`/products/${encodeURIComponent(productId)}`);
+}
+
+export async function getModerationProducts(): Promise<ModerationProductList | null> {
+  return backendGet<ModerationProductList>(`/moderation/products?limit=${SELLER_PAGE_SIZE}`);
+}
+
+export async function getModerationBusinesses(): Promise<BusinessList | null> {
+  return backendGet<BusinessList>(`/moderation/businesses?limit=${SELLER_PAGE_SIZE}`);
 }
