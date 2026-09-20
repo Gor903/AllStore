@@ -90,6 +90,18 @@ async def archive_product(
 
 
 @router.post(
+    "/{product_id}/submit", response_model=ProductRead, dependencies=[Depends(require_csrf)]
+)
+async def submit_product_for_review(
+    product_id: uuid.UUID, business: CurrentBusiness, session: SessionDep
+) -> ProductRead:
+    """Sends the product back to the queue after a refusal, once the seller has fixed it."""
+    product = await products_service.submit_product_for_review(session, business.id, product_id)
+    await session.commit()
+    return ProductRead.model_validate(product)
+
+
+@router.post(
     "/{product_id}/images",
     response_model=ProductImageRead,
     status_code=status.HTTP_201_CREATED,

@@ -6,7 +6,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.models import Category
+from app.core.security import hash_password
+from app.models import Category, User, UserRole
 
 PRODUCTS_URL = "/api/v1/products"
 
@@ -34,6 +35,21 @@ async def register_seller(client: AsyncClient, **overrides: Any) -> Response:
 
 async def login(client: AsyncClient, email: str, password: str) -> Response:
     return await client.post("/api/v1/auth/login", json={"email": email, "password": password})
+
+
+async def become_moderator(client: AsyncClient, session: AsyncSession) -> User:
+    """There is no self-registration for moderators, so the account is seeded and then logged in."""
+    password = "moderator-password-1"
+    user = User(
+        email=f"moderator-{uuid.uuid4().hex}@example.com",
+        password_hash=hash_password(password),
+        role=UserRole.MODERATOR,
+    )
+    session.add(user)
+    await session.flush()
+    client.cookies.clear()
+    await login(client, user.email, password)
+    return user
 
 
 async def register_second_seller(client: AsyncClient) -> None:
