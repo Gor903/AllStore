@@ -6,6 +6,8 @@ import { Pagination } from "@/components/catalog/Pagination";
 import { ProductCard } from "@/components/catalog/ProductCard";
 import { PAGE_SIZE, fetchCatalogProducts, fetchCategories } from "@/lib/api";
 import { catalogSearchParams, parseCatalogQuery, toSearchParams } from "@/lib/catalog-query";
+import { currentSubdomain } from "@/lib/request-host";
+import { productHref } from "@/lib/urls";
 
 // rendered per request: the catalogue changes whenever a moderator approves something
 export const dynamic = "force-dynamic";
@@ -20,7 +22,11 @@ export const metadata: Metadata = {
 
 export default async function CatalogPage({ searchParams }: PageProps<"/catalog">) {
   const query = parseCatalogQuery(toSearchParams(await searchParams));
-  const [page, categories] = await Promise.all([fetchCatalogProducts(query), fetchCategories()]);
+  const [page, categories, subdomain] = await Promise.all([
+    fetchCatalogProducts(query),
+    fetchCategories(),
+    currentSubdomain(),
+  ]);
 
   return (
     <>
@@ -40,7 +46,11 @@ export default async function CatalogPage({ searchParams }: PageProps<"/catalog"
             <p className="text-sm text-ink-muted">Найдено товаров: {page.total}</p>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
               {page.items.map((product) => (
-                <ProductCard key={product.id} product={product} />
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  href={productHref(product.store.subdomain, product.id, subdomain)}
+                />
               ))}
             </div>
             <Pagination

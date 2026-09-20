@@ -51,7 +51,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.6,
     })),
     ...products.map((product) => ({
-      url: productUrl(product.id),
+      url: productUrl(product.store.subdomain, product.id),
       // the public view carries no updated_at, and the day a product appeared is closer
       // to the truth than the day the file was built
       lastModified: product.created_at,

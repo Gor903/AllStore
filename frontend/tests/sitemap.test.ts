@@ -79,7 +79,7 @@ describe("sitemap", () => {
     const urls = (await sitemap()).map((entry) => entry.url);
 
     expect(urls).toContain("https://shop-1.allstore.am/");
-    expect(urls).toContain("https://allstore.am/p/product-1");
+    expect(urls).toContain("https://cups.allstore.am/p/product-1");
   });
 
   it("walks through every page of the catalogue", async () => {

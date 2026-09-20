@@ -1,22 +1,45 @@
 import { env } from "@/lib/env";
 
 /**
- * One canonical address per thing, so a crawler never sees the same page twice.
+ * Where everything lives.
  *
- * A storefront is reachable both as a subdomain and as /s/{subdomain} on the marketplace.
- * The subdomain wins: it is the address the seller is given and the one they hand out.
- * A product lives on the marketplace only — the weight of every shop then lands on one
- * domain instead of being scattered across hundreds of subdomains.
+ * The marketplace domain advertises shops: it carries the catalogue, the search and the
+ * shop list. A shop and its products live on the shop's own subdomain, and that is the
+ * address a crawler is told about and a visitor is sent to. The marketplace address of a
+ * product stays reachable and redirects there permanently, so older links keep working.
  */
-export function storeUrl(subdomain: string): string {
-  const scheme = new URL(env.siteUrl).protocol;
-  return `${scheme}//${subdomain}.${env.baseDomain}/`;
+export function storeUrl(subdomain: string, path: string = "/"): string {
+  const base = new URL(env.siteUrl);
+  // the port survives: locally the gateway does not sit on 80
+  const port = base.port === "" ? "" : `:${base.port}`;
+  return `${base.protocol}//${subdomain}.${env.baseDomain}${port}${path}`;
 }
 
-export function productUrl(productId: string): string {
-  return new URL(`/p/${encodeURIComponent(productId)}`, env.siteUrl).toString();
+export function productPath(productId: string): string {
+  return `/p/${encodeURIComponent(productId)}`;
+}
+
+/** The one address of a product: inside the shop that sells it. */
+export function productUrl(subdomain: string, productId: string): string {
+  return storeUrl(subdomain, productPath(productId));
 }
 
 export function siteUrl(path: string): string {
   return new URL(path, env.siteUrl).toString();
+}
+
+/**
+ * Where a link points from the host the visitor is on. Inside the shop it stays relative —
+ * no reason to send a browser to the address it is already at.
+ */
+export function productHref(
+  subdomain: string,
+  productId: string,
+  currentSubdomain: string | null,
+): string {
+  return currentSubdomain === subdomain ? productPath(productId) : productUrl(subdomain, productId);
+}
+
+export function storeHref(subdomain: string, currentSubdomain: string | null): string {
+  return currentSubdomain === subdomain ? "/" : storeUrl(subdomain);
 }
