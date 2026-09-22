@@ -55,6 +55,10 @@ export async function apiPatch<T>(path: string, body: unknown): Promise<ApiResul
   return send<T>("PATCH", path, withJson(body));
 }
 
+export async function apiPut<T>(path: string, body: unknown): Promise<ApiResult<T>> {
+  return send<T>("PUT", path, withJson(body));
+}
+
 export async function apiDelete<T>(path: string): Promise<ApiResult<T>> {
   return send<T>("DELETE", path, {});
 }
@@ -62,4 +66,9 @@ export async function apiDelete<T>(path: string): Promise<ApiResult<T>> {
 /** Multipart: the browser writes the boundary itself, so no Content-Type is set here. */
 export async function apiUpload<T>(path: string, form: FormData): Promise<ApiResult<T>> {
   return send<T>("POST", path, { body: form });
+}
+
+/** The same, where the target holds one file and a second upload replaces it. */
+export async function apiUploadPut<T>(path: string, form: FormData): Promise<ApiResult<T>> {
+  return send<T>("PUT", path, { body: form });
 }

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { LogoutButton } from "@/components/auth/LogoutButton";
 import { StatusPill } from "@/components/dashboard/StatusPill";
 import { StoreForm } from "@/components/dashboard/StoreForm";
-import { getMyBusiness, getMyProducts, getMyStore, requireUser } from "@/lib/dal";
+import { getMyBusiness, getMyContacts, getMyProducts, getMyStore, requireUser } from "@/lib/dal";
 import { formatPrice } from "@/lib/format";
 import { productStatus } from "@/lib/product-status";
 import { storeUrl } from "@/lib/urls";
@@ -25,9 +25,9 @@ export default async function DashboardPage() {
   // the real check lives here, not in the layout: layouts do not re-render on navigation
   const user = await requireUser();
   const seller = user.role === "seller";
-  const [business, store, products] = seller
-    ? await Promise.all([getMyBusiness(), getMyStore(), getMyProducts()])
-    : [null, null, null];
+  const [business, store, products, contacts] = seller
+    ? await Promise.all([getMyBusiness(), getMyStore(), getMyProducts(), getMyContacts()])
+    : [null, null, null, null];
 
   return (
     <main className="mx-auto flex max-w-4xl flex-col gap-8 px-6 py-10">
@@ -75,20 +75,31 @@ export default async function DashboardPage() {
           {store === null ? (
             <StoreForm />
           ) : (
-            <p className="text-sm">
-              Адрес магазина:{" "}
-              <a
-                href={storeUrl(store.subdomain)}
-                className="font-medium hover:text-brand"
-                target="_blank"
-                rel="noreferrer"
-              >
-                {storeUrl(store.subdomain)}
-              </a>
-              {store.status === "active" ? null : (
-                <span className="text-ink-muted"> — откроется после одобрения</span>
-              )}
-            </p>
+            <>
+              <p className="text-sm">
+                Адрес магазина:{" "}
+                <a
+                  href={storeUrl(store.subdomain)}
+                  className="font-medium hover:text-brand"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {storeUrl(store.subdomain)}
+                </a>
+                {store.status === "active" ? null : (
+                  <span className="text-ink-muted"> — откроется после одобрения</span>
+                )}
+              </p>
+              {contacts !== null && contacts.items.length === 0 ? (
+                <p className="text-sm text-danger">
+                  Не указан ни один способ связи. Пока его нет, товар не уходит на проверку —
+                  покупателю некуда обратиться.
+                </p>
+              ) : null}
+              <Link href="/dashboard/store" className="self-start text-sm hover:text-brand">
+                Настройки магазина: оформление и контакты →
+              </Link>
+            </>
           )}
         </section>
       )}
