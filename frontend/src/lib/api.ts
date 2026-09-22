@@ -15,7 +15,10 @@ export type ModerationProduct = components["schemas"]["ModerationProductRead"];
 export type ModerationProductList = components["schemas"]["ModerationProductListResponse"];
 export type BusinessReview = components["schemas"]["BusinessReviewRead"];
 export type BusinessList = components["schemas"]["BusinessListResponse"];
+export type Contact = components["schemas"]["ContactRead"];
 export type CatalogProduct = components["schemas"]["CatalogProductRead"];
+// the card carries the ways to reach the seller; the listing deliberately does not
+export type CatalogProductDetail = components["schemas"]["CatalogProductDetailRead"];
 export type CatalogProductList = components["schemas"]["CatalogProductListResponse"];
 export type CatalogStore = components["schemas"]["CatalogStoreRead"];
 export type CatalogStoreList = components["schemas"]["CatalogStoreListResponse"];
@@ -65,9 +68,9 @@ export async function fetchCatalogProducts(
   }
 }
 
-export async function fetchCatalogProduct(productId: string): Promise<CatalogProduct | null> {
+export async function fetchCatalogProduct(productId: string): Promise<CatalogProductDetail | null> {
   try {
-    return await apiGet<CatalogProduct>(
+    return await apiGet<CatalogProductDetail>(
       `${API_PREFIX}/catalog/products/${encodeURIComponent(productId)}`,
     );
   } catch {
