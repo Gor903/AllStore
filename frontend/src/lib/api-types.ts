@@ -1547,14 +1547,17 @@ export interface components {
         /**
          * ReportRequest
          * @description Exactly one subject. A complaint about "something" is not one anyone can act on.
+         *
+         *     A shop is named by its subdomain rather than by an identifier: that is what a visitor
+         *     has in front of them, and the public storefront deliberately carries no internal ids.
          */
         ReportRequest: {
-            /** Business Id */
-            business_id?: string | null;
             /** Product Id */
             product_id?: string | null;
             /** Reason */
             reason: string;
+            /** Subdomain */
+            subdomain?: string | null;
         };
         /**
          * ReportResolutionResponse

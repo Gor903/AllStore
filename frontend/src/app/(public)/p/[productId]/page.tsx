@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 
+import { ReportButton } from "@/components/ReportButton";
 import { StoreContacts } from "@/components/StoreContacts";
 import { StoreHeader } from "@/components/StoreHeader";
 import { StoreTheme } from "@/components/StoreTheme";
@@ -150,6 +151,7 @@ export default async function ProductPage({ params }: PageProps<"/p/[productId]"
               <p className="text-sm text-ink-muted">
                 Заказ обсуждается с продавцом напрямую — оплата на платформе появится позже.
               </p>
+              <ReportButton productId={product.id} label="Пожаловаться на товар" />
             </div>
           </div>
         </div>

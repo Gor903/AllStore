@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import { notFound, permanentRedirect } from "next/navigation";
 
+import { ReportButton } from "@/components/ReportButton";
 import { StoreContacts } from "@/components/StoreContacts";
 import { StoreHeader } from "@/components/StoreHeader";
 import { StoreTheme } from "@/components/StoreTheme";
@@ -109,6 +110,9 @@ export default async function StorefrontPage({
             />
           </>
         )}
+        <footer className="mt-4 border-t border-ink-muted/15 pt-4">
+          <ReportButton subdomain={store.subdomain} label="Пожаловаться на магазин" />
+        </footer>
       </main>
     </StoreTheme>
   );

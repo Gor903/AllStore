@@ -73,10 +73,10 @@ async def test_a_guest_complains_about_a_product(
 async def test_a_guest_complains_about_a_shop(
     api_client: AsyncClient, session: AsyncSession
 ) -> None:
-    shop = await a_live_shop(api_client, session, "cups")
+    await a_live_shop(api_client, session, "cups")
     await anonymous(api_client)
 
-    response = await complain(api_client, business_id=shop.business_id, reason=REASON)
+    response = await complain(api_client, subdomain="cups", reason=REASON)
 
     assert response.status_code == 201
     assert (await rows(session))[0].business_id is not None
@@ -148,9 +148,7 @@ async def test_many_complaints_about_one_product_are_one_line(
 async def test_a_complaint_needs_exactly_one_subject(api_client: AsyncClient) -> None:
     assert (await complain(api_client, reason=REASON)).status_code == 422
     assert (
-        await complain(
-            api_client, product_id=str(uuid.uuid4()), business_id=str(uuid.uuid4()), reason=REASON
-        )
+        await complain(api_client, product_id=str(uuid.uuid4()), subdomain="cups", reason=REASON)
     ).status_code == 422
 
 
@@ -211,7 +209,7 @@ async def test_upholding_takes_the_shop_off_the_air(
     shop = await a_live_shop(api_client, session, "cups")
     await a_published_product(api_client, session, shop)
     await anonymous(api_client)
-    await complain(api_client, business_id=shop.business_id, reason=REASON)
+    await complain(api_client, subdomain="cups", reason=REASON)
     switch(api_client, shop.moderator)
 
     assert (await resolve(api_client, "business", shop.business_id, "uphold")).status_code == 200
@@ -433,7 +431,7 @@ async def test_a_shop_that_is_not_on_the_air_cannot_be_reported(
 ) -> None:
     await anonymous(api_client)
 
-    response = await complain(api_client, business_id=str(uuid.uuid4()), reason=REASON)
+    response = await complain(api_client, subdomain="nosuchshop", reason=REASON)
 
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "report_subject_not_found"
@@ -444,7 +442,7 @@ async def test_a_complaint_about_a_shop_is_dismissed_with_a_reason(
 ) -> None:
     shop = await a_live_shop(api_client, session, "cups")
     await anonymous(api_client)
-    await complain(api_client, business_id=shop.business_id, reason=REASON)
+    await complain(api_client, subdomain="cups", reason=REASON)
     switch(api_client, shop.moderator)
 
     response = await resolve(
@@ -463,7 +461,7 @@ async def test_the_queue_shows_the_shop_a_complaint_is_about(
 ) -> None:
     shop = await a_live_shop(api_client, session, "cups")
     await anonymous(api_client)
-    await complain(api_client, business_id=shop.business_id, reason=REASON)
+    await complain(api_client, subdomain="cups", reason=REASON)
     switch(api_client, shop.moderator)
 
     item = (await queue_of(api_client))["items"][0]

@@ -75,9 +75,9 @@ async def submit_report(
             session, reporter, payload.product_id, payload.reason
         )
     else:
-        assert payload.business_id is not None  # noqa: S101 — the schema enforces one subject
-        report = await reports_service.report_business(
-            session, reporter, payload.business_id, payload.reason
+        assert payload.subdomain is not None  # noqa: S101 — the schema enforces one subject
+        report = await reports_service.report_shop(
+            session, reporter, payload.subdomain, payload.reason
         )
     await session.commit()
     return ReportAccepted(id=report.id)

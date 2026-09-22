@@ -35,10 +35,12 @@ async def report_product(
     return await _file(session, reporter, product_id=product_id, business_id=None, reason=reason)
 
 
-async def report_business(
-    session: AsyncSession, reporter: User | None, business_id: uuid.UUID, reason: str
+async def report_shop(
+    session: AsyncSession, reporter: User | None, subdomain: str, reason: str
 ) -> Report:
-    await _live_business(session, business_id)
+    business_id = await reports_repo.live_business_by_subdomain(session, subdomain)
+    if business_id is None:
+        raise ReportSubjectNotFoundError("Магазин не найден")
     return await _file(session, reporter, product_id=None, business_id=business_id, reason=reason)
 
 
@@ -153,8 +155,3 @@ async def _close(
 async def _public_product(session: AsyncSession, product_id: uuid.UUID) -> None:
     if not await reports_repo.public_product_exists(session, product_id):
         raise ReportSubjectNotFoundError("Товар не найден")
-
-
-async def _live_business(session: AsyncSession, business_id: uuid.UUID) -> None:
-    if not await reports_repo.live_business_exists(session, business_id):
-        raise ReportSubjectNotFoundError("Магазин не найден")

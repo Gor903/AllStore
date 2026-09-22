@@ -8,6 +8,7 @@ from app.models import Business, Product
 from app.models.report import REASON_MAX_LENGTH
 from app.repositories.reports import OpenSubject
 from app.schemas.moderation import ModerationProductRead
+from app.schemas.store import Subdomain
 
 # trimmed first, so a line of spaces is not a complaint
 ReportReason = Annotated[
@@ -16,17 +17,21 @@ ReportReason = Annotated[
 
 
 class ReportRequest(BaseModel):
-    """Exactly one subject. A complaint about "something" is not one anyone can act on."""
+    """Exactly one subject. A complaint about "something" is not one anyone can act on.
+
+    A shop is named by its subdomain rather than by an identifier: that is what a visitor
+    has in front of them, and the public storefront deliberately carries no internal ids.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     product_id: uuid.UUID | None = None
-    business_id: uuid.UUID | None = None
+    subdomain: Subdomain | None = None
     reason: ReportReason
 
     @model_validator(mode="after")
     def _one_subject(self) -> Self:
-        if (self.product_id is None) == (self.business_id is None):
+        if (self.product_id is None) == (self.subdomain is None):
             raise ValueError("Укажите либо товар, либо магазин")
         return self
 

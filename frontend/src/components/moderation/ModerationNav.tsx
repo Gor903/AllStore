@@ -3,12 +3,13 @@ import Link from "next/link";
 import { LogoutButton } from "@/components/auth/LogoutButton";
 
 type ModerationNavProps = {
-  current: "products" | "businesses" | "catalog";
+  current: "products" | "businesses" | "catalog" | "reports";
   products: number;
   businesses: number;
+  reports?: number;
 };
 
-export function ModerationNav({ current, products, businesses }: ModerationNavProps) {
+export function ModerationNav({ current, products, businesses, reports = 0 }: ModerationNavProps) {
   const style = (active: boolean): string =>
     active
       ? "rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-white"
@@ -23,6 +24,9 @@ export function ModerationNav({ current, products, businesses }: ModerationNavPr
         </Link>
         <Link href="/moderation/businesses" className={style(current === "businesses")}>
           Продавцы ({businesses})
+        </Link>
+        <Link href="/moderation/reports" className={style(current === "reports")}>
+          Жалобы ({reports})
         </Link>
         <Link href="/moderation/catalog" className={style(current === "catalog")}>
           Поиск по каталогу
