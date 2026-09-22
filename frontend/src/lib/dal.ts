@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { cache } from "react";
 
 import type {
+  AdminCategory,
+  AuditLogList,
   Business,
   BusinessList,
   ContactList,
@@ -13,11 +15,13 @@ import type {
   ProductList,
   Store,
   User,
+  UserList,
 } from "@/lib/api";
 import { API_PREFIX, env } from "@/lib/env";
 
 // the cabinet shows the whole shelf at once; pagination arrives when a shop outgrows it
 const SELLER_PAGE_SIZE = 100;
+export const ADMIN_PAGE_SIZE = 20;
 
 async function backendGet<T>(path: string): Promise<T | null> {
   const cookieHeader = (await cookies()).toString();
@@ -84,4 +88,38 @@ export async function getModerationProducts(): Promise<ModerationProductList | n
 
 export async function getModerationBusinesses(): Promise<BusinessList | null> {
   return backendGet<BusinessList>(`/moderation/businesses?limit=${SELLER_PAGE_SIZE}`);
+}
+
+/** The administrator's screens. Every one of them is behind requireRole("admin"). */
+export async function getAdminUsers(query: string, offset: number): Promise<UserList | null> {
+  const params = new URLSearchParams({ limit: String(ADMIN_PAGE_SIZE), offset: String(offset) });
+  if (query !== "") {
+    params.set("q", query);
+  }
+  return backendGet<UserList>(`/admin/users?${params}`);
+}
+
+export async function getAdminCategories(): Promise<AdminCategory[] | null> {
+  return backendGet<AdminCategory[]>("/admin/categories");
+}
+
+export async function getAuditLogs(offset: number): Promise<AuditLogList | null> {
+  const params = new URLSearchParams({ limit: String(ADMIN_PAGE_SIZE), offset: String(offset) });
+  return backendGet<AuditLogList>(`/admin/audit-logs?${params}`);
+}
+
+/** An empty query is not a search: the backend refuses it, so it is not asked. */
+export async function searchModerationCatalog(
+  query: string,
+  offset: number,
+): Promise<ModerationProductList | null> {
+  if (query === "") {
+    return { items: [], total: 0, limit: ADMIN_PAGE_SIZE, offset };
+  }
+  const params = new URLSearchParams({
+    q: query,
+    limit: String(ADMIN_PAGE_SIZE),
+    offset: String(offset),
+  });
+  return backendGet<ModerationProductList>(`/moderation/catalog?${params}`);
 }
