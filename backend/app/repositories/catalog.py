@@ -117,6 +117,8 @@ async def get_product(session: AsyncSession, product_id: uuid.UUID) -> Product |
         _public_products()
         .options(
             contains_eager(Product.business).contains_eager(Business.store),
+            # the card shows how to reach the seller, and a lazy load has nowhere to run here
+            contains_eager(Product.business).selectinload(Business.social_links),
             selectinload(Product.images),
             selectinload(Product.category),
         )
@@ -129,7 +131,7 @@ async def list_stores(session: AsyncSession, limit: int, offset: int) -> Sequenc
     result = await session.execute(
         select(Store)
         .join(Store.business)
-        .options(contains_eager(Store.business))
+        .options(contains_eager(Store.business).selectinload(Business.social_links))
         .where(Store.status == StoreStatus.ACTIVE, Business.status == BusinessStatus.ACTIVE)
         .order_by(Store.created_at.desc(), Store.id)
         .limit(limit)

@@ -396,7 +396,14 @@ async def test_the_shop_list_holds_shops_on_the_air(
     assert body["total"] == 1
     item = body["items"][0]
     assert item["subdomain"] == "cups"
-    assert set(item) == {"subdomain", "display_name", "description", "logo_url", "banner_url"}
+    assert set(item) == {
+        "subdomain",
+        "display_name",
+        "description",
+        "logo_url",
+        "banner_url",
+        "contacts",
+    }
 
 
 async def test_a_draft_shop_is_not_listed(api_client: AsyncClient, session: AsyncSession) -> None:

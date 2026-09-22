@@ -39,6 +39,7 @@ function store(index: number): CatalogStore {
     description: null,
     logo_url: null,
     banner_url: null,
+    contacts: [],
   };
 }
 

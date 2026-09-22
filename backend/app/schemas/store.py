@@ -6,6 +6,7 @@ from pydantic import BaseModel, BeforeValidator, ConfigDict, StringConstraints
 
 from app.models import Store, StoreStatus
 from app.models.store import SUBDOMAIN_MAX_LENGTH, SUBDOMAIN_MIN_LENGTH, SUBDOMAIN_PATTERN
+from app.schemas.contact import ContactRead
 
 
 def _normalize(value: object) -> object:
@@ -42,6 +43,7 @@ class StorefrontRead(BaseModel):
     primary_color: str | None
     secondary_color: str | None
     theme_id: str
+    contacts: list[ContactRead]
 
     @classmethod
     def from_store(cls, store: Store) -> "StorefrontRead":
@@ -54,6 +56,7 @@ class StorefrontRead(BaseModel):
             primary_color=store.primary_color,
             secondary_color=store.secondary_color,
             theme_id=store.theme_id,
+            contacts=[ContactRead.from_link(link) for link in store.business.social_links],
         )
 
 

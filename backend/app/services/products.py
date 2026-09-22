@@ -13,7 +13,7 @@ from app.models import (
 )
 from app.repositories import categories, products
 from app.schemas.product import ProductCreateRequest, ProductUpdateRequest
-from app.services import moderation
+from app.services import contacts, moderation
 
 # what a moderator judged; changing any of it invalidates the verdict, price and stock do not
 MODERATED_FIELDS = frozenset({"name", "description", "category_id"})
@@ -31,6 +31,9 @@ async def create_product(
     session: AsyncSession, business: Business, payload: ProductCreateRequest
 ) -> Product:
     await resolve_category(session, payload.category_id)
+    # creating a product already files it into the queue, so the contact is required here
+    # and not only at submit — otherwise the rule would be bypassed by never resubmitting
+    await contacts.require_contact(session, business.id)
     # moderation and publication keep their model defaults: pending and draft, so the
     # product is invisible to buyers until a moderator has approved it
     product = await products.add(session, Product(business_id=business.id, **payload.model_dump()))
@@ -78,6 +81,7 @@ async def submit_product_for_review(
 ) -> Product:
     """The seller sends a refused — or an already approved — product back into the queue."""
     product = await get_owned_product(session, business_id, product_id)
+    await contacts.require_contact(session, business_id)
     moderation.submit_for_review(product)
     await session.flush()
     await session.refresh(product, attribute_names=["updated_at"])
