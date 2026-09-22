@@ -1,5 +1,6 @@
 """Модели реэкспортируются здесь, чтобы Alembic autogenerate видел полную метадату."""
 
+from app.models.audit import AuditLog
 from app.models.auth import PasswordResetToken, RefreshToken
 from app.models.business import Business, BusinessStatus
 from app.models.category import Category, CategoryStatus
@@ -22,6 +23,7 @@ from app.models.user import User, UserRole, UserStatus
 
 __all__ = [
     "PHONE_PLATFORMS",
+    "AuditLog",
     "Business",
     "BusinessDecision",
     "BusinessModerationReview",
