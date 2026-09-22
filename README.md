@@ -70,6 +70,30 @@ uv tool install pre-commit   # или pipx install pre-commit
 pre-commit install
 ```
 
+### Тесты backend: отдельная база и накатанные миграции
+
+`pytest` не создаёт схему и не поднимает Postgres — он ждёт готовую базу, так же как
+`backend-ci.yml`. Прогон на чистой машине даёт сотни падений `relation "users" does not
+exist`, пока миграции не накатаны, а прогон на базе с данными — падения тестов, которые
+ждут пустую базу (после `seed_demo` их около тридцати). И то и другое выглядит как
+регрессия, хотя код ни при чём.
+
+Поэтому тесты гоняются на **отдельной** базе, а не на той, что обслуживает
+`docker compose`:
+
+```bash
+docker compose up -d postgres minio
+docker compose exec postgres psql -U allstore -d postgres -c "CREATE DATABASE allstore_test OWNER allstore;"
+
+cd backend
+export DATABASE_URL="postgresql+asyncpg://allstore:allstore@localhost:5433/allstore_test"
+uv run alembic upgrade head   # один раз и после каждой новой ревизии
+uv run pytest
+```
+
+Остальные переменные окружения у тестов есть по умолчанию (см. `tests/conftest.py`);
+`DATABASE_URL` переопределяется, потому что его дефолт указывает на базу стенда.
+
 ## Миграции
 
 ```bash
