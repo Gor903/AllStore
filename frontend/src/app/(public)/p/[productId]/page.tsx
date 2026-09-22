@@ -3,8 +3,10 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 
+import { StoreContacts } from "@/components/StoreContacts";
 import { StoreHeader } from "@/components/StoreHeader";
-import { fetchCatalogProduct } from "@/lib/api";
+import { StoreTheme } from "@/components/StoreTheme";
+import { fetchCatalogProduct, fetchStorefront } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
 import { currentSubdomain } from "@/lib/request-host";
 import { productUrl, siteUrl } from "@/lib/urls";
@@ -52,9 +54,12 @@ export async function generateMetadata({ params }: PageProps<"/p/[productId]">):
 
 export default async function ProductPage({ params }: PageProps<"/p/[productId]">) {
   const { productId } = await params;
-  const [product, subdomain] = await Promise.all([
+  const subdomain = await currentSubdomain();
+  // the storefront is asked for by the host rather than by the product's shop: the two are
+  // the same in every case that renders, and asking by host keeps the requests parallel
+  const [product, store] = await Promise.all([
     fetchCatalogProduct(productId),
-    currentSubdomain(),
+    subdomain === null ? Promise.resolve(null) : fetchStorefront(subdomain),
   ]);
   // a product that is not public answers exactly as one that does not exist
   if (product === null) {
@@ -67,8 +72,12 @@ export default async function ProductPage({ params }: PageProps<"/p/[productId]"
   const cover = product.images[0];
 
   return (
-    <>
-      <StoreHeader displayName={product.store.display_name} homeHref="/" />
+    <StoreTheme primary={store?.primary_color ?? null} secondary={store?.secondary_color ?? null}>
+      <StoreHeader
+        displayName={product.store.display_name}
+        homeHref="/"
+        logoUrl={store?.logo_url ?? null}
+      />
       <main className="mx-auto flex max-w-5xl flex-col gap-6 px-6 py-8">
         <nav className="text-sm text-ink-muted">
           <a href={siteUrl("/catalog")} className="hover:text-brand">
@@ -130,18 +139,21 @@ export default async function ProductPage({ params }: PageProps<"/p/[productId]"
             {product.description === null ? null : (
               <p className="whitespace-pre-line">{product.description}</p>
             )}
-            <div className="mt-auto rounded-card border border-ink-muted/15 p-4">
-              <p className="text-sm text-ink-muted">Продавец</p>
-              <Link href="/" className="text-lg font-medium hover:text-brand">
-                {product.store.display_name}
-              </Link>
-              <p className="mt-2 text-sm text-ink-muted">
+            <div className="mt-auto flex flex-col gap-3 rounded-card border border-ink-muted/15 p-4">
+              <div>
+                <p className="text-sm text-ink-muted">Продавец</p>
+                <Link href="/" className="text-lg font-medium hover:text-brand">
+                  {product.store.display_name}
+                </Link>
+              </div>
+              <StoreContacts contacts={product.store.contacts} />
+              <p className="text-sm text-ink-muted">
                 Заказ обсуждается с продавцом напрямую — оплата на платформе появится позже.
               </p>
             </div>
           </div>
         </div>
       </main>
-    </>
+    </StoreTheme>
   );
 }

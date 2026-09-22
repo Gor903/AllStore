@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { CatalogProduct, Storefront } from "@/lib/api";
+import type { CatalogProduct, CatalogProductDetail, Contact, Storefront } from "@/lib/api";
 
 const host = { value: "cups.allstore.am" };
 
@@ -33,6 +33,18 @@ const PRODUCT: CatalogProduct = {
   created_at: "2026-09-21T00:00:00Z",
 };
 
+const PHONE: Contact = {
+  platform: "phone",
+  value: "+37410123456",
+  href: "tel:+37410123456",
+};
+
+// what the card endpoint adds on top of the listing: the ways to reach the seller
+const PRODUCT_DETAIL: CatalogProductDetail = {
+  ...PRODUCT,
+  store: { ...PRODUCT.store, contacts: [PHONE] },
+};
+
 const STORE: Storefront = {
   subdomain: "cups",
   display_name: "Лавка кружек",
@@ -43,6 +55,15 @@ const STORE: Storefront = {
   secondary_color: null,
   theme_id: "default",
   contacts: [],
+};
+
+const DRESSED: Storefront = {
+  ...STORE,
+  logo_url: "https://cdn.example/logo.jpg",
+  banner_url: "https://cdn.example/banner.jpg",
+  primary_color: "#c4805c",
+  secondary_color: "#eed6ba",
+  contacts: [PHONE],
 };
 
 const productProps = (productId: string) => ({
@@ -64,7 +85,7 @@ beforeEach(() => {
 
 describe("product page", () => {
   it("renders on the subdomain of the shop that sells it", async () => {
-    vi.mocked(fetchCatalogProduct).mockResolvedValue(PRODUCT);
+    vi.mocked(fetchCatalogProduct).mockResolvedValue(PRODUCT_DETAIL);
 
     render(await ProductPage(productProps(PRODUCT.id)));
 
@@ -75,7 +96,7 @@ describe("product page", () => {
 
   it("moves the visitor into the shop when opened on the marketplace", async () => {
     host.value = "allstore.am";
-    vi.mocked(fetchCatalogProduct).mockResolvedValue(PRODUCT);
+    vi.mocked(fetchCatalogProduct).mockResolvedValue(PRODUCT_DETAIL);
 
     await expect(ProductPage(productProps(PRODUCT.id))).rejects.toThrow();
   });
@@ -85,6 +106,39 @@ describe("product page", () => {
     vi.mocked(fetchCatalogProduct).mockResolvedValue(null);
 
     await expect(ProductPage(productProps(PRODUCT.id))).rejects.toThrow();
+  });
+
+  it("gives the buyer a way to reach the seller", async () => {
+    // there is no cart in the MVP, so this link is the whole of the transaction
+    vi.mocked(fetchCatalogProduct).mockResolvedValue(PRODUCT_DETAIL);
+    vi.mocked(fetchStorefront).mockResolvedValue(STORE);
+
+    render(await ProductPage(productProps(PRODUCT.id)));
+
+    expect(screen.getByRole("link", { name: /Телефон/u })).toHaveAttribute(
+      "href",
+      "tel:+37410123456",
+    );
+  });
+
+  it("wears the shop it is sold in", async () => {
+    vi.mocked(fetchCatalogProduct).mockResolvedValue(PRODUCT_DETAIL);
+    vi.mocked(fetchStorefront).mockResolvedValue(DRESSED);
+
+    const { container } = render(await ProductPage(productProps(PRODUCT.id)));
+
+    expect(container.querySelector('img[src="https://cdn.example/logo.jpg"]')).toBeInTheDocument();
+    expect(container.querySelector("[style*='--color-brand']")).toBeInTheDocument();
+  });
+
+  it("still renders when the storefront cannot be read", async () => {
+    // the product is the page; its shop's colours are decoration and may be missing
+    vi.mocked(fetchCatalogProduct).mockResolvedValue(PRODUCT_DETAIL);
+    vi.mocked(fetchStorefront).mockResolvedValue(null);
+
+    render(await ProductPage(productProps(PRODUCT.id)));
+
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Кружка керамическая");
   });
 });
 
@@ -134,5 +188,58 @@ describe("storefront page", () => {
     vi.mocked(fetchStorefront).mockResolvedValue(null);
 
     await expect(StorefrontPage(storeProps("cups"))).rejects.toThrow();
+  });
+
+  it("shows what the seller dressed it in", async () => {
+    vi.mocked(fetchStorefront).mockResolvedValue(DRESSED);
+    vi.mocked(fetchCatalogProducts).mockResolvedValue({
+      items: [],
+      total: 0,
+      limit: 24,
+      offset: 0,
+    });
+
+    const { container } = render(await StorefrontPage(storeProps("cups")));
+
+    expect(container.querySelector('img[src="https://cdn.example/logo.jpg"]')).toBeInTheDocument();
+    expect(
+      container.querySelector('img[src="https://cdn.example/banner.jpg"]'),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Керамика ручной работы")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Телефон/u })).toHaveAttribute(
+      "href",
+      "tel:+37410123456",
+    );
+  });
+
+  it("paints its own colours over the shared skeleton", async () => {
+    vi.mocked(fetchStorefront).mockResolvedValue(DRESSED);
+    vi.mocked(fetchCatalogProducts).mockResolvedValue({
+      items: [],
+      total: 0,
+      limit: 24,
+      offset: 0,
+    });
+
+    const { container } = render(await StorefrontPage(storeProps("cups")));
+
+    const painted = container.querySelector("[style*='--color-brand']");
+    expect(painted).toHaveStyle({ "--color-brand": "#c4805c" });
+    expect(painted).toHaveStyle({ "--color-brand-dark": "#eed6ba" });
+  });
+
+  it("inherits the platform look when the seller chose nothing", async () => {
+    vi.mocked(fetchStorefront).mockResolvedValue(STORE);
+    vi.mocked(fetchCatalogProducts).mockResolvedValue({
+      items: [],
+      total: 0,
+      limit: 24,
+      offset: 0,
+    });
+
+    const { container } = render(await StorefrontPage(storeProps("cups")));
+
+    expect(container.querySelector("[style*='--color-brand']")).toBeNull();
+    expect(container.querySelector("img")).toBeNull();
   });
 });
