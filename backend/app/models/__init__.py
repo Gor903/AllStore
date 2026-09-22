@@ -3,6 +3,7 @@
 from app.models.auth import PasswordResetToken, RefreshToken
 from app.models.business import Business, BusinessStatus
 from app.models.category import Category, CategoryStatus
+from app.models.contact import PHONE_PLATFORMS, ContactPlatform, SocialLink
 from app.models.moderation import (
     BusinessDecision,
     BusinessModerationReview,
@@ -20,12 +21,14 @@ from app.models.store import Store, StoreStatus
 from app.models.user import User, UserRole, UserStatus
 
 __all__ = [
+    "PHONE_PLATFORMS",
     "Business",
     "BusinessDecision",
     "BusinessModerationReview",
     "BusinessStatus",
     "Category",
     "CategoryStatus",
+    "ContactPlatform",
     "ModerationDecision",
     "ModerationReview",
     "ModerationStatus",
@@ -35,6 +38,7 @@ __all__ = [
     "ProductImage",
     "PublicationStatus",
     "RefreshToken",
+    "SocialLink",
     "Store",
     "StoreStatus",
     "User",

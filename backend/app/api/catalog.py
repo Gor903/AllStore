@@ -7,6 +7,7 @@ from app.deps.auth import SessionDep
 from app.models.category import CATEGORY_SLUG_MAX_LENGTH
 from app.models.store import SUBDOMAIN_MAX_LENGTH
 from app.schemas.catalog import (
+    CatalogProductDetailRead,
     CatalogProductListResponse,
     CatalogProductRead,
     CatalogStoreListResponse,
@@ -48,9 +49,10 @@ async def search_products(
     )
 
 
-@router.get("/products/{product_id}", response_model=CatalogProductRead)
-async def read_product(product_id: uuid.UUID, session: SessionDep) -> CatalogProductRead:
-    return CatalogProductRead.from_product(await catalog_service.get_product(session, product_id))
+@router.get("/products/{product_id}", response_model=CatalogProductDetailRead)
+async def read_product(product_id: uuid.UUID, session: SessionDep) -> CatalogProductDetailRead:
+    product = await catalog_service.get_product(session, product_id)
+    return CatalogProductDetailRead.from_product(product)
 
 
 @router.get("/stores", response_model=CatalogStoreListResponse)

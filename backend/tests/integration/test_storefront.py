@@ -20,6 +20,7 @@ PUBLIC_FIELDS = {
     "primary_color",
     "secondary_color",
     "theme_id",
+    "contacts",
 }
 
 

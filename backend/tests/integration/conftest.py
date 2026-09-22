@@ -10,6 +10,7 @@ from app.core.security import hash_password
 from app.models import Category, User, UserRole
 
 PRODUCTS_URL = "/api/v1/products"
+CONTACTS_URL = "/api/v1/stores/me/contacts"
 
 BUYER_PAYLOAD = {"email": "Buyer@Example.com", "password": "buyer-password-1"}
 SELLER_PAYLOAD = {
@@ -74,7 +75,16 @@ def product_payload(category_id: uuid.UUID, **overrides: Any) -> dict[str, Any]:
     return body
 
 
+async def set_contacts(client: AsyncClient, *items: dict[str, str]) -> Response:
+    payload = list(items) or [{"platform": "phone", "value": "+37410123456"}]
+    return await client.put(CONTACTS_URL, json={"items": payload}, headers=csrf_headers(client))
+
+
 async def create_product(client: AsyncClient, category_id: uuid.UUID, **overrides: Any) -> Response:
+    """Seeds a contact first: since этап 11 a product may not enter the queue without one,
+    so a seller who can sell is a seller a buyer can reach. The rule itself is tested in
+    test_contacts.py, where the seeding is deliberately skipped."""
+    await set_contacts(client)
     return await client.post(
         PRODUCTS_URL, json=product_payload(category_id, **overrides), headers=csrf_headers(client)
     )

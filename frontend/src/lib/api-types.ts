@@ -558,6 +558,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/stores/me/contacts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read My Contacts */
+        get: operations["read_my_contacts_api_v1_stores_me_contacts_get"];
+        /** Replace My Contacts */
+        put: operations["replace_my_contacts_api_v1_stores_me_contacts_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users/me": {
         parameters: {
             query?: never;
@@ -734,6 +752,36 @@ export interface components {
             /** Image Url */
             image_url: string;
         };
+        /**
+         * CatalogProductDetailRead
+         * @description The page a buyer lands on, and the only place the contacts ride along: a listing of
+         *     twenty products from one shop would repeat the same phone twenty times.
+         */
+        CatalogProductDetailRead: {
+            availability_status: components["schemas"]["ProductAvailability"];
+            category: components["schemas"]["CatalogCategoryRead"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Currency */
+            currency: string;
+            /** Description */
+            description: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Images */
+            images: components["schemas"]["CatalogImageRead"][];
+            /** Name */
+            name: string;
+            /** Price */
+            price: string;
+            store: components["schemas"]["CatalogStoreContactRef"];
+        };
         /** CatalogProductListResponse */
         CatalogProductListResponse: {
             /** Items */
@@ -771,6 +819,15 @@ export interface components {
             price: string;
             store: components["schemas"]["CatalogStoreRef"];
         };
+        /** CatalogStoreContactRef */
+        CatalogStoreContactRef: {
+            /** Contacts */
+            contacts: components["schemas"]["ContactRead"][];
+            /** Display Name */
+            display_name: string;
+            /** Subdomain */
+            subdomain: string;
+        };
         /** CatalogStoreListResponse */
         CatalogStoreListResponse: {
             /** Items */
@@ -786,6 +843,8 @@ export interface components {
         CatalogStoreRead: {
             /** Banner Url */
             banner_url: string | null;
+            /** Contacts */
+            contacts: components["schemas"]["ContactRead"][];
             /** Description */
             description: string | null;
             /** Display Name */
@@ -820,6 +879,40 @@ export interface components {
             name: string;
             /** Slug */
             slug: string;
+        };
+        /**
+         * ContactPlatform
+         * @description Declaration order is display order: a buyer sees the ways to call before the profiles.
+         * @enum {string}
+         */
+        ContactPlatform: "phone" | "whatsapp" | "telegram" | "viber" | "instagram" | "facebook";
+        /** ContactRead */
+        ContactRead: {
+            /** Href */
+            href: string;
+            platform: components["schemas"]["ContactPlatform"];
+            /** Value */
+            value: string;
+        };
+        /** ContactWrite */
+        ContactWrite: {
+            platform: components["schemas"]["ContactPlatform"];
+            /** Value */
+            value: string;
+        };
+        /**
+         * ContactsRequest
+         * @description The whole set at once: the settings screen is one form, and replacing it wholesale
+         *     means a contact the seller cleared is gone rather than left behind by a missed delete.
+         */
+        ContactsRequest: {
+            /** Items */
+            items?: components["schemas"]["ContactWrite"][];
+        };
+        /** ContactsResponse */
+        ContactsResponse: {
+            /** Items */
+            items: components["schemas"]["ContactRead"][];
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -1157,6 +1250,8 @@ export interface components {
         StorefrontRead: {
             /** Banner Url */
             banner_url: string | null;
+            /** Contacts */
+            contacts: components["schemas"]["ContactRead"][];
             /** Description */
             description: string | null;
             /** Display Name */
@@ -1531,7 +1626,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CatalogProductRead"];
+                    "application/json": components["schemas"]["CatalogProductDetailRead"];
                 };
             };
             /** @description Validation Error */
@@ -2257,6 +2352,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StoreRead"];
+                };
+            };
+        };
+    };
+    read_my_contacts_api_v1_stores_me_contacts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContactsResponse"];
+                };
+            };
+        };
+    };
+    replace_my_contacts_api_v1_stores_me_contacts_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContactsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContactsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

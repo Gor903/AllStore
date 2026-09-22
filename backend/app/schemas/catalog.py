@@ -5,9 +5,12 @@ from decimal import Decimal
 from pydantic import BaseModel
 
 from app.models import Category, Product, ProductAvailability, Store
+from app.schemas.contact import ContactRead
 
 # Nothing internal is listed in this module — no identifiers of a business, no moderation or
 # publication status, no stock figures, no legal name. A visitor sees a shop window.
+# Contacts are the one thing a seller publishes on purpose, so they belong here; the login
+# email and the phone of the user record do not, and neither is reachable from these shapes.
 
 
 class CatalogImageRead(BaseModel):
@@ -25,6 +28,10 @@ class CatalogStoreRef(BaseModel):
     display_name: str
 
 
+class CatalogStoreContactRef(CatalogStoreRef):
+    contacts: list[ContactRead]
+
+
 class CatalogProductRead(BaseModel):
     id: uuid.UUID
     name: str
@@ -38,7 +45,13 @@ class CatalogProductRead(BaseModel):
     created_at: datetime
 
     @classmethod
-    def from_product(cls, product: Product) -> "CatalogProductRead":
+    def _store_ref(cls, product: Product, store: Store) -> CatalogStoreRef:
+        return CatalogStoreRef(
+            subdomain=store.subdomain, display_name=product.business.display_name
+        )
+
+    @classmethod
+    def from_product[T: "CatalogProductRead"](cls: type[T], product: Product) -> T:
         store = product.business.store
         if store is None:  # pragma: no cover — the public query joins the store in
             raise ValueError("a public product always belongs to a storefront")
@@ -50,14 +63,27 @@ class CatalogProductRead(BaseModel):
             currency=product.currency,
             availability_status=product.availability_status,
             category=CatalogCategoryRead(slug=product.category.slug, name=product.category.name),
-            store=CatalogStoreRef(
-                subdomain=store.subdomain, display_name=product.business.display_name
-            ),
+            store=cls._store_ref(product, store),
             images=[
                 CatalogImageRead(image_url=image.image_url, alt_text=image.alt_text)
                 for image in product.images
             ],
             created_at=product.created_at,
+        )
+
+
+class CatalogProductDetailRead(CatalogProductRead):
+    """The page a buyer lands on, and the only place the contacts ride along: a listing of
+    twenty products from one shop would repeat the same phone twenty times."""
+
+    store: CatalogStoreContactRef
+
+    @classmethod
+    def _store_ref(cls, product: Product, store: Store) -> CatalogStoreContactRef:
+        return CatalogStoreContactRef(
+            subdomain=store.subdomain,
+            display_name=product.business.display_name,
+            contacts=[ContactRead.from_link(link) for link in product.business.social_links],
         )
 
 
@@ -74,6 +100,7 @@ class CatalogStoreRead(BaseModel):
     description: str | None
     logo_url: str | None
     banner_url: str | None
+    contacts: list[ContactRead]
 
     @classmethod
     def from_store(cls, store: Store) -> "CatalogStoreRead":
@@ -83,6 +110,7 @@ class CatalogStoreRead(BaseModel):
             description=store.business.description,
             logo_url=store.logo_url,
             banner_url=store.banner_url,
+            contacts=[ContactRead.from_link(link) for link in store.business.social_links],
         )
 
 

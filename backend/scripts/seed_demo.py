@@ -66,6 +66,8 @@ class ShopSpec:
     subdomain: str
     description: str
     products: tuple[ProductSpec, ...]
+    # a shop cannot file a product without a way to reach it, so every demo shop has one
+    contacts: tuple[tuple[str, str], ...]
     admitted: bool = True
 
 
@@ -86,6 +88,7 @@ SHOPS: tuple[ShopSpec, ...] = (
         legal_name='ИП "Саркисян А."',
         subdomain="keramika",
         description="Керамика ручной работы из Гюмри: посуда, вазы, подарочные наборы.",
+        contacts=(("phone", "+37493110011"), ("whatsapp", "+37493110011")),
         products=(
             ProductSpec(
                 name="Кружка керамическая «Арарат»",
@@ -133,6 +136,7 @@ SHOPS: tuple[ShopSpec, ...] = (
         legal_name='ООО "Техно Ереван"',
         subdomain="tehno",
         description="Смартфоны, ноутбуки и аудио с официальной гарантией. Самовывоз в центре.",
+        contacts=(("phone", "+37410550022"), ("telegram", "tehno_erevan")),
         products=(
             ProductSpec(
                 name="Смартфон Nova 12, 256 ГБ",
@@ -187,6 +191,7 @@ SHOPS: tuple[ShopSpec, ...] = (
         legal_name='ИП "Мкртчян Л."',
         subdomain="anush",
         description="Сухофрукты, пахлава и варенье по домашним рецептам. Доставка по Еревану.",
+        contacts=(("viber", "+37477330044"), ("instagram", "anush.sweets")),
         products=(
             ProductSpec(
                 name="Пахлава медовая, 500 г",
@@ -241,6 +246,7 @@ SHOPS: tuple[ShopSpec, ...] = (
         legal_name='ИП "Ованнисян Т."',
         subdomain="karpet",
         description="Ковры ручной работы, пледы и скатерти. Своё производство в Ванадзоре.",
+        contacts=(("phone", "+37455770055"), ("facebook", "karpet.vanadzor")),
         products=(
             ProductSpec(
                 name="Ковёр шерстяной 150×200",
@@ -286,6 +292,7 @@ SHOPS: tuple[ShopSpec, ...] = (
         legal_name='ИП "Петросян Г."',
         subdomain="arciv",
         description="Серебро 925 пробы ручной работы. Заявка ещё ждёт проверки модератора.",
+        contacts=(("telegram", "arciv_studio"),),
         admitted=False,
         products=(
             ProductSpec(
@@ -428,6 +435,19 @@ async def open_shop(
             ),
             code=201,
             what=f"витрина {spec.subdomain}",
+        )
+        await expect(
+            await client.put(
+                "/api/v1/stores/me/contacts",
+                json={
+                    "items": [
+                        {"platform": platform, "value": value} for platform, value in spec.contacts
+                    ]
+                },
+                headers=csrf(client),
+            ),
+            code=200,
+            what=f"контакты {spec.display_name}",
         )
 
         products: list[tuple[ProductSpec, str]] = []

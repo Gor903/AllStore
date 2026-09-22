@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
-from app.models import Store
+from app.models import Business, Store
 
 
 async def get_by_subdomain(session: AsyncSession, subdomain: str) -> Store | None:
@@ -13,9 +13,12 @@ async def get_by_subdomain(session: AsyncSession, subdomain: str) -> Store | Non
 
 
 async def get_with_business_by_subdomain(session: AsyncSession, subdomain: str) -> Store | None:
-    """Business is loaded with the store: the storefront shows its name and description."""
+    """Business is loaded with the store: the storefront shows its name, description and
+    the ways to reach the seller."""
     result = await session.execute(
-        select(Store).options(joinedload(Store.business)).where(Store.subdomain == subdomain)
+        select(Store)
+        .options(joinedload(Store.business).selectinload(Business.social_links))
+        .where(Store.subdomain == subdomain)
     )
     return result.scalar_one_or_none()
 

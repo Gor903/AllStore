@@ -42,6 +42,7 @@ const STORE: Storefront = {
   primary_color: null,
   secondary_color: null,
   theme_id: "default",
+  contacts: [],
 };
 
 const productProps = (productId: string) => ({
