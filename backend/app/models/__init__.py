@@ -18,6 +18,7 @@ from app.models.product import (
     ProductImage,
     PublicationStatus,
 )
+from app.models.report import Report, ReportStatus
 from app.models.store import Store, StoreStatus
 from app.models.user import User, UserRole, UserStatus
 
@@ -40,6 +41,8 @@ __all__ = [
     "ProductImage",
     "PublicationStatus",
     "RefreshToken",
+    "Report",
+    "ReportStatus",
     "SocialLink",
     "Store",
     "StoreStatus",
