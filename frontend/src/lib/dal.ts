@@ -7,6 +7,7 @@ import { cache } from "react";
 import type {
   Business,
   BusinessList,
+  ContactList,
   ModerationProductList,
   Product,
   ProductList,
@@ -62,6 +63,11 @@ export async function getMyBusiness(): Promise<Business | null> {
 /** Null when the seller has not opened a storefront yet — the backend answers 404. */
 export async function getMyStore(): Promise<Store | null> {
   return backendGet<Store>("/stores/me");
+}
+
+/** An empty set is a valid answer; null means the seller has no shop to ask about. */
+export async function getMyContacts(): Promise<ContactList | null> {
+  return backendGet<ContactList>("/stores/me/contacts");
 }
 
 export async function getMyProducts(): Promise<ProductList | null> {

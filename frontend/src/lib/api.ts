@@ -16,6 +16,7 @@ export type ModerationProductList = components["schemas"]["ModerationProductList
 export type BusinessReview = components["schemas"]["BusinessReviewRead"];
 export type BusinessList = components["schemas"]["BusinessListResponse"];
 export type Contact = components["schemas"]["ContactRead"];
+export type ContactList = components["schemas"]["ContactsResponse"];
 export type CatalogProduct = components["schemas"]["CatalogProductRead"];
 // the card carries the ways to reach the seller; the listing deliberately does not
 export type CatalogProductDetail = components["schemas"]["CatalogProductDetailRead"];
