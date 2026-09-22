@@ -1,21 +1,24 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, status
 
 from app.core.errors import NotFoundError
 from app.deps.auth import SessionDep, require_csrf, require_role
 from app.models import User, UserRole
 from app.repositories import users as users_repo
 from app.schemas.admin import (
+    AdminCategoryRead,
     AuditLogListResponse,
     AuditLogRead,
     BlockRequest,
+    CategoryCreateRequest,
+    CategoryUpdateRequest,
     RoleChangeRequest,
     UserListResponse,
 )
 from app.schemas.auth import UserRead
-from app.services import admin_users, audit
+from app.services import admin_categories, admin_users, audit
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -98,3 +101,47 @@ async def list_audit_logs(
         limit=limit,
         offset=offset,
     )
+
+
+@router.get("/categories", response_model=list[AdminCategoryRead])
+async def list_categories(_: AdminUser, session: SessionDep) -> list[AdminCategoryRead]:
+    tree = await admin_categories.list_tree(session)
+    return [AdminCategoryRead.from_root(category) for category in tree]
+
+
+@router.post(
+    "/categories",
+    response_model=AdminCategoryRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_csrf)],
+)
+async def create_category(
+    payload: CategoryCreateRequest, admin: AdminUser, session: SessionDep
+) -> AdminCategoryRead:
+    category = await admin_categories.create(
+        session, admin, payload.name, payload.slug, payload.parent_id
+    )
+    await session.commit()
+    return AdminCategoryRead.leaf(category)
+
+
+@router.patch(
+    "/categories/{category_id}",
+    response_model=AdminCategoryRead,
+    dependencies=[Depends(require_csrf)],
+)
+async def update_category(
+    category_id: uuid.UUID,
+    payload: CategoryUpdateRequest,
+    admin: AdminUser,
+    session: SessionDep,
+) -> AdminCategoryRead:
+    category = None
+    if payload.name is not None:
+        category = await admin_categories.rename(session, admin, category_id, payload.name)
+    if payload.status is not None:
+        category = await admin_categories.set_status(session, admin, category_id, payload.status)
+    if category is None:
+        category = await admin_categories.find(session, category_id)
+    await session.commit()
+    return AdminCategoryRead.leaf(category)

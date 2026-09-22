@@ -22,6 +22,8 @@ ModeratorUser = Annotated[User, Depends(require_role(UserRole.MODERATOR, UserRol
 DEFAULT_PAGE_SIZE = 20
 MAX_PAGE_SIZE = 100
 
+QUERY_MAX_LENGTH = 100
+
 Limit = Annotated[int, Query(ge=1, le=MAX_PAGE_SIZE)]
 Offset = Annotated[int, Query(ge=0)]
 
@@ -34,6 +36,24 @@ async def read_queue(
     offset: Offset = 0,
 ) -> ModerationProductListResponse:
     items, total = await moderation_queue.list_queue(session, limit, offset)
+    return ModerationProductListResponse(
+        items=[ModerationProductRead.from_product(item) for item in items],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get("/catalog", response_model=ModerationProductListResponse)
+async def search_catalog(
+    moderator: ModeratorUser,
+    session: SessionDep,
+    q: Annotated[str, Query(min_length=1, max_length=QUERY_MAX_LENGTH)],
+    limit: Limit = DEFAULT_PAGE_SIZE,
+    offset: Offset = 0,
+) -> ModerationProductListResponse:
+    """A product that is not in the queue: the one a complaint or a report is about."""
+    items, total = await moderation_queue.search(session, q, limit, offset)
     return ModerationProductListResponse(
         items=[ModerationProductRead.from_product(item) for item in items],
         total=total,

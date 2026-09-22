@@ -1,11 +1,12 @@
 import uuid
 from collections.abc import Sequence
 
-from sqlalchemy import func, select
+from sqlalchemy import ColumnElement, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import contains_eager, selectinload
 
 from app.models import Business, ModerationReview, ModerationStatus, Product
+from app.repositories.catalog import LIKE_ESCAPE, like_pattern
 
 # The queries here deliberately do not filter by business_id: a moderator works across every
 # tenant, and that is the one role for which the isolation rule does not hold. Archived
@@ -67,3 +68,43 @@ async def add_review(session: AsyncSession, review: ModerationReview) -> Moderat
     session.add(review)
     await session.flush()
     return review
+
+
+def _found(query: str) -> ColumnElement[bool]:
+    """By product name or by shop: a moderator acting on a complaint usually knows one
+    or the other, rarely an identifier."""
+    pattern = like_pattern(query)
+    return or_(
+        Product.name.ilike(pattern, escape=LIKE_ESCAPE),
+        Business.display_name.ilike(pattern, escape=LIKE_ESCAPE),
+    )
+
+
+async def search(session: AsyncSession, query: str, limit: int, offset: int) -> Sequence[Product]:
+    """Every status, not just the queue: what a moderator is sent after is usually already
+    on the shelf. Archived is left out — the seller has withdrawn it themselves."""
+    result = await session.execute(
+        select(Product)
+        .join(Product.business)
+        .options(
+            contains_eager(Product.business).selectinload(Business.store),
+            selectinload(Product.images),
+            selectinload(Product.reviews),
+            selectinload(Product.category),
+        )
+        .where(Product.archived_at.is_(None), _found(query))
+        .order_by(Product.created_at.desc(), Product.id)
+        .limit(limit)
+        .offset(offset)
+    )
+    return result.unique().scalars().all()
+
+
+async def count_search(session: AsyncSession, query: str) -> int:
+    result = await session.execute(
+        select(func.count())
+        .select_from(Product)
+        .join(Product.business)
+        .where(Product.archived_at.is_(None), _found(query))
+    )
+    return result.scalar_one()
