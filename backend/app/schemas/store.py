@@ -2,11 +2,20 @@ import uuid
 from datetime import datetime
 from typing import Annotated
 
-from pydantic import BaseModel, BeforeValidator, ConfigDict, StringConstraints
+from pydantic import BaseModel, BeforeValidator, ConfigDict, StringConstraints, model_validator
 
-from app.models import Store, StoreStatus
-from app.models.store import SUBDOMAIN_MAX_LENGTH, SUBDOMAIN_MIN_LENGTH, SUBDOMAIN_PATTERN
+from app.models import Business, Store, StoreStatus
+from app.models.store import (
+    AVAILABLE_THEMES,
+    COLOUR_PATTERN,
+    SUBDOMAIN_MAX_LENGTH,
+    SUBDOMAIN_MIN_LENGTH,
+    SUBDOMAIN_PATTERN,
+)
 from app.schemas.contact import ContactRead
+
+# a shop tells its story, it does not write an article
+DESCRIPTION_MAX_LENGTH = 2000
 
 
 def _normalize(value: object) -> object:
@@ -29,6 +38,53 @@ Subdomain = Annotated[
 
 class StoreCreateRequest(BaseModel):
     subdomain: Subdomain
+
+
+def _normalize_colour(value: object) -> object:
+    """#AABBCC and #aabbcc are the same colour, and the column keeps one shape."""
+    return value.strip().lower() if isinstance(value, str) else value
+
+
+Colour = Annotated[
+    str,
+    StringConstraints(pattern=COLOUR_PATTERN),
+    BeforeValidator(_normalize_colour),
+]
+StoreDescription = Annotated[
+    str, StringConstraints(strip_whitespace=True, max_length=DESCRIPTION_MAX_LENGTH)
+]
+
+# everything a seller may clear back to the default look; the subdomain is not among them
+CLEARABLE_FIELDS = frozenset({"description", "primary_color", "secondary_color"})
+
+
+class StoreUpdateRequest(BaseModel):
+    """Only the fields present in the body change. Null clears a field back to the default,
+    which for a colour means the theme decides and for a description means none is shown.
+
+    The subdomain is not here: it is the address the seller has already given out, and the
+    storefront answers at it. Renaming it is a separate decision with its own redirects.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    description: StoreDescription | None = None
+    primary_color: Colour | None = None
+    secondary_color: Colour | None = None
+    theme_id: str | None = None
+
+    @model_validator(mode="after")
+    def _check(self) -> "StoreUpdateRequest":
+        nulled = sorted(
+            field
+            for field in self.model_fields_set
+            if getattr(self, field) is None and field not in CLEARABLE_FIELDS
+        )
+        if nulled:
+            raise ValueError(f"Эти поля нельзя очистить: {', '.join(nulled)}")
+        if self.theme_id is not None and self.theme_id not in AVAILABLE_THEMES:
+            raise ValueError(f"Неизвестная тема, доступны: {', '.join(sorted(AVAILABLE_THEMES))}")
+        return self
 
 
 class StorefrontRead(BaseModel):
@@ -61,11 +117,14 @@ class StorefrontRead(BaseModel):
 
 
 class StoreRead(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+    """What the seller sees of their own storefront. The description is kept on the
+    business, so it is passed in rather than read through a relation that may not be
+    loaded — a lazy load in the async session would have nowhere to run."""
 
     id: uuid.UUID
     business_id: uuid.UUID
     subdomain: str
+    description: str | None
     logo_url: str | None
     banner_url: str | None
     primary_color: str | None
@@ -73,3 +132,19 @@ class StoreRead(BaseModel):
     theme_id: str
     status: StoreStatus
     created_at: datetime
+
+    @classmethod
+    def of(cls, store: Store, business: Business) -> "StoreRead":
+        return cls(
+            id=store.id,
+            business_id=store.business_id,
+            subdomain=store.subdomain,
+            description=business.description,
+            logo_url=store.logo_url,
+            banner_url=store.banner_url,
+            primary_color=store.primary_color,
+            secondary_color=store.secondary_color,
+            theme_id=store.theme_id,
+            status=store.status,
+            created_at=store.created_at,
+        )

@@ -17,6 +17,12 @@ SUBDOMAIN_MAX_LENGTH = 63
 # a DNS label: lowercase, no leading or trailing hyphen
 SUBDOMAIN_PATTERN = r"^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$"
 
+COLOUR_PATTERN = r"^#[0-9a-f]{6}$"
+
+# a theme is added here once the storefront can actually render it; until then an unknown
+# id is refused rather than stored, so a seller cannot pick a look that does not exist
+AVAILABLE_THEMES = frozenset({"default"})
+
 
 class StoreStatus(enum.StrEnum):
     DRAFT = "draft"

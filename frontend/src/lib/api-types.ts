@@ -555,7 +555,8 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /** Update My Store */
+        patch: operations["update_my_store_api_v1_stores_me_patch"];
         trace?: never;
     };
     "/api/v1/stores/me/contacts": {
@@ -571,6 +572,28 @@ export interface paths {
         put: operations["replace_my_contacts_api_v1_stores_me_contacts_put"];
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/stores/me/images/{kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Store Image
+         * @description PUT rather than POST: a storefront has one logo and one banner, so a second upload
+         *     replaces the first instead of adding to a gallery.
+         */
+        put: operations["set_store_image_api_v1_stores_me_images__kind__put"];
+        post?: never;
+        /** Clear Store Image */
+        delete: operations["clear_store_image_api_v1_stores_me_images__kind__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -654,6 +677,11 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** Body_set_store_image_api_v1_stores_me_images__kind__put */
+        Body_set_store_image_api_v1_stores_me_images__kind__put: {
+            /** File */
+            file: string;
+        };
         /** Body_upload_product_image_api_v1_products__product_id__images_post */
         Body_upload_product_image_api_v1_products__product_id__images_post: {
             /** Alt Text */
@@ -1206,7 +1234,17 @@ export interface components {
             /** Subdomain */
             subdomain: string;
         };
-        /** StoreRead */
+        /**
+         * StoreImageKind
+         * @enum {string}
+         */
+        StoreImageKind: "logo" | "banner";
+        /**
+         * StoreRead
+         * @description What the seller sees of their own storefront. The description is kept on the
+         *     business, so it is passed in rather than read through a relation that may not be
+         *     loaded — a lazy load in the async session would have nowhere to run.
+         */
         StoreRead: {
             /** Banner Url */
             banner_url: string | null;
@@ -1220,6 +1258,8 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Description */
+            description: string | null;
             /**
              * Id
              * Format: uuid
@@ -1242,6 +1282,24 @@ export interface components {
          * @enum {string}
          */
         StoreStatus: "draft" | "active" | "suspended" | "blocked";
+        /**
+         * StoreUpdateRequest
+         * @description Only the fields present in the body change. Null clears a field back to the default,
+         *     which for a colour means the theme decides and for a description means none is shown.
+         *
+         *     The subdomain is not here: it is the address the seller has already given out, and the
+         *     storefront answers at it. Renaming it is a separate decision with its own redirects.
+         */
+        StoreUpdateRequest: {
+            /** Description */
+            description?: string | null;
+            /** Primary Color */
+            primary_color?: string | null;
+            /** Secondary Color */
+            secondary_color?: string | null;
+            /** Theme Id */
+            theme_id?: string | null;
+        };
         /**
          * StorefrontRead
          * @description What a visitor may see. Nothing internal is listed here — not the legal name, not
@@ -2356,6 +2414,39 @@ export interface operations {
             };
         };
     };
+    update_my_store_api_v1_stores_me_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StoreUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     read_my_contacts_api_v1_stores_me_contacts_get: {
         parameters: {
             query?: never;
@@ -2396,6 +2487,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ContactsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_store_image_api_v1_stores_me_images__kind__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: components["schemas"]["StoreImageKind"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_set_store_image_api_v1_stores_me_images__kind__put"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_store_image_api_v1_stores_me_images__kind__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: components["schemas"]["StoreImageKind"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreRead"];
                 };
             };
             /** @description Validation Error */
