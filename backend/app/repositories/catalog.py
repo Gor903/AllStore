@@ -170,7 +170,9 @@ async def list_categories(session: AsyncSession) -> Sequence[Category]:
     """The whole tree at once: it is two levels deep and changes about never."""
     result = await session.execute(
         select(Category)
-        .options(selectinload(Category.children))
+        # the children are filtered too: hiding a subcategory must take it out of the
+        # filter, not only out of its parent's listing
+        .options(selectinload(Category.children.and_(Category.status == CategoryStatus.ACTIVE)))
         .where(Category.parent_id.is_(None), Category.status == CategoryStatus.ACTIVE)
         .order_by(Category.name)
     )

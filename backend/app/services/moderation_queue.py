@@ -18,6 +18,16 @@ async def list_queue(
     )
 
 
+async def search(
+    session: AsyncSession, query: str, limit: int, offset: int
+) -> tuple[Sequence[Product], int]:
+    """Finding a product that is not in the queue — the one a complaint is about."""
+    return (
+        await moderation_repo.search(session, query, limit, offset),
+        await moderation_repo.count_search(session, query),
+    )
+
+
 async def approve(session: AsyncSession, moderator: User, product_id: uuid.UUID) -> Product:
     product = await _under_review(session, product_id)
     moderation.approve(product)
