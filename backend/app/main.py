@@ -11,6 +11,8 @@ from app.api.contacts import router as contacts_router
 from app.api.health import router as health_router
 from app.api.moderation import router as moderation_router
 from app.api.products import router as products_router
+from app.api.reports import public_router as reports_public_router
+from app.api.reports import router as reports_router
 from app.api.storefront import router as storefront_router
 from app.api.stores import router as stores_router
 from app.api.users import router as users_router
@@ -64,6 +66,8 @@ def create_app() -> FastAPI:
     app.include_router(storefront_router, prefix=settings.api_prefix)
     app.include_router(catalog_router, prefix=settings.api_prefix)
     app.include_router(admin_router, prefix=settings.api_prefix)
+    app.include_router(reports_public_router, prefix=settings.api_prefix)
+    app.include_router(reports_router, prefix=settings.api_prefix)
     return app
 
 

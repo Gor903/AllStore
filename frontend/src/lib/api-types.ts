@@ -530,6 +530,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/moderation/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Queue */
+        get: operations["read_queue_api_v1_moderation_reports_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/moderation/reports/{subject}/{subject_id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss
+         * @description Nothing happens to the subject, so the reason is the only record of the decision —
+         *     which is why it is required.
+         */
+        post: operations["dismiss_api_v1_moderation_reports__subject___subject_id__dismiss_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/moderation/reports/{subject}/{subject_id}/uphold": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Uphold
+         * @description The complaint was right. The product comes off the shelf and the shop off the air
+         *     through the moderation that already exists, so the seller reads it in the same history
+         *     as any other verdict.
+         */
+        post: operations["uphold_api_v1_moderation_reports__subject___subject_id__uphold_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/products": {
         parameters: {
             query?: never;
@@ -618,6 +678,32 @@ export interface paths {
          * @description Sends the product back to the queue after a refusal, once the seller has fixed it.
          */
         post: operations["submit_product_for_review_api_v1_products__product_id__submit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit Report
+         * @description No CSRF gate here, unlike every other mutation.
+         *
+         *     Double submit protects actions that ride on the caller's own credentials; this one
+         *     carries no authority at all — it files a sentence for a moderator to read. Forging it
+         *     from another site achieves nothing an author could not do by posting directly. The
+         *     gate would, however, shut out the guest the complaint exists for: the CSRF cookie is
+         *     only issued with a session.
+         */
+        post: operations["submit_report_api_v1_reports_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1435,6 +1521,75 @@ export interface components {
             /** Storage */
             storage: boolean;
         };
+        /**
+         * ReportAccepted
+         * @description Deliberately thin: the person who complained has no business knowing what became
+         *     of the complaint, or how many others filed one.
+         */
+        ReportAccepted: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+        };
+        /** ReportQueueResponse */
+        ReportQueueResponse: {
+            /** Items */
+            items: components["schemas"]["ReportedSubjectRead"][];
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /** Total */
+            total: number;
+        };
+        /**
+         * ReportRequest
+         * @description Exactly one subject. A complaint about "something" is not one anyone can act on.
+         */
+        ReportRequest: {
+            /** Business Id */
+            business_id?: string | null;
+            /** Product Id */
+            product_id?: string | null;
+            /** Reason */
+            reason: string;
+        };
+        /**
+         * ReportResolutionResponse
+         * @description How many complaints the one verdict closed — twenty about one product is one act.
+         */
+        ReportResolutionResponse: {
+            /** Closed */
+            closed: number;
+        };
+        /** ReportedShopRead */
+        ReportedShopRead: {
+            /** Display Name */
+            display_name: string;
+            /** Subdomain */
+            subdomain: string | null;
+        };
+        /**
+         * ReportedSubjectRead
+         * @description One line of the moderator's queue: what is complained about and what was said.
+         */
+        ReportedSubjectRead: {
+            /** Business Id */
+            business_id: string | null;
+            /**
+             * Last At
+             * Format: date-time
+             */
+            last_at: string;
+            product: components["schemas"]["ModerationProductRead"] | null;
+            /** Reasons */
+            reasons: string[];
+            shop: components["schemas"]["ReportedShopRead"] | null;
+            /** Total */
+            total: number;
+        };
         /** RoleChangeRequest */
         RoleChangeRequest: {
             role: components["schemas"]["UserRole"];
@@ -1559,6 +1714,11 @@ export interface components {
             /** Theme Id */
             theme_id: string;
         };
+        /**
+         * Subject
+         * @enum {string}
+         */
+        Subject: "product" | "business";
         /** UserListResponse */
         UserListResponse: {
             /** Items */
@@ -2586,6 +2746,110 @@ export interface operations {
             };
         };
     };
+    read_queue_api_v1_moderation_reports_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportQueueResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dismiss_api_v1_moderation_reports__subject___subject_id__dismiss_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subject: components["schemas"]["Subject"];
+                subject_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModerationReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportResolutionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    uphold_api_v1_moderation_reports__subject___subject_id__uphold_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subject: components["schemas"]["Subject"];
+                subject_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModerationReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportResolutionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_products_api_v1_products_get: {
         parameters: {
             query?: {
@@ -2829,6 +3093,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProductRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_report_api_v1_reports_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportAccepted"];
                 };
             };
             /** @description Validation Error */
