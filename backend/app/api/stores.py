@@ -1,14 +1,18 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, File, UploadFile, status
 
+from app.core import storage
 from app.core.errors import NotFoundError
 from app.deps.auth import SessionDep, SettingsDep, require_csrf, require_role
+from app.deps.business import CurrentBusiness
 from app.models import User, UserRole
 from app.repositories import stores as stores_repo
 from app.repositories import users as users_repo
-from app.schemas.store import StoreCreateRequest, StoreRead
+from app.schemas.store import StoreCreateRequest, StoreRead, StoreUpdateRequest
+from app.services import store_branding
 from app.services import stores as stores_service
+from app.services.store_branding import StoreImageKind
 
 router = APIRouter(prefix="/stores", tags=["stores"])
 
@@ -29,13 +33,56 @@ async def create_store(
         raise NotFoundError("У аккаунта нет бизнеса")
     store = await stores_service.create_store(session, settings, business, payload.subdomain)
     await session.commit()
-    return StoreRead.model_validate(store)
+    return StoreRead.of(store, business)
 
 
 @router.get("/me", response_model=StoreRead)
 async def read_my_store(user: SellerUser, session: SessionDep) -> StoreRead:
     business = await users_repo.get_business_of(session, user.id)
     store = None if business is None else await stores_repo.get_by_business(session, business.id)
-    if store is None:
+    if store is None or business is None:
         raise NotFoundError("У аккаунта нет витрины")
-    return StoreRead.model_validate(store)
+    return StoreRead.of(store, business)
+
+
+@router.patch("/me", response_model=StoreRead, dependencies=[Depends(require_csrf)])
+async def update_my_store(
+    payload: StoreUpdateRequest, business: CurrentBusiness, session: SessionDep
+) -> StoreRead:
+    store = await store_branding.update_store(session, business, payload)
+    await session.commit()
+    return StoreRead.of(store, business)
+
+
+# the literal segment keeps this off /stores/me/contacts, which an enum path would swallow
+@router.put("/me/images/{kind}", response_model=StoreRead, dependencies=[Depends(require_csrf)])
+async def set_store_image(
+    kind: StoreImageKind,
+    business: CurrentBusiness,
+    settings: SettingsDep,
+    session: SessionDep,
+    file: Annotated[UploadFile, File()],
+) -> StoreRead:
+    """PUT rather than POST: a storefront has one logo and one banner, so a second upload
+    replaces the first instead of adding to a gallery."""
+    store, displaced = await store_branding.set_image(session, settings, business.id, kind, file)
+    await session.commit()
+    # only after the new address is committed: the reverse order would leave the page
+    # pointing at an object that is already gone
+    if displaced is not None:
+        await storage.delete_object(settings, displaced)
+    return StoreRead.of(store, business)
+
+
+@router.delete("/me/images/{kind}", response_model=StoreRead, dependencies=[Depends(require_csrf)])
+async def clear_store_image(
+    kind: StoreImageKind,
+    business: CurrentBusiness,
+    settings: SettingsDep,
+    session: SessionDep,
+) -> StoreRead:
+    store, displaced = await store_branding.clear_image(session, settings, business.id, kind)
+    await session.commit()
+    if displaced is not None:
+        await storage.delete_object(settings, displaced)
+    return StoreRead.of(store, business)
