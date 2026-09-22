@@ -165,14 +165,16 @@ async def public_product_exists(session: AsyncSession, product_id: uuid.UUID) ->
     return result.scalar_one_or_none() is not None
 
 
-async def live_business_exists(session: AsyncSession, business_id: uuid.UUID) -> bool:
+async def live_business_by_subdomain(session: AsyncSession, subdomain: str) -> uuid.UUID | None:
+    """Only a shop on the air can be complained about, and it is named the way a visitor
+    sees it — by the address in their browser."""
     result = await session.execute(
         select(Business.id)
         .join(Business.store)
         .where(
-            Business.id == business_id,
+            Store.subdomain == subdomain,
             Business.status == BusinessStatus.ACTIVE,
             Store.status == StoreStatus.ACTIVE,
         )
     )
-    return result.scalar_one_or_none() is not None
+    return result.scalar_one_or_none()

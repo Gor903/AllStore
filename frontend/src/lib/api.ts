@@ -27,6 +27,8 @@ export type CategoryTree = components["schemas"]["CategoryTreeRead"];
 export type UserList = components["schemas"]["UserListResponse"];
 export type AdminCategory = components["schemas"]["AdminCategoryRead"];
 export type AuditLogList = components["schemas"]["AuditLogListResponse"];
+export type ReportQueue = components["schemas"]["ReportQueueResponse"];
+export type ReportedSubject = components["schemas"]["ReportedSubjectRead"];
 export type AuditEntry = components["schemas"]["AuditLogRead"];
 
 export const PAGE_SIZE = 24;

@@ -13,6 +13,7 @@ import type {
   ModerationProductList,
   Product,
   ProductList,
+  ReportQueue,
   Store,
   User,
   UserList,
@@ -122,4 +123,9 @@ export async function searchModerationCatalog(
     offset: String(offset),
   });
   return backendGet<ModerationProductList>(`/moderation/catalog?${params}`);
+}
+
+export async function getReportQueue(offset: number): Promise<ReportQueue | null> {
+  const params = new URLSearchParams({ limit: String(ADMIN_PAGE_SIZE), offset: String(offset) });
+  return backendGet<ReportQueue>(`/moderation/reports?${params}`);
 }
