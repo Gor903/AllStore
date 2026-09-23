@@ -25,7 +25,9 @@ jobs:
 
     services:
       postgres:
-        image: postgres:17-alpine
+        # same image as the compose stack: migration 0013 creates the pgvector extension,
+        # and a plain postgres image has nothing to create it from
+        image: pgvector/pgvector:pg17
         env:
           POSTGRES_USER: allstore
           POSTGRES_PASSWORD: allstore

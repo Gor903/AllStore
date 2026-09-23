@@ -5,6 +5,7 @@ from app.models.auth import PasswordResetToken, RefreshToken
 from app.models.business import Business, BusinessStatus
 from app.models.category import Category, CategoryStatus
 from app.models.contact import PHONE_PLATFORMS, ContactPlatform, SocialLink
+from app.models.embedding import EMBEDDING_DIMENSIONS, ProductEmbedding
 from app.models.moderation import (
     BusinessDecision,
     BusinessModerationReview,
@@ -23,6 +24,7 @@ from app.models.store import Store, StoreStatus
 from app.models.user import User, UserRole, UserStatus
 
 __all__ = [
+    "EMBEDDING_DIMENSIONS",
     "PHONE_PLATFORMS",
     "AuditLog",
     "Business",
@@ -38,6 +40,7 @@ __all__ = [
     "PasswordResetToken",
     "Product",
     "ProductAvailability",
+    "ProductEmbedding",
     "ProductImage",
     "PublicationStatus",
     "RefreshToken",
