@@ -17,7 +17,7 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 # snapshot of app.models.embedding: a migration must not follow the model
-EMBEDDING_DIMENSIONS = 768
+EMBEDDING_DIMENSIONS = 1024
 
 
 def upgrade() -> None:

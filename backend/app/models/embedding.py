@@ -7,9 +7,9 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
 
-# multilingual-e5-base, see docs/rag-first.md, раздел 27: one number per dimension, fixed at
-# rest — changing the model to one of another width is a migration, not a configuration change
-EMBEDDING_DIMENSIONS = 768
+# intfloat/multilingual-e5-large, see docs/rag-first.md, раздел 27: one number per dimension,
+# fixed at rest — a model of another width is a migration, not a configuration change
+EMBEDDING_DIMENSIONS = 1024
 MODEL_MAX_LENGTH = 128
 # sha256 of the search text, hex
 SOURCE_HASH_LENGTH = 64
