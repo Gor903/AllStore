@@ -25,7 +25,9 @@ _sweeping = asyncio.Lock()
 
 class SearchRequest(BaseModel):
     query: str = Field(min_length=1, max_length=QUERY_MAX_LENGTH)
-    limit: int = Field(default=20, ge=1, le=100)
+    # no upper bound here: asking for more than the service is willing to return is not an
+    # error the caller can act on, so it gets what there is instead of a refusal
+    limit: int = Field(default=20, ge=1)
 
 
 class MatchRead(BaseModel):
@@ -81,7 +83,8 @@ def create_app() -> FastAPI:
 
     @app.post("/search", response_model=SearchResponse)
     async def run_search(payload: SearchRequest, session: SessionDep) -> SearchResponse:
-        matches = await search.find(session, embedder, payload.query, payload.limit)
+        limit = min(payload.limit, settings.max_limit)
+        matches = await search.find(session, embedder, payload.query, limit)
         return SearchResponse(
             model=embedder.name,
             matches=[MatchRead(product_id=m.product_id, score=m.score) for m in matches],

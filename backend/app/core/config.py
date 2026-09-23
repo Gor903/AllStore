@@ -91,8 +91,14 @@ class Settings(BaseSettings):
     search_service_url: str | None = None
     # a search that takes longer than this is worse than no search: the visitor is waiting
     search_timeout_seconds: float = 2.0
-    # how many identifiers to ask for before the public filter thins them out
-    search_candidates: int = 200
+    # how many suggestions the semantic side contributes.
+    #
+    # Deliberately small and fixed. A vector search ranks, it does not match: it always
+    # returns something, and the scores fall off so gently that any threshold would be a
+    # magic number that drifts with the model. A large pool would inflate the number of
+    # found products with things nobody was looking for, so the semantic side adds a short
+    # list of best guesses — every one of them marked as such in the answer.
+    search_candidates: int = 20
 
     @field_validator("secret_key")
     @classmethod
