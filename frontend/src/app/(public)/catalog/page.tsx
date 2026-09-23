@@ -39,7 +39,8 @@ export default async function CatalogPage({ searchParams }: PageProps<"/catalog"
           <p className="text-danger">Каталог сейчас недоступен, попробуйте обновить страницу.</p>
         ) : page.items.length === 0 ? (
           <p className="text-ink-muted">
-            По этому запросу ничего не нашлось. Попробуйте другое слово или категорию.
+            По этому запросу ничего не нашлось. Попробуйте описать словами, что нужно, — например
+            «небольшая ваза для цветов».
           </p>
         ) : (
           <>
@@ -50,6 +51,7 @@ export default async function CatalogPage({ searchParams }: PageProps<"/catalog"
                   key={product.id}
                   product={product}
                   href={productHref(product.store.subdomain, product.id, subdomain)}
+                  byMeaning={page.by_meaning.includes(product.id)}
                 />
               ))}
             </div>
