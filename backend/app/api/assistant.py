@@ -9,6 +9,7 @@ from app.deps.auth import SessionDep, SettingsDep
 from app.schemas.assistant import (
     AssistantAskRequest,
     AssistantError,
+    AssistantLine,
     AssistantProducts,
     AssistantText,
 )
@@ -21,7 +22,18 @@ router = APIRouter(prefix="/assistant", tags=["assistant"])
 UNAVAILABLE = "Помощник сейчас не отвечает. Поиск по каталогу работает как обычно."
 
 
-@router.post("/ask")
+@router.post(
+    "/ask",
+    responses={
+        200: {
+            "model": AssistantLine,
+            "description": (
+                "A stream of JSON lines, `application/x-ndjson`: one object per line, in the "
+                "order they become ready. The schema describes a single line, not the body."
+            ),
+        }
+    },
+)
 async def ask(
     payload: AssistantAskRequest, session: SessionDep, settings: SettingsDep
 ) -> StreamingResponse:
@@ -70,5 +82,5 @@ async def _lines(
         yield _line(AssistantError(message=UNAVAILABLE))
 
 
-def _line(event: AssistantProducts | AssistantText | AssistantError) -> str:
+def _line(event: AssistantLine) -> str:
     return event.model_dump_json() + "\n"

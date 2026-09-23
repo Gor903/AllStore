@@ -3,16 +3,11 @@
 import { useState, type FormEvent } from "react";
 
 import { ProductCard } from "@/components/catalog/ProductCard";
-import type { CatalogProduct } from "@/lib/api";
+import type { AssistantLine, CatalogProduct } from "@/lib/api";
 import { apiPostLines } from "@/lib/browser-api";
 import { productUrl } from "@/lib/urls";
 
 type Turn = { role: "user" | "assistant"; content: string };
-
-type Line =
-  | { type: "products"; products: CatalogProduct[] }
-  | { type: "answer"; text: string }
-  | { type: "error"; message: string };
 
 type Exchange = {
   question: string;
@@ -64,7 +59,7 @@ export function AssistantChat() {
     });
 
     try {
-      for await (const line of apiPostLines<Line>("/assistant/ask", {
+      for await (const line of apiPostLines<AssistantLine>("/assistant/ask", {
         question: asked,
         history,
       })) {
@@ -79,7 +74,7 @@ export function AssistantChat() {
           );
         } else if (line.type === "answer") {
           update(index, { answer: line.text });
-        } else {
+        } else if (line.type === "error") {
           update(index, { error: line.message });
         }
       }

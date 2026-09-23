@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field
 
@@ -40,3 +40,11 @@ class AssistantError(BaseModel):
 
     type: Literal["error"] = "error"
     message: str
+
+
+# Declared to the schema so the frontend reads these shapes from the contract instead of keeping
+# its own copy of them (ADR 4). What the schema cannot say is that they arrive one per line —
+# that lives in the response description.
+AssistantLine = Annotated[
+    AssistantProducts | AssistantText | AssistantError, Field(discriminator="type")
+]
