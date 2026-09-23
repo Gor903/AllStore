@@ -65,6 +65,7 @@ from app.models import (  # noqa: E402
     StoreStatus,
     User,
     UserRole,
+    UserStatus,
 )
 from app.models.contact import ContactPlatform  # noqa: E402
 from app.models.moderation import BusinessDecision, ModerationDecision  # noqa: E402
@@ -648,7 +649,22 @@ def moment(rng: random.Random, now: datetime) -> datetime:
     return now - timedelta(days=rng.randint(0, CATALOGUE_AGE_DAYS), minutes=rng.randint(0, 24 * 60))
 
 
-def business_status(rng: random.Random) -> BusinessStatus:
+# every state a seller can be in, laid out first so a run cannot leave one unrepresented:
+# a stand where nobody is suspended says nothing about the screens that handle suspension
+GUARANTEED = (
+    BusinessStatus.PENDING,
+    BusinessStatus.PENDING,
+    BusinessStatus.PENDING,
+    BusinessStatus.SUSPENDED,
+    BusinessStatus.SUSPENDED,
+    BusinessStatus.BLOCKED,
+    BusinessStatus.BLOCKED,
+)
+
+
+def business_status(rng: random.Random, index: int) -> BusinessStatus:
+    if index < len(GUARANTEED):
+        return GUARANTEED[index]
     roll = rng.random()
     if roll < 0.88:
         return BusinessStatus.ACTIVE
@@ -657,6 +673,36 @@ def business_status(rng: random.Random) -> BusinessStatus:
     if roll < 0.98:
         return BusinessStatus.SUSPENDED
     return BusinessStatus.BLOCKED
+
+
+def seller_account(rng: random.Random, business: BusinessStatus) -> UserStatus:
+    """A barred business usually means a barred person; a paused one does not.
+
+    Suspension is what a moderator does to a shop while something is being sorted out —
+    the seller has to be able to log in and sort it out.
+    """
+    if business is BusinessStatus.BLOCKED:
+        return UserStatus.BLOCKED if rng.random() < 0.8 else UserStatus.ACTIVE
+    return UserStatus.ACTIVE
+
+
+def buyer_account(rng: random.Random, index: int) -> UserStatus:
+    # the first two cover the states by hand, the rest are rare on purpose
+    if index == 0:
+        return UserStatus.BLOCKED
+    if index == 1:
+        return UserStatus.SUSPENDED
+    roll = rng.random()
+    if roll < 0.03:
+        return UserStatus.BLOCKED
+    if roll < 0.05:
+        return UserStatus.SUSPENDED
+    return UserStatus.ACTIVE
+
+
+def phone_number(index: int) -> str:
+    """Unique by construction: the column is unique and a collision would abort the batch."""
+    return f"+3747{index:07d}"
 
 
 def product_state(rng: random.Random) -> tuple[ModerationStatus, PublicationStatus, bool]:
@@ -758,12 +804,14 @@ async def build(
             continue
         known.add(subdomain)
         born = moment(rng, now)
-        status = business_status(rng)
+        status = business_status(rng, index)
 
         user = User(
             email=f"{subdomain}@{DOMAIN}",
+            phone=phone_number(index) if rng.random() < 0.6 else None,
             password_hash=password_hash,
             role=UserRole.SELLER,
+            status=seller_account(rng, status),
             created_at=born,
         )
         session.add(user)
@@ -910,8 +958,10 @@ async def build(
     for number in range(buyers):
         buyer = User(
             email=f"buyer{number + 1:03d}@{DOMAIN}",
+            phone=phone_number(1000 + number) if rng.random() < 0.45 else None,
             password_hash=password_hash,
             role=UserRole.BUYER,
+            status=buyer_account(rng, number),
             created_at=moment(rng, now),
         )
         session.add(buyer)
