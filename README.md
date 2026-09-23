@@ -70,6 +70,33 @@ uv tool install pre-commit   # или pipx install pre-commit
 pre-commit install
 ```
 
+### Сервис семантического поиска
+
+`search/` — отдельный сервис (ADR 10): многоязычная модель считает эмбеддинги товаров и ищет
+по смыслу. Наружу он не смотрит — отвечает только backend.
+
+```bash
+docker compose up -d search                       # модель качается один раз, ~2.2 ГБ в volume
+docker compose exec search python -c "import urllib.request;print(urllib.request.urlopen('http://localhost:8000/health').read())"
+```
+
+Первый старт долгий: модель скачивается и загружается в память. Дальше она живёт в томе
+`fastembed-cache` и переживает пересборку образа.
+
+Индексация фоновая: сервис раз в несколько минут обходит каталог и пересчитывает то, что
+разошлось с текущим текстом товара или моделью. Разово можно попросить прямо:
+
+```bash
+docker compose exec search python -c "import urllib.request;urllib.request.urlopen(urllib.request.Request('http://localhost:8000/reindex',method='POST'),timeout=3600).read()"
+```
+
+Тесты сервиса гоняются на детерминированном эмбеддере, модель для них не нужна:
+
+```bash
+cd search
+EMBEDDER=fake DATABASE_URL="postgresql+asyncpg://allstore:allstore@localhost:5433/allstore_test" uv run pytest
+```
+
 ### Наполнение стенда данными
 
 ```bash
