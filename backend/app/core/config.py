@@ -110,6 +110,9 @@ class Settings(BaseSettings):
     # a small model on a CPU is slow, and the visitor is told to wait rather than lied to
     assistant_timeout_seconds: float = 120.0
     assistant_max_tokens: int = 700
+    # low, not zero: at the default a small model sometimes skips the search and answers from
+    # nothing, and a shop assistant that invents is worse than one that repeats itself
+    assistant_temperature: float = 0.2
     # how many times the model may search before it has to answer with what it has
     assistant_max_tool_rounds: int = 4
     # how much of the conversation travels back: enough to follow up, not to pay for a novel

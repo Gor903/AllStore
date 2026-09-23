@@ -97,7 +97,7 @@ async def test_a_model_that_only_talks_is_answered_as_is(
     assert "Уточните" in answer.text
 
 
-async def test_a_model_that_never_stops_searching_is_stopped(
+async def test_a_model_that_never_stops_searching_and_finds_nothing_is_stopped(
     session: AsyncSession, configured: None
 ) -> None:
     """A small model can search forever; a visitor waiting on that is served worse than one told."""
@@ -105,6 +105,44 @@ async def test_a_model_that_never_stops_searching_is_stopped(
 
     with pytest.raises(AssistantUnavailableError):
         await conversation.ask(session, get_settings(), model, "Что подарить?", None)
+
+
+async def test_a_model_that_never_stops_searching_still_shows_what_it_found(
+    api_client: AsyncClient, session: AsyncSession, configured: None
+) -> None:
+    """Rounds run out, but the products are real: the cards are worth more than an apology."""
+    shop = await a_live_shop(api_client, session, "cups")
+    vase = await a_published_product(api_client, session, shop, name="Ваза «Гюмри»")
+    model = ScriptedModel(*[searching(EXACT_SEARCH, "ваза") for _ in range(10)])
+
+    answer = await conversation.ask(session, get_settings(), model, "Есть вазы?", None)
+
+    assert [str(product.id) for product in answer.products] == [vase]
+    assert answer.text == conversation.FOUND_BUT_SILENT
+
+
+async def test_a_silent_model_with_products_still_answers(
+    api_client: AsyncClient, session: AsyncSession, configured: None
+) -> None:
+    """A small model sometimes returns nothing at all; an empty screen is not an answer."""
+    shop = await a_live_shop(api_client, session, "cups")
+    vase = await a_published_product(api_client, session, shop, name="Ваза «Гюмри»")
+    model = ScriptedModel(searching(EXACT_SEARCH, "ваза"), Reply(text="   "))
+
+    answer = await conversation.ask(session, get_settings(), model, "Есть вазы?", None)
+
+    # the line states nothing the tools did not return — the price and shop live on the cards
+    assert answer.text == conversation.FOUND_BUT_SILENT
+    assert [str(product.id) for product in answer.products] == [vase]
+
+
+async def test_a_silent_model_with_nothing_found_is_not_an_answer(
+    session: AsyncSession, configured: None
+) -> None:
+    model = ScriptedModel(Reply(text=""))
+
+    with pytest.raises(AssistantUnavailableError):
+        await conversation.ask(session, get_settings(), model, "Есть вазы?", None)
 
 
 async def test_an_unknown_tool_is_answered_not_raised(

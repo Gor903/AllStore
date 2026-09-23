@@ -51,6 +51,7 @@ class OpenAICompatibleModel:
         self._model = settings.assistant_model
         self._timeout = settings.assistant_timeout_seconds
         self._max_tokens = settings.assistant_max_tokens
+        self._temperature = settings.assistant_temperature
         key = settings.assistant_api_key
         self._headers = {"Authorization": f"Bearer {key.get_secret_value()}"} if key else {}
 
@@ -60,6 +61,7 @@ class OpenAICompatibleModel:
             "messages": messages,
             "tools": tools,
             "max_tokens": self._max_tokens,
+            "temperature": self._temperature,
             "stream": False,
         }
         try:

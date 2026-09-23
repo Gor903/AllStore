@@ -44,7 +44,7 @@ async def ask(
     for _ in range(settings.assistant_max_tool_rounds):
         reply = await model.reply(messages, tools.DEFINITIONS)
         if not reply.tool_calls:
-            return Answer(text=reply.text.strip(), products=list(seen.values()))
+            return _answer(reply.text.strip(), list(seen.values()))
 
         messages.append(_assistant_turn(reply))
         for call in reply.tool_calls:
@@ -63,9 +63,27 @@ async def ask(
             )
 
     # the rounds ran out: a small model can keep searching forever, and a visitor waiting on
-    # that is worse served than one told plainly that the search went nowhere
+    # that is worse served than one shown what the search already turned up
     logger.info("ассистент исчерпал круги поиска на вопросе: %s", question[:80])
-    raise AssistantUnavailableError("слишком много обращений к поиску")
+    return _answer("", list(seen.values()))
+
+
+FOUND_BUT_SILENT = "Вот что нашлось в каталоге по вашему запросу."
+
+
+def _answer(text: str, products: list[Product]) -> Answer:
+    """A small model sometimes falls silent; silence is not an answer.
+
+    With products in hand the visitor is served by the cards plus a line that states nothing
+    beyond them. With neither text nor products there is nothing to serve, and saying so
+    honestly beats an empty screen.
+    """
+    if text:
+        return Answer(text=text, products=products)
+    if products:
+        return Answer(text=FOUND_BUT_SILENT, products=products)
+    logger.info("модель ответила пустотой и ничего не нашла")
+    raise AssistantUnavailableError("пустой ответ модели")
 
 
 def _assistant_turn(reply: Reply) -> dict[str, Any]:
