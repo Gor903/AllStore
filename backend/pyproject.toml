@@ -16,6 +16,7 @@ dependencies = [
     "pyjwt>=2.10",
     "python-multipart>=0.0.32",
     "pgvector>=0.5.0",
+    "httpx>=0.28.1",
 ]
 
 [dependency-groups]
@@ -26,7 +27,6 @@ dev = [
     "pytest>=8.3",
     "pytest-asyncio>=0.25",
     "pytest-cov>=6.0",
-    "httpx>=0.28",
     "boto3-stubs[s3]>=1.35",
     "moto[s3]>=5.2.3",
 ]

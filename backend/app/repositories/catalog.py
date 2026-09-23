@@ -92,6 +92,76 @@ async def list_products(
     return result.unique().scalars().all()
 
 
+async def list_matching_ids(
+    session: AsyncSession,
+    *,
+    query: str | None,
+    category_ids: Sequence[uuid.UUID] | None,
+    subdomain: str | None,
+    limit: int,
+) -> list[uuid.UUID]:
+    """Identifiers of the exact matches, newest first — the same set the listing shows.
+
+    Used when the ordering has to be merged with another one; loading whole products only to
+    throw most of them away would be the alternative.
+    """
+    statement = _narrow(
+        select(Product.id).join(Product.business).join(Business.store).where(*PUBLIC_PRODUCT),
+        query,
+        category_ids,
+        subdomain,
+    )
+    result = await session.execute(
+        statement.order_by(Product.created_at.desc(), Product.id).limit(limit)
+    )
+    return list(result.scalars().all())
+
+
+async def keep_public(
+    session: AsyncSession,
+    ids: Sequence[uuid.UUID],
+    *,
+    category_ids: Sequence[uuid.UUID] | None,
+    subdomain: str | None,
+) -> set[uuid.UUID]:
+    """Which of these products a visitor may actually see.
+
+    The search index knows nothing about moderation, publication or a shop being off the air —
+    and must not. This is where identifiers from anywhere meet the one rule that decides
+    visibility, the same `PUBLIC_PRODUCT` the listing itself is built on.
+    """
+    if not ids:
+        return set()
+    statement = _narrow(
+        select(Product.id)
+        .join(Product.business)
+        .join(Business.store)
+        .where(*PUBLIC_PRODUCT, Product.id.in_(ids)),
+        None,
+        category_ids,
+        subdomain,
+    )
+    return set((await session.execute(statement)).scalars().all())
+
+
+async def list_products_by_ids(
+    session: AsyncSession, ids: Sequence[uuid.UUID]
+) -> Sequence[Product]:
+    """The products behind an already-decided order; the caller restores that order."""
+    if not ids:
+        return []
+    result = await session.execute(
+        _public_products()
+        .options(
+            contains_eager(Product.business).contains_eager(Business.store),
+            selectinload(Product.images),
+            selectinload(Product.category),
+        )
+        .where(Product.id.in_(ids))
+    )
+    return result.unique().scalars().all()
+
+
 async def count_products(
     session: AsyncSession,
     *,

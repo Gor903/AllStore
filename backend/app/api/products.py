@@ -1,7 +1,7 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Query, UploadFile, status
 
 from app.core import storage
 from app.deps.auth import SessionDep, SettingsDep, require_csrf
@@ -16,6 +16,7 @@ from app.schemas.product import (
 )
 from app.services import product_images as images_service
 from app.services import products as products_service
+from app.services import search_client
 
 router = APIRouter(prefix="/products", tags=["products"])
 
@@ -33,10 +34,16 @@ Offset = Annotated[int, Query(ge=0)]
     dependencies=[Depends(require_csrf)],
 )
 async def create_product(
-    payload: ProductCreateRequest, business: CurrentBusiness, session: SessionDep
+    payload: ProductCreateRequest,
+    business: CurrentBusiness,
+    session: SessionDep,
+    background: BackgroundTasks,
+    settings: SettingsDep,
 ) -> ProductRead:
     product = await products_service.create_product(session, business, payload)
     await session.commit()
+    # the seller's answer does not wait for the search to catch up (docs/rag-first.md, раздел 25)
+    background.add_task(search_client.product_changed, settings, product.id)
     return ProductRead.model_validate(product)
 
 
@@ -70,9 +77,12 @@ async def update_product(
     payload: ProductUpdateRequest,
     business: CurrentBusiness,
     session: SessionDep,
+    background: BackgroundTasks,
+    settings: SettingsDep,
 ) -> ProductRead:
     product = await products_service.update_product(session, business.id, product_id, payload)
     await session.commit()
+    background.add_task(search_client.product_changed, settings, product.id)
     return ProductRead.model_validate(product)
 
 

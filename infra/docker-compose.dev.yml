@@ -55,6 +55,8 @@ services:
       S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
       S3_BUCKET: ${S3_BUCKET:-allstore-dev}
       S3_PUBLIC_URL: http://localhost:${MINIO_PORT:-9000}/${S3_BUCKET:-allstore-dev}
+      # unset this and the catalogue searches exactly as it did before semantic search
+      SEARCH_SERVICE_URL: ${SEARCH_SERVICE_URL-http://search:8000}
     volumes:
       - ../backend:/srv/app
     depends_on:

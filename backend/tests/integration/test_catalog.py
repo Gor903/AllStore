@@ -295,7 +295,13 @@ async def test_search_finds_nothing_when_there_is_nothing(
 
     response = await api_client.get(CATALOG_PRODUCTS, params={"q": "велосипед"})
 
-    assert response.json() == {"items": [], "total": 0, "limit": 24, "offset": 0}
+    assert response.json() == {
+        "items": [],
+        "total": 0,
+        "limit": 24,
+        "offset": 0,
+        "by_meaning": [],
+    }
 
 
 @pytest.mark.parametrize("query", ["%", "_", "%%", "\\"])
