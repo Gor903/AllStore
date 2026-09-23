@@ -70,6 +70,18 @@ uv tool install pre-commit   # или pipx install pre-commit
 pre-commit install
 ```
 
+### Наполнение стенда данными
+
+```bash
+docker compose exec backend python -m scripts.seed_demo   # четыре витрины, всё через публичный API
+docker compose exec backend python -m scripts.seed_bulk   # ~60 магазинов и ~2000 товаров, прямо в базу
+```
+
+`seed_demo` показывает, как данные проходят через приложение; `seed_bulk` нужен, когда
+важен объём — поиск, пагинация, очереди модератора. Всё, что он создаёт, живёт на домене
+`@fake.allstore.am`, и `--reset` удаляет только это. Пароль у всех аккаунтов обоих
+скриптов — `demo-password-1`.
+
 ### Сквозной сценарий (e2e)
 
 ```bash
