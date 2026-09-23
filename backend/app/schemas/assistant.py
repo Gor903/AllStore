@@ -20,12 +20,23 @@ class AssistantAskRequest(BaseModel):
     history: list[AssistantTurn] = Field(default_factory=list)
 
 
-class AssistantAnswer(BaseModel):
-    """The text and the products it is allowed to be about.
+# The answer arrives as a sequence of lines rather than one object, because its two halves are
+# ready at very different times. Cards are rendered from `products`, never parsed out of the
+# text: what the assistant says and what the catalogue holds must not be able to disagree.
 
-    Cards are rendered from `products`, never parsed out of `answer`: what the assistant says
-    and what the catalogue actually holds must not be able to disagree.
-    """
 
-    answer: str
+class AssistantProducts(BaseModel):
+    type: Literal["products"] = "products"
     products: list[CatalogProductRead]
+
+
+class AssistantText(BaseModel):
+    type: Literal["answer"] = "answer"
+    text: str
+
+
+class AssistantError(BaseModel):
+    """A failure that arrives mid-stream, when the status code has long been sent."""
+
+    type: Literal["error"] = "error"
+    message: str

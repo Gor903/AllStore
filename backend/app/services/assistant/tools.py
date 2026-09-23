@@ -15,9 +15,12 @@ from app.core.config import Settings
 from app.models import Product
 from app.services import catalog as catalog_service
 
-# what fits in a model's context without drowning it: enough to answer, not the whole card
-DESCRIPTION_LIMIT = 200
-MAX_RESULTS = 8
+# Every character here is paid for twice: the model reads the whole search result back before
+# it writes a word, and on a CPU that reading is the slowest part of an answer. Measured on the
+# stand: eight full cards cost 2489 characters and about 40 seconds of the model merely looking
+# at them. So the model gets what it needs to talk about a product and nothing else.
+DESCRIPTION_LIMIT = 120
+MAX_RESULTS = 6
 
 EXACT_SEARCH = "exact_search"
 SEMANTIC_SEARCH = "semantic_search"
@@ -70,19 +73,20 @@ DEFINITIONS: list[dict[str, Any]] = [
 
 
 def describe(product: Product) -> dict[str, Any]:
-    """A product as the model sees it: enough to talk about, never enough to invent."""
-    store = product.business.store
+    """A product as the model sees it: enough to talk about, never enough to invent.
+
+    No identifier and no subdomain: the cards are assembled in code from the same products, so
+    a UUID in here would cost the model a line of reading and buy the visitor nothing.
+    """
     description = (product.description or "").strip()
     if len(description) > DESCRIPTION_LIMIT:
         description = description[:DESCRIPTION_LIMIT].rstrip() + "…"
     return {
-        "id": str(product.id),
         "name": product.name,
         "price": f"{product.price:.0f} {product.currency}",
         "in_stock": product.availability_status.value == "in_stock",
         "category": product.category.name,
         "shop": product.business.display_name,
-        "shop_subdomain": store.subdomain if store is not None else None,
         "description": description or None,
     }
 

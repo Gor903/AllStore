@@ -1,19 +1,34 @@
-from fastapi import APIRouter, HTTPException, status
+from collections.abc import AsyncIterator
 
+from fastapi import APIRouter, HTTPException, status
+from fastapi.responses import StreamingResponse
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.config import Settings
 from app.deps.auth import SessionDep, SettingsDep
-from app.schemas.assistant import AssistantAnswer, AssistantAskRequest
+from app.schemas.assistant import (
+    AssistantAskRequest,
+    AssistantError,
+    AssistantProducts,
+    AssistantText,
+)
 from app.schemas.catalog import CatalogProductRead
 from app.services.assistant import conversation
 from app.services.assistant.client import AssistantUnavailableError, build_model
 
 router = APIRouter(prefix="/assistant", tags=["assistant"])
 
+UNAVAILABLE = "Помощник сейчас не отвечает. Поиск по каталогу работает как обычно."
 
-@router.post("/ask", response_model=AssistantAnswer)
+
+@router.post("/ask")
 async def ask(
     payload: AssistantAskRequest, session: SessionDep, settings: SettingsDep
-) -> AssistantAnswer:
+) -> StreamingResponse:
     """Open to a guest: someone who has bought nothing yet is exactly who this is for.
+
+    The reply is a stream of JSON lines, not one object, so the products can reach the visitor
+    as soon as the search finds them instead of waiting out the model.
 
     No CSRF gate, for the same reason complaints have none: the request carries nobody's
     privileges, and forging it from another site achieves what its author could do directly.
@@ -27,16 +42,33 @@ async def ask(
             detail="Помощник пока не подключён.",
         )
     history = [turn.model_dump() for turn in payload.history[-settings.assistant_history_turns :]]
-    try:
-        answer = await conversation.ask(
-            session, settings, build_model(settings), payload.question, history
-        )
-    except AssistantUnavailableError:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Помощник сейчас не отвечает. Поиск по каталогу работает как обычно.",
-        ) from None
-    return AssistantAnswer(
-        answer=answer.text,
-        products=[CatalogProductRead.from_product(product) for product in answer.products],
+    return StreamingResponse(
+        _lines(session, settings, payload.question, history),
+        media_type="application/x-ndjson",
     )
+
+
+async def _lines(
+    session: AsyncSession, settings: Settings, question: str, history: list[dict[str, str]]
+) -> AsyncIterator[str]:
+    try:
+        async for event in conversation.stream(
+            session, settings, build_model(settings), question, history
+        ):
+            if isinstance(event, conversation.Found):
+                yield _line(
+                    AssistantProducts(
+                        products=[
+                            CatalogProductRead.from_product(product) for product in event.products
+                        ]
+                    )
+                )
+            else:
+                yield _line(AssistantText(text=event.text))
+    except AssistantUnavailableError:
+        # the status code left with the headers, so the honest failure travels as a line
+        yield _line(AssistantError(message=UNAVAILABLE))
+
+
+def _line(event: AssistantProducts | AssistantText | AssistantError) -> str:
+    return event.model_dump_json() + "\n"
