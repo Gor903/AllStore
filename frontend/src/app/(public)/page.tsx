@@ -3,7 +3,8 @@ import Link from "next/link";
 
 import { SiteHeader } from "@/components/SiteHeader";
 import { ProductCard } from "@/components/catalog/ProductCard";
-import { fetchCatalogProducts } from "@/lib/api";
+import { StoreCard } from "@/components/catalog/StoreCard";
+import { fetchCatalogProducts, fetchCatalogStores } from "@/lib/api";
 import { currentSubdomain } from "@/lib/request-host";
 import { productHref } from "@/lib/urls";
 
@@ -16,14 +17,19 @@ export const metadata: Metadata = {
   alternates: { canonical: "/" },
 };
 
-const FRESH_COUNT = 8;
+const FRESH_PRODUCTS = 8;
+const FRESH_STORES = 6;
 
 export default async function HomePage() {
-  const [page, subdomain] = await Promise.all([
-    fetchCatalogProducts({ q: null, category: null, store: null, offset: 0 }),
+  // both listings answer newest first and hold only what a visitor may see, so the blocks
+  // are the head of each: nothing to pick here, and nothing to keep up to date by hand
+  const [products, stores, subdomain] = await Promise.all([
+    fetchCatalogProducts({ q: null, category: null, store: null, offset: 0 }, FRESH_PRODUCTS),
+    fetchCatalogStores(0, FRESH_STORES),
     currentSubdomain(),
   ]);
-  const fresh = page?.items.slice(0, FRESH_COUNT) ?? [];
+  const freshProducts = products?.items ?? [];
+  const freshStores = stores?.items ?? [];
 
   return (
     <>
@@ -48,7 +54,7 @@ export default async function HomePage() {
           </div>
         </section>
 
-        {fresh.length === 0 ? null : (
+        {freshProducts.length === 0 ? null : (
           <section className="flex flex-col gap-4">
             <div className="flex items-center justify-between">
               <h2 className="text-2xl font-semibold tracking-tight">Новые товары</h2>
@@ -57,12 +63,28 @@ export default async function HomePage() {
               </Link>
             </div>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-              {fresh.map((product) => (
+              {freshProducts.map((product) => (
                 <ProductCard
                   key={product.id}
                   product={product}
                   href={productHref(product.store.subdomain, product.id, subdomain)}
                 />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {freshStores.length === 0 ? null : (
+          <section className="flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-semibold tracking-tight">Новые магазины</h2>
+              <Link href="/stores" className="text-sm hover:text-brand">
+                Все магазины
+              </Link>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {freshStores.map((store) => (
+                <StoreCard key={store.subdomain} store={store} />
               ))}
             </div>
           </section>
