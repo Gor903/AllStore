@@ -15,6 +15,9 @@ export function SiteHeader() {
           <Link href="/stores" className="hover:text-brand">
             Магазины
           </Link>
+          <Link href="/assistant" className="hover:text-brand">
+            Помощник
+          </Link>
         </nav>
         <Link href="/login" className="ml-auto text-sm hover:text-brand">
           Войти

@@ -100,6 +100,21 @@ class Settings(BaseSettings):
     # list of best guesses — every one of them marked as such in the answer.
     search_candidates: int = 20
 
+    # the assistant (docs/rag-first.md, раздел 26). Any OpenAI-compatible endpoint with tool
+    # calling: a local Ollama on the stand, a hosted provider later — the backend speaks the
+    # protocol, not a vendor SDK. Unset means the assistant is simply not offered.
+    assistant_base_url: str | None = None
+    assistant_model: str = "qwen2.5:3b"
+    # only hosted endpoints need it; a local model has no key at all
+    assistant_api_key: SecretStr | None = None
+    # a small model on a CPU is slow, and the visitor is told to wait rather than lied to
+    assistant_timeout_seconds: float = 120.0
+    assistant_max_tokens: int = 700
+    # how many times the model may search before it has to answer with what it has
+    assistant_max_tool_rounds: int = 4
+    # how much of the conversation travels back: enough to follow up, not to pay for a novel
+    assistant_history_turns: int = 6
+
     @field_validator("secret_key")
     @classmethod
     def _secret_key_is_long_enough(cls, value: SecretStr) -> SecretStr:
