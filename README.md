@@ -70,6 +70,17 @@ uv tool install pre-commit   # или pipx install pre-commit
 pre-commit install
 ```
 
+### Сквозной сценарий (e2e)
+
+```bash
+cd frontend && npx playwright install chromium   # один раз
+make e2e                                         # поднимет стек и прогонит сценарий
+```
+
+Браузер проходит путь «регистрация продавца → магазин → товар → модерация → каталог»
+через nginx, то есть по тому же стеку, которым пользуется человек. Подробности — в
+`frontend/e2e/README.md`.
+
 ### Тесты backend: отдельная база и накатанные миграции
 
 `pytest` не создаёт схему и не поднимает Postgres — он ждёт готовую базу, так же как

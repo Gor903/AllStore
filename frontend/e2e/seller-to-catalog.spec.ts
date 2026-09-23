@@ -1,0 +1,125 @@
+import { expect, test } from "@playwright/test";
+
+/**
+ * The one path the whole product exists for: a seller signs up, opens a shop, files a
+ * product, a moderator lets both through, and a stranger finds the product in the
+ * catalogue and on the shop's own address.
+ *
+ * The moderator is not registered here — nobody can register into that role. The account
+ * is made by scripts/grant_role.py before the run, see e2e/README.md.
+ */
+const MODERATOR = {
+  email: process.env["E2E_MODERATOR_EMAIL"] ?? "e2e-moderator@e2e.allstore.am",
+  password: process.env["E2E_MODERATOR_PASSWORD"] ?? "e2e-password-1",
+};
+
+const PASSWORD = "e2e-password-1";
+const PHONE = "+37410123456";
+
+/** Every run leaves its rows behind, so nothing it creates may collide with a previous one. */
+const run = Date.now().toString(36);
+const subdomain = `e2e${run}`;
+const seller = {
+  email: `seller-${run}@e2e.allstore.am`,
+  legalName: `ИП e2e ${run}`,
+  displayName: `Магазин e2e ${run}`,
+};
+const productName = `Ваза e2e ${run}`;
+
+test("продавец регистрируется, заводит магазин и товар, модератор пропускает, покупатель находит", async ({
+  page,
+}) => {
+  await test.step("продавец регистрируется", async () => {
+    await page.goto("/register");
+    await page.getByRole("button", { name: "Продавец" }).click();
+    await page.getByLabel("Email", { exact: true }).fill(seller.email);
+    await page.getByLabel("Пароль", { exact: true }).fill(PASSWORD);
+    await page.getByLabel("Юридическое название").fill(seller.legalName);
+    await page.getByLabel("Название магазина").fill(seller.displayName);
+    await page.getByRole("button", { name: "Зарегистрироваться" }).click();
+
+    await expect(page).toHaveURL(/\/dashboard$/);
+    await expect(page.getByRole("heading", { name: "Кабинет" })).toBeVisible();
+  });
+
+  const storefrontUrl = await test.step("продавец открывает витрину", async () => {
+    await page.getByLabel("Адрес магазина").fill(subdomain);
+    await page.getByRole("button", { name: "Создать магазин" }).click();
+
+    const address = page.getByRole("link", { name: new RegExp(`${subdomain}\\.`) });
+    await expect(address).toBeVisible();
+    // the address is taken from the page, not built here: the port belongs to the stack
+    const href = await address.getAttribute("href");
+    expect(href).not.toBeNull();
+    return href ?? "";
+  });
+
+  await test.step("продавец оставляет способ связи", async () => {
+    // without one the product does not go to review: there is no other way to order
+    await page.getByRole("link", { name: /Настройки магазина/ }).click();
+    await page.getByLabel("Телефон", { exact: true }).fill(PHONE);
+    await page.getByRole("button", { name: "Сохранить контакты" }).click();
+    await expect(page.getByText("Сохранено.")).toBeVisible();
+  });
+
+  await test.step("продавец заводит товар, и тот уходит на проверку", async () => {
+    await page.goto("/dashboard/products/new");
+    await page.getByLabel("Название").fill(productName);
+    // the first real option: the placeholder above it is disabled
+    await page.getByLabel("Категория").selectOption({ index: 1 });
+    await page.getByLabel("Цена, ֏").fill("4500");
+    await page.getByLabel("Остаток, шт.").fill("3");
+    await page.getByRole("button", { name: "Создать товар" }).click();
+
+    await expect(page.getByRole("heading", { name: productName })).toBeVisible();
+    // a new product is already in the queue: submitting is for the ones sent back
+    await expect(page.getByRole("button", { name: "Уже на проверке" })).toBeVisible();
+  });
+
+  await test.step("модератор входит", async () => {
+    // one browser for both people: the seller is done, and the shop still has to be let in
+    await page.goto("/dashboard");
+    await page.getByRole("button", { name: "Выйти" }).click();
+    await expect(page).toHaveURL(/\/login/);
+    await page.getByLabel("Email", { exact: true }).fill(MODERATOR.email);
+    await page.getByLabel("Пароль", { exact: true }).fill(MODERATOR.password);
+    await page.getByRole("button", { name: "Войти" }).click();
+
+    // every role lands in the same cabinet; the queue is one link away from it
+    await expect(page).toHaveURL(/\/dashboard$/);
+    await page.getByRole("link", { name: "Очередь модерации" }).click();
+    await expect(page).toHaveURL(/\/moderation$/);
+  });
+
+  await test.step("модератор допускает продавца", async () => {
+    await page.getByRole("link", { name: /Продавцы/ }).click();
+    const application = page.getByRole("listitem").filter({ hasText: subdomain });
+    await application.getByRole("button", { name: "Допустить" }).click();
+    // the queue holds applications awaiting a verdict, so a decided one leaves it
+    await expect(application).toHaveCount(0);
+  });
+
+  await test.step("модератор одобряет товар", async () => {
+    await page.goto("/moderation");
+    const queued = page.getByRole("listitem").filter({ hasText: productName });
+    await queued.getByRole("button", { name: "Одобрить" }).click();
+    await expect(queued).toHaveCount(0);
+  });
+
+  await test.step("покупатель находит товар в каталоге", async () => {
+    await page.goto(`/catalog?q=${encodeURIComponent(productName)}`);
+    const card = page.getByRole("link", { name: new RegExp(productName) });
+    await expect(card).toBeVisible();
+    // the only address of a product is inside the shop that sells it
+    await expect(card).toHaveAttribute("href", new RegExp(`^https?://${subdomain}\\.`));
+  });
+
+  await test.step("покупатель попадает на витрину и видит, как связаться", async () => {
+    await page.goto(storefrontUrl);
+    await expect(page.getByRole("heading", { level: 1, name: seller.displayName })).toBeVisible();
+    await expect(page.getByText(productName)).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: new RegExp(PHONE.replace("+", "\\+")) }),
+    ).toHaveAttribute("href", `tel:${PHONE}`);
+  });
+});

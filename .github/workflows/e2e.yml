@@ -1,0 +1,62 @@
+name: e2e
+
+on:
+  workflow_dispatch:
+  # no paths filter on purpose: the scenario crosses nginx, backend, frontend and the database,
+  # so there is no change in this repository that cannot break it
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  scenario:
+    runs-on: ubuntu-latest
+
+    env:
+      E2E_MODERATOR_EMAIL: e2e-moderator@e2e.allstore.am
+      E2E_MODERATOR_PASSWORD: e2e-password-1
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install browser
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      # --wait holds until postgres, minio and backend report healthy; the first page of the
+      # frontend compiles on demand and is covered by the navigation timeout instead
+      - name: Bring the stack up
+        run: docker compose up --build -d --wait
+
+      - name: Moderator account
+        run: >-
+          docker compose exec -T backend python -m scripts.grant_role
+          "$E2E_MODERATOR_EMAIL" "$E2E_MODERATOR_PASSWORD" moderator
+
+      - name: Scenario
+        working-directory: frontend
+        run: npx playwright test
+
+      - name: Report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+          retention-days: 7
+
+      # a failed step in the browser usually has its reason in the logs of the stack
+      - name: Stack logs
+        if: failure()
+        run: docker compose logs --no-color --tail 300
