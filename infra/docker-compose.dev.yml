@@ -70,6 +70,33 @@ services:
       retries: 10
       start_period: 20s
 
+  # not published through nginx: the search answers backend, never a browser
+  search:
+    build:
+      context: ../search
+      target: dev
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-allstore}:${POSTGRES_PASSWORD:-allstore}@postgres:5432/${POSTGRES_DB:-allstore}
+      EMBEDDER: ${EMBEDDER:-fastembed}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-intfloat/multilingual-e5-large}
+      REINDEX_INTERVAL_SECONDS: ${REINDEX_INTERVAL_SECONDS:-300}
+    volumes:
+      - ../search:/srv/app
+      # two gigabytes of model: downloaded once, kept across restarts and rebuilds
+      - fastembed-cache:/var/cache/fastembed
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      # the model is loaded on the first request, and the first load is the slow one
+      start_period: 180s
+
   frontend:
     build:
       context: ../frontend
@@ -103,3 +130,4 @@ volumes:
   minio-data:
   frontend-node-modules:
   frontend-next-cache:
+  fastembed-cache:
