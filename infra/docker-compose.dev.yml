@@ -1,6 +1,8 @@
 services:
   postgres:
-    image: postgres:17-alpine
+    # the same PostgreSQL 17 with pgvector built in: embeddings live beside the products they
+    # describe, not in a separate database (docs/rag-first.md, раздел 24)
+    image: pgvector/pgvector:pg17
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-allstore}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-allstore}
