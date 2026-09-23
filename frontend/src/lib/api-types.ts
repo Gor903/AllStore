@@ -144,6 +144,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/assistant/ask": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask
+         * @description Open to a guest: someone who has bought nothing yet is exactly who this is for.
+         *
+         *     No CSRF gate, for the same reason complaints have none: the request carries nobody's
+         *     privileges, and forging it from another site achieves what its author could do directly.
+         *     There is no rate limiting in this project at all (see the stage 14 journal), and this
+         *     endpoint costs processor time — so the work is bounded from above instead: by the length
+         *     of the question, the length of the history and the number of search rounds.
+         */
+        post: operations["ask_api_v1_assistant_ask_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/login": {
         parameters: {
             query?: never;
@@ -924,6 +950,36 @@ export interface components {
             /** Slug */
             slug: string;
             status: components["schemas"]["CategoryStatus"];
+        };
+        /**
+         * AssistantAnswer
+         * @description The text and the products it is allowed to be about.
+         *
+         *     Cards are rendered from `products`, never parsed out of `answer`: what the assistant says
+         *     and what the catalogue actually holds must not be able to disagree.
+         */
+        AssistantAnswer: {
+            /** Answer */
+            answer: string;
+            /** Products */
+            products: components["schemas"]["CatalogProductRead"][];
+        };
+        /** AssistantAskRequest */
+        AssistantAskRequest: {
+            /** History */
+            history?: components["schemas"]["AssistantTurn"][];
+            /** Question */
+            question: string;
+        };
+        /** AssistantTurn */
+        AssistantTurn: {
+            /** Content */
+            content: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "user" | "assistant";
         };
         /** AuditLogListResponse */
         AuditLogListResponse: {
@@ -2063,6 +2119,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ask_api_v1_assistant_ask_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssistantAskRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantAnswer"];
                 };
             };
             /** @description Validation Error */

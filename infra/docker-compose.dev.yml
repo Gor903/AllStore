@@ -57,6 +57,9 @@ services:
       S3_PUBLIC_URL: http://localhost:${MINIO_PORT:-9000}/${S3_BUCKET:-allstore-dev}
       # unset this and the catalogue searches exactly as it did before semantic search
       SEARCH_SERVICE_URL: ${SEARCH_SERVICE_URL-http://search:8000}
+      # empty disables the assistant and the site simply does not offer it
+      ASSISTANT_BASE_URL: ${ASSISTANT_BASE_URL-http://ollama:11434/v1}
+      ASSISTANT_MODEL: ${ASSISTANT_MODEL:-qwen2.5:3b}
     volumes:
       - ../backend:/srv/app
     depends_on:
@@ -99,6 +102,20 @@ services:
       # the model is loaded on the first request, and the first load is the slow one
       start_period: 180s
 
+  # the assistant's brain, local and free: no key, no account, no per-token cost. Swapped for
+  # any OpenAI-compatible endpoint by changing ASSISTANT_BASE_URL — the backend speaks that
+  # protocol, not a vendor SDK
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama-models:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
   frontend:
     build:
       context: ../frontend
@@ -133,3 +150,4 @@ volumes:
   frontend-node-modules:
   frontend-next-cache:
   fastembed-cache:
+  ollama-models:
