@@ -1,7 +1,13 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { CatalogProduct, CatalogProductDetail, Contact, Storefront } from "@/lib/api";
+import type {
+  CatalogProduct,
+  CatalogProductDetail,
+  CatalogStore,
+  Contact,
+  Storefront,
+} from "@/lib/api";
 
 const host = { value: "cups.allstore.am" };
 
@@ -13,10 +19,13 @@ vi.mock("@/lib/api", () => ({
   PAGE_SIZE: 24,
   fetchCatalogProduct: vi.fn(),
   fetchCatalogProducts: vi.fn(),
+  fetchCatalogStores: vi.fn(),
   fetchStorefront: vi.fn(),
 }));
 
-const { fetchCatalogProduct, fetchCatalogProducts, fetchStorefront } = await import("@/lib/api");
+const { fetchCatalogProduct, fetchCatalogProducts, fetchCatalogStores, fetchStorefront } =
+  await import("@/lib/api");
+const { default: HomePage } = await import("@/app/(public)/page");
 const { default: ProductPage } = await import("@/app/(public)/p/[productId]/page");
 const { default: StorefrontPage } = await import("@/app/(public)/s/[subdomain]/page");
 
@@ -57,6 +66,15 @@ const STORE: Storefront = {
   contacts: [],
 };
 
+const SHOP: CatalogStore = {
+  subdomain: "cups",
+  display_name: "Лавка кружек",
+  description: "Керамика ручной работы",
+  logo_url: null,
+  banner_url: null,
+  contacts: [],
+};
+
 const DRESSED: Storefront = {
   ...STORE,
   logo_url: "https://cdn.example/logo.jpg",
@@ -80,7 +98,78 @@ beforeEach(() => {
   host.value = "cups.allstore.am";
   vi.mocked(fetchCatalogProduct).mockReset();
   vi.mocked(fetchCatalogProducts).mockReset();
+  vi.mocked(fetchCatalogStores).mockReset();
   vi.mocked(fetchStorefront).mockReset();
+});
+
+describe("home page", () => {
+  const products = (items: CatalogProduct[]) => ({
+    items,
+    total: items.length,
+    limit: 8,
+    offset: 0,
+  });
+  const stores = (items: CatalogStore[]) => ({ items, total: items.length, limit: 6, offset: 0 });
+
+  beforeEach(() => {
+    host.value = "allstore.am";
+  });
+
+  it("shows the newest products and the newest shops", async () => {
+    vi.mocked(fetchCatalogProducts).mockResolvedValue(products([PRODUCT]));
+    vi.mocked(fetchCatalogStores).mockResolvedValue(stores([SHOP]));
+
+    render(await HomePage());
+
+    expect(screen.getByRole("heading", { name: "Новые товары" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Новые магазины" })).toBeInTheDocument();
+    // both blocks leave the marketplace for the shop's own subdomain
+    expect(screen.getByRole("link", { name: /Кружка керамическая/u })).toHaveAttribute(
+      "href",
+      `https://cups.allstore.am/p/${PRODUCT.id}`,
+    );
+    // the shop card is the one naming the address the visitor will land on
+    expect(screen.getByRole("link", { name: /cups\.allstore\.am/u })).toHaveAttribute(
+      "href",
+      "https://cups.allstore.am/",
+    );
+  });
+
+  it("asks for a block, not for a page of the catalogue", async () => {
+    // the blocks are the head of each public listing: nothing on the page picks or caches
+    // what to show, so a product taken off the shelf leaves the block with the next render
+    vi.mocked(fetchCatalogProducts).mockResolvedValue(products([]));
+    vi.mocked(fetchCatalogStores).mockResolvedValue(stores([]));
+
+    render(await HomePage());
+
+    expect(fetchCatalogProducts).toHaveBeenCalledWith(
+      { q: null, category: null, store: null, offset: 0 },
+      8,
+    );
+    expect(fetchCatalogStores).toHaveBeenCalledWith(0, 6);
+  });
+
+  it("drops a block it has nothing to fill with", async () => {
+    // nothing published yet, everything hidden, every shop suspended — the listings answer
+    // empty and the page must not show an empty shelf
+    vi.mocked(fetchCatalogProducts).mockResolvedValue(products([]));
+    vi.mocked(fetchCatalogStores).mockResolvedValue(stores([]));
+
+    render(await HomePage());
+
+    expect(screen.queryByRole("heading", { name: "Новые товары" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Новые магазины" })).not.toBeInTheDocument();
+  });
+
+  it("stands even when the catalogue cannot be read", async () => {
+    vi.mocked(fetchCatalogProducts).mockResolvedValue(null);
+    vi.mocked(fetchCatalogStores).mockResolvedValue(null);
+
+    render(await HomePage());
+
+    expect(screen.getByRole("heading", { level: 1 })).toBeInTheDocument();
+  });
 });
 
 describe("product page", () => {
