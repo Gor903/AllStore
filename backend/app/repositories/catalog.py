@@ -59,6 +59,9 @@ def _narrow[S: Select[Any]](
             or_(
                 Product.name.ilike(pattern, escape=LIKE_ESCAPE),
                 Product.description.ilike(pattern, escape=LIKE_ESCAPE),
+                # buyers search by the shop too: asking what a particular workshop sells is a
+                # question about products, not about shops (AllStore_build_plan.md, item 11.8)
+                Business.display_name.ilike(pattern, escape=LIKE_ESCAPE),
             )
         )
     if category_ids is not None:
