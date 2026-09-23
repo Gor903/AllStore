@@ -1,11 +1,14 @@
 import uuid
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models import Product, Store
 from tests.integration.conftest import (
     PRODUCTS_URL,
     become_moderator,
@@ -102,6 +105,21 @@ async def a_published_product(
 
 async def anonymous(client: AsyncClient) -> None:
     client.cookies.clear()
+
+
+async def born_on(
+    session: AsyncSession, model: type[Product] | type[Store], day: int, **key: Any
+) -> None:
+    """Sets a row's age by hand.
+
+    Every request of a test runs inside one transaction, and `created_at` defaults to the
+    clock of that transaction — so rows created a few requests apart are the same age here,
+    and the order among them is undefined. Age is what the newest-first listings sort by, so
+    a test about their order has to state it.
+    """
+    await session.execute(
+        update(model).filter_by(**key).values(created_at=datetime(2026, 1, day, tzinfo=UTC))
+    )
 
 
 async def test_the_catalogue_shows_a_published_product(
@@ -404,6 +422,40 @@ async def test_the_shop_list_holds_shops_on_the_air(
         "banner_url",
         "contacts",
     }
+
+
+async def test_the_head_of_the_catalogue_is_the_newest_products(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    """The home page block is the head of this listing — nothing else decides what is new."""
+    shop = await a_live_shop(api_client, session, "cups")
+    await a_published_product(api_client, session, shop, name="Кружка")
+    await a_published_product(api_client, session, shop, name="Чайник")
+    await born_on(session, Product, day=1, name="Кружка")
+    await born_on(session, Product, day=2, name="Чайник")
+    await anonymous(api_client)
+
+    response = await api_client.get(CATALOG_PRODUCTS, params={"limit": 1})
+
+    body = response.json()
+    assert body["total"] == 2
+    assert [item["name"] for item in body["items"]] == ["Чайник"]
+
+
+async def test_the_head_of_the_shop_list_is_the_newest_shops(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    await a_live_shop(api_client, session, "cups")
+    await a_live_shop(api_client, session, "mugs")
+    await born_on(session, Store, day=1, subdomain="cups")
+    await born_on(session, Store, day=2, subdomain="mugs")
+    await anonymous(api_client)
+
+    response = await api_client.get(CATALOG_STORES, params={"limit": 1})
+
+    body = response.json()
+    assert body["total"] == 2
+    assert [item["subdomain"] for item in body["items"]] == ["mugs"]
 
 
 async def test_a_draft_shop_is_not_listed(api_client: AsyncClient, session: AsyncSession) -> None:
