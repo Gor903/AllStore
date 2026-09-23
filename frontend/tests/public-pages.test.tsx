@@ -108,6 +108,7 @@ describe("home page", () => {
     total: items.length,
     limit: 8,
     offset: 0,
+    by_meaning: [],
   });
   const stores = (items: CatalogStore[]) => ({ items, total: items.length, limit: 6, offset: 0 });
 
@@ -239,6 +240,7 @@ describe("storefront page", () => {
       total: 1,
       limit: 24,
       offset: 0,
+      by_meaning: [],
     });
 
     render(await StorefrontPage(storeProps("cups")));
@@ -258,6 +260,7 @@ describe("storefront page", () => {
       total: 0,
       limit: 24,
       offset: 0,
+      by_meaning: [],
     });
 
     render(await StorefrontPage(storeProps("cups")));
@@ -286,6 +289,7 @@ describe("storefront page", () => {
       total: 0,
       limit: 24,
       offset: 0,
+      by_meaning: [],
     });
 
     const { container } = render(await StorefrontPage(storeProps("cups")));
@@ -308,6 +312,7 @@ describe("storefront page", () => {
       total: 0,
       limit: 24,
       offset: 0,
+      by_meaning: [],
     });
 
     const { container } = render(await StorefrontPage(storeProps("cups")));
@@ -324,6 +329,7 @@ describe("storefront page", () => {
       total: 0,
       limit: 24,
       offset: 0,
+      by_meaning: [],
     });
 
     const { container } = render(await StorefrontPage(storeProps("cups")));

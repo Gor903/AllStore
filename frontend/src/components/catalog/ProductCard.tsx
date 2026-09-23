@@ -8,9 +8,11 @@ type ProductCardProps = {
   product: CatalogProduct;
   /** Built by the page: on the marketplace it leaves for the shop's subdomain. */
   href: string;
+  /** The words of the query are not in this product — only the search by meaning brought it. */
+  byMeaning?: boolean;
 };
 
-export function ProductCard({ product, href }: ProductCardProps) {
+export function ProductCard({ product, href, byMeaning = false }: ProductCardProps) {
   const cover = product.images[0];
 
   return (
@@ -34,6 +36,11 @@ export function ProductCard({ product, href }: ProductCardProps) {
         )}
       </div>
       <div className="flex flex-1 flex-col gap-1 p-3">
+        {byMeaning ? (
+          <span className="w-fit rounded-full bg-surface-muted px-2 py-0.5 text-xs text-ink-muted">
+            по смыслу
+          </span>
+        ) : null}
         <h3 className="line-clamp-2 font-medium group-hover:text-brand">{product.name}</h3>
         <span className="mt-auto pt-2 text-lg font-semibold">
           {formatPrice(product.price, product.currency)}

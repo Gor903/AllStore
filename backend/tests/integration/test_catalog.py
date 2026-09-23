@@ -295,7 +295,13 @@ async def test_search_finds_nothing_when_there_is_nothing(
 
     response = await api_client.get(CATALOG_PRODUCTS, params={"q": "велосипед"})
 
-    assert response.json() == {"items": [], "total": 0, "limit": 24, "offset": 0}
+    assert response.json() == {
+        "items": [],
+        "total": 0,
+        "limit": 24,
+        "offset": 0,
+        "by_meaning": [],
+    }
 
 
 @pytest.mark.parametrize("query", ["%", "_", "%%", "\\"])
@@ -477,3 +483,16 @@ async def test_the_category_tree_is_offered_to_the_visitor(api_client: AsyncClie
     # the id comes with it: a seller files a product under a category by id, not by slug
     assert set(electronics) == {"id", "slug", "name", "children"}
     assert uuid.UUID(electronics["children"][0]["id"])
+
+
+async def test_the_search_looks_at_the_shop_name(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    """Asking what a workshop sells is a question about products (build plan, item 11.8)."""
+    shop = await a_live_shop(api_client, session, "cups")
+    product_id = await a_published_product(api_client, session, shop, name="Кружка")
+    await anonymous(api_client)
+
+    response = await api_client.get(CATALOG_PRODUCTS, params={"q": "Тестовый магазин"})
+
+    assert [item["id"] for item in response.json()["items"]] == [product_id]

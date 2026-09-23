@@ -1104,6 +1104,11 @@ export interface components {
         };
         /** CatalogProductListResponse */
         CatalogProductListResponse: {
+            /**
+             * By Meaning
+             * @default []
+             */
+            by_meaning: string[];
             /** Items */
             items: components["schemas"]["CatalogProductRead"][];
             /** Limit */

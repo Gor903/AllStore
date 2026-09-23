@@ -92,6 +92,10 @@ class CatalogProductListResponse(BaseModel):
     total: int
     limit: int
     offset: int
+    # which of the items above the words of the query do not appear in: found by meaning
+    # alone. A property of this search, not of the product — which is why it lives here and
+    # not on the card, where it would follow a product onto its own page and mean nothing
+    by_meaning: list[uuid.UUID] = []
 
 
 class CatalogStoreRead(BaseModel):

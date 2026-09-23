@@ -1,16 +1,32 @@
 import uuid
 from collections.abc import Sequence
+from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import Settings
 from app.core.errors import NotFoundError
 from app.models import Category, Product, Store
 from app.repositories import catalog
+from app.services import ranking, search_client
 from app.services.products import ProductNotFoundError
+
+# how many exact matches take part in the merge: beyond this a text query is not a search
+# any more, and the visitor is going to refine it rather than page through five hundred items
+EXACT_CANDIDATES = 500
 
 
 class UnknownCategoryError(NotFoundError):
     code = "category_not_found"
+
+
+@dataclass(frozen=True)
+class CatalogPage:
+    items: Sequence[Product]
+    total: int
+    # what only the semantic search found: the words of the query are not in these products,
+    # and a buyer deserves to be told why they are in the list
+    by_meaning: set[uuid.UUID]
 
 
 async def list_products(
@@ -21,10 +37,21 @@ async def list_products(
     subdomain: str | None,
     limit: int,
     offset: int,
-) -> tuple[Sequence[Product], int]:
+    settings: Settings | None = None,
+) -> CatalogPage:
     category_ids = None if category_slug is None else await _with_children(session, category_slug)
-    return (
-        await catalog.list_products(
+    if query is not None and settings is not None and settings.search_service_url is not None:
+        return await _search_by_words_and_meaning(
+            session,
+            settings=settings,
+            query=query,
+            category_ids=category_ids,
+            subdomain=subdomain,
+            limit=limit,
+            offset=offset,
+        )
+    return CatalogPage(
+        items=await catalog.list_products(
             session,
             query=query,
             category_ids=category_ids,
@@ -32,9 +59,56 @@ async def list_products(
             limit=limit,
             offset=offset,
         ),
-        await catalog.count_products(
+        total=await catalog.count_products(
             session, query=query, category_ids=category_ids, subdomain=subdomain
         ),
+        by_meaning=set(),
+    )
+
+
+async def _search_by_words_and_meaning(
+    session: AsyncSession,
+    *,
+    settings: Settings,
+    query: str,
+    category_ids: Sequence[uuid.UUID] | None,
+    subdomain: str | None,
+    limit: int,
+    offset: int,
+) -> CatalogPage:
+    """Both searches, one list.
+
+    The exact search is authoritative about what contains the words; the semantic one is
+    authoritative about nothing, only suggestive. They are merged by rank rather than by score
+    (see services/ranking.py), and the result meets the public filter afterwards — identifiers
+    from the index have no standing until this repository confirms a visitor may see them.
+
+    `total` here counts the merged candidates rather than every product that would ever match:
+    a semantic search has no natural total, and a page count that grew when a service came up
+    would be stranger than one that says how much this search found.
+    """
+    exact = await catalog.list_matching_ids(
+        session,
+        query=query,
+        category_ids=category_ids,
+        subdomain=subdomain,
+        limit=EXACT_CANDIDATES,
+    )
+    found_by_meaning = await search_client.semantic_ids(settings, query, settings.search_candidates)
+    merged = ranking.merge(exact, found_by_meaning)
+    public = await catalog.keep_public(
+        session, merged, category_ids=category_ids, subdomain=subdomain
+    )
+    ordered = [identifier for identifier in merged if identifier in public]
+
+    page = ordered[offset : offset + limit]
+    products = {
+        product.id: product for product in await catalog.list_products_by_ids(session, page)
+    }
+    return CatalogPage(
+        items=[products[identifier] for identifier in page if identifier in products],
+        total=len(ordered),
+        by_meaning=public.intersection(found_by_meaning).difference(exact),
     )
 
 

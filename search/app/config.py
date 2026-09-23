@@ -34,9 +34,9 @@ class Settings(BaseSettings):
     batch_size: int = 32
     # the sweep is the safety net under the ping from backend, not the main path
     reindex_interval_seconds: int = 300
-    # how many candidates the vector search returns before the caller filters them
-    default_limit: int = 20
-    max_limit: int = 100
+    # how many candidates the vector search returns before the caller filters them; a
+    # request for more is trimmed to this rather than refused
+    max_limit: int = 200
 
 
 @lru_cache

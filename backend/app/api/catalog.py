@@ -3,7 +3,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from app.deps.auth import SessionDep
+from app.deps.auth import SessionDep, SettingsDep
 from app.models.category import CATEGORY_SLUG_MAX_LENGTH
 from app.models.store import SUBDOMAIN_MAX_LENGTH
 from app.schemas.catalog import (
@@ -32,18 +32,26 @@ Subdomain = Annotated[str | None, Query(max_length=SUBDOMAIN_MAX_LENGTH)]
 @router.get("/products", response_model=CatalogProductListResponse)
 async def search_products(
     session: SessionDep,
+    settings: SettingsDep,
     q: SearchQuery = None,
     category: CategorySlug = None,
     store: Subdomain = None,
     limit: Limit = DEFAULT_PAGE_SIZE,
     offset: Offset = 0,
 ) -> CatalogProductListResponse:
-    items, total = await catalog_service.list_products(
-        session, query=q, category_slug=category, subdomain=store, limit=limit, offset=offset
+    page = await catalog_service.list_products(
+        session,
+        query=q,
+        category_slug=category,
+        subdomain=store,
+        limit=limit,
+        offset=offset,
+        settings=settings,
     )
     return CatalogProductListResponse(
-        items=[CatalogProductRead.from_product(item) for item in items],
-        total=total,
+        items=[CatalogProductRead.from_product(item) for item in page.items],
+        total=page.total,
+        by_meaning=[item.id for item in page.items if item.id in page.by_meaning],
         limit=limit,
         offset=offset,
     )

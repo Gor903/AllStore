@@ -55,6 +55,7 @@ function pagedFrom<T>(items: T[]) {
       total: items.length,
       limit: 100,
       offset,
+      by_meaning: [],
     });
   };
 }

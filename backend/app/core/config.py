@@ -86,6 +86,20 @@ class Settings(BaseSettings):
     s3_public_url: str | None = None
     max_upload_size_mb: int = 5
 
+    # the semantic search service, see docs/rag-first.md. Unset means the catalogue searches
+    # exactly as it always did — the site does not depend on it being there (ADR 10)
+    search_service_url: str | None = None
+    # a search that takes longer than this is worse than no search: the visitor is waiting
+    search_timeout_seconds: float = 2.0
+    # how many suggestions the semantic side contributes.
+    #
+    # Deliberately small and fixed. A vector search ranks, it does not match: it always
+    # returns something, and the scores fall off so gently that any threshold would be a
+    # magic number that drifts with the model. A large pool would inflate the number of
+    # found products with things nobody was looking for, so the semantic side adds a short
+    # list of best guesses — every one of them marked as such in the answer.
+    search_candidates: int = 20
+
     @field_validator("secret_key")
     @classmethod
     def _secret_key_is_long_enough(cls, value: SecretStr) -> SecretStr:
