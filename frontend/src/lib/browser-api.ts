@@ -43,6 +43,48 @@ async function send<T>(method: string, path: string, init: RequestInit): Promise
   return { ok: true, data: payload as T };
 }
 
+/**
+ * A POST whose answer arrives as JSON lines, yielded as each one lands.
+ *
+ * Used where the halves of an answer become ready at very different times: waiting for the
+ * slowest of them would hide the fastest for as long as the slowest takes.
+ */
+export async function* apiPostLines<T>(path: string, body: unknown): AsyncGenerator<T> {
+  const csrfToken = readCookie(env.csrfCookie);
+  const response = await fetch(`${env.apiUrl}${API_PREFIX}${path}`, {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      ...(csrfToken ? { [env.csrfHeader]: csrfToken } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok || response.body === null) {
+    const payload: unknown = await response.json().catch(() => null);
+    throw toFormError(payload);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    buffer += done ? "" : decoder.decode(value, { stream: true });
+    // the last chunk rarely ends on a line break, so the tail is kept until it is whole
+    const lines = buffer.split("\n");
+    buffer = done ? "" : (lines.pop() ?? "");
+    for (const line of lines) {
+      if (line.trim() !== "") {
+        yield JSON.parse(line) as T;
+      }
+    }
+    if (done) {
+      return;
+    }
+  }
+}
+
 function withJson(body: unknown): RequestInit {
   return { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
 }

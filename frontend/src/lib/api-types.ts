@@ -157,6 +157,9 @@ export interface paths {
          * Ask
          * @description Open to a guest: someone who has bought nothing yet is exactly who this is for.
          *
+         *     The reply is a stream of JSON lines, not one object, so the products can reach the visitor
+         *     as soon as the search finds them instead of waiting out the model.
+         *
          *     No CSRF gate, for the same reason complaints have none: the request carries nobody's
          *     privileges, and forging it from another site achieves what its author could do directly.
          *     There is no rate limiting in this project at all (see the stage 14 journal), and this
@@ -951,25 +954,45 @@ export interface components {
             slug: string;
             status: components["schemas"]["CategoryStatus"];
         };
-        /**
-         * AssistantAnswer
-         * @description The text and the products it is allowed to be about.
-         *
-         *     Cards are rendered from `products`, never parsed out of `answer`: what the assistant says
-         *     and what the catalogue actually holds must not be able to disagree.
-         */
-        AssistantAnswer: {
-            /** Answer */
-            answer: string;
-            /** Products */
-            products: components["schemas"]["CatalogProductRead"][];
-        };
         /** AssistantAskRequest */
         AssistantAskRequest: {
             /** History */
             history?: components["schemas"]["AssistantTurn"][];
             /** Question */
             question: string;
+        };
+        /**
+         * AssistantError
+         * @description A failure that arrives mid-stream, when the status code has long been sent.
+         */
+        AssistantError: {
+            /** Message */
+            message: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "error";
+        };
+        /** AssistantProducts */
+        AssistantProducts: {
+            /** Products */
+            products: components["schemas"]["CatalogProductRead"][];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "products";
+        };
+        /** AssistantText */
+        AssistantText: {
+            /** Text */
+            text: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "answer";
         };
         /** AssistantTurn */
         AssistantTurn: {
@@ -2145,13 +2168,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description A stream of JSON lines, `application/x-ndjson`: one object per line, in the order they become ready. The schema describes a single line, not the body. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AssistantAnswer"];
+                    "application/json": components["schemas"]["AssistantProducts"] | components["schemas"]["AssistantText"] | components["schemas"]["AssistantError"];
                 };
             };
             /** @description Validation Error */

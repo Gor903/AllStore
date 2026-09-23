@@ -27,7 +27,11 @@ export type CategoryTree = components["schemas"]["CategoryTreeRead"];
 export type UserList = components["schemas"]["UserListResponse"];
 export type AdminCategory = components["schemas"]["AdminCategoryRead"];
 export type AuditLogList = components["schemas"]["AuditLogListResponse"];
-export type AssistantAnswer = components["schemas"]["AssistantAnswer"];
+// one line of the assistant stream: the halves of an answer arrive as they become ready
+export type AssistantLine =
+  | components["schemas"]["AssistantProducts"]
+  | components["schemas"]["AssistantText"]
+  | components["schemas"]["AssistantError"];
 export type ReportQueue = components["schemas"]["ReportQueueResponse"];
 export type ReportedSubject = components["schemas"]["ReportedSubjectRead"];
 export type AuditEntry = components["schemas"]["AuditLogRead"];

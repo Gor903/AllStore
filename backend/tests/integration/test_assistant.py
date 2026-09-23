@@ -6,10 +6,11 @@ not from the text, that a model which never stops searching is stopped, and that
 answer degrades into an honest one rather than an exception.
 """
 
+import json
 from typing import Any
 
 import pytest
-from httpx import AsyncClient
+from httpx import AsyncClient, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -46,6 +47,11 @@ class ScriptedModel:
 
 def searching(name: str, query: str) -> Reply:
     return Reply(tool_calls=[ToolCall(id="1", name=name, arguments={"query": query})])
+
+
+def lines(response: Response) -> list[dict[str, Any]]:
+    """The answer travels as JSON lines, one per thing that became ready."""
+    return [json.loads(line) for line in response.text.splitlines() if line]
 
 
 @pytest.fixture
@@ -192,9 +198,32 @@ async def test_a_broken_model_does_not_break_the_answer(
 
     response = await api_client.post(ASK, json={"question": "Есть вазы?"})
 
-    assert response.status_code == 503
+    # the stream opened before the model was reached, so the failure arrives as a line in it
+    assert response.status_code == 200
+    failure = lines(response)[-1]
+    assert failure["type"] == "error"
     # the visitor is told what still works, not handed a stack trace
-    assert "каталог" in response.json()["error"]["message"].lower()
+    assert "каталог" in failure["message"].lower()
+
+
+async def test_the_products_arrive_before_the_text(
+    api_client: AsyncClient, session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The whole point of the stream: the search is a third of a second, the model is twenty."""
+    monkeypatch.setattr(get_settings(), "assistant_base_url", "http://ollama:11434/v1")
+    shop = await a_live_shop(api_client, session, "cups")
+    await a_published_product(api_client, session, shop, name="Ваза «Гюмри»")
+    model = ScriptedModel(searching(EXACT_SEARCH, "ваза"), Reply(text="Нашёл вазу."))
+    monkeypatch.setattr("app.api.assistant.build_model", lambda settings: model)
+    await anonymous(api_client)
+
+    response = await api_client.post(ASK, json={"question": "Есть вазы?"})
+
+    kinds = [line["type"] for line in lines(response)]
+    assert kinds == ["products", "answer"]
+    first, last = lines(response)
+    assert [product["name"] for product in first["products"]] == ["Ваза «Гюмри»"]
+    assert last["text"] == "Нашёл вазу."
 
 
 async def test_the_question_has_a_ceiling(api_client: AsyncClient, configured: None) -> None:
