@@ -2,11 +2,9 @@ import enum
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi import APIRouter, Depends, Query, status
 
-from app.core.errors import AppError
-from app.core.tokens import InvalidAccessToken, decode_access_token
-from app.deps.auth import SessionDep, SettingsDep, require_csrf, require_role
+from app.deps.auth import OptionalUser, SessionDep, require_csrf, require_role
 from app.models import User, UserRole
 from app.schemas.moderation import ModerationReasonRequest
 from app.schemas.report import (
@@ -16,7 +14,6 @@ from app.schemas.report import (
     ReportRequest,
     ReportResolutionResponse,
 )
-from app.services import auth as auth_service
 from app.services import reports as reports_service
 
 public_router = APIRouter(prefix="/reports", tags=["reports"])
@@ -36,31 +33,11 @@ class Subject(enum.StrEnum):
     BUSINESS = "business"
 
 
-async def optional_user(
-    request: Request, settings: SettingsDep, session: SessionDep
-) -> User | None:
-    """Whoever is signed in, or nobody. A guest may complain: someone who has just been
-    cheated is not going to register first, and a complaint nobody can file is no
-    protection at all."""
-    token = request.cookies.get(settings.access_cookie_name)
-    if not token:
-        return None
-    try:
-        payload = decode_access_token(settings, token)
-    except InvalidAccessToken:
-        return None
-    try:
-        return await auth_service.get_active_user(session, payload.user_id)
-    except AppError:
-        # a barred or missing account still gets to complain, just as a guest does
-        return None
-
-
 @public_router.post("", response_model=ReportAccepted, status_code=status.HTTP_201_CREATED)
 async def submit_report(
     payload: ReportRequest,
     session: SessionDep,
-    reporter: Annotated[User | None, Depends(optional_user)],
+    reporter: OptionalUser,
 ) -> ReportAccepted:
     """No CSRF gate here, unlike every other mutation.
 

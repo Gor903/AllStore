@@ -38,6 +38,7 @@ async def list_products(
     limit: int,
     offset: int,
     settings: Settings | None = None,
+    viewer_id: uuid.UUID | None = None,
 ) -> CatalogPage:
     category_ids = None if category_slug is None else await _with_children(session, category_slug)
     if query is not None and settings is not None and settings.search_service_url is not None:
@@ -49,6 +50,7 @@ async def list_products(
             subdomain=subdomain,
             limit=limit,
             offset=offset,
+            viewer_id=viewer_id,
         )
     return CatalogPage(
         items=await catalog.list_products(
@@ -58,9 +60,14 @@ async def list_products(
             subdomain=subdomain,
             limit=limit,
             offset=offset,
+            viewer_id=viewer_id,
         ),
         total=await catalog.count_products(
-            session, query=query, category_ids=category_ids, subdomain=subdomain
+            session,
+            query=query,
+            category_ids=category_ids,
+            subdomain=subdomain,
+            viewer_id=viewer_id,
         ),
         by_meaning=set(),
     )
@@ -75,6 +82,7 @@ async def _search_by_words_and_meaning(
     subdomain: str | None,
     limit: int,
     offset: int,
+    viewer_id: uuid.UUID | None,
 ) -> CatalogPage:
     """Both searches, one list.
 
@@ -93,17 +101,19 @@ async def _search_by_words_and_meaning(
         category_ids=category_ids,
         subdomain=subdomain,
         limit=EXACT_CANDIDATES,
+        viewer_id=viewer_id,
     )
     found_by_meaning = await search_client.semantic_ids(settings, query, settings.search_candidates)
     merged = ranking.merge(exact, found_by_meaning)
     public = await catalog.keep_public(
-        session, merged, category_ids=category_ids, subdomain=subdomain
+        session, merged, category_ids=category_ids, subdomain=subdomain, viewer_id=viewer_id
     )
     ordered = [identifier for identifier in merged if identifier in public]
 
     page = ordered[offset : offset + limit]
     products = {
-        product.id: product for product in await catalog.list_products_by_ids(session, page)
+        product.id: product
+        for product in await catalog.list_products_by_ids(session, page, viewer_id)
     }
     return CatalogPage(
         items=[products[identifier] for identifier in page if identifier in products],
@@ -112,20 +122,26 @@ async def _search_by_words_and_meaning(
     )
 
 
-async def get_product(session: AsyncSession, product_id: uuid.UUID) -> Product:
-    """A product that is not public answers exactly as one that does not exist."""
-    product = await catalog.get_product(session, product_id)
+async def get_product(
+    session: AsyncSession, product_id: uuid.UUID, viewer_id: uuid.UUID | None = None
+) -> Product:
+    """A product that is not public answers exactly as one that does not exist.
+
+    A shop that has barred this buyer is not public *to them*, so a saved link answers the
+    same 404 as a product that was taken down — the filter decides, not the route.
+    """
+    product = await catalog.get_product(session, product_id, viewer_id)
     if product is None:
         raise ProductNotFoundError("Товар не найден")
     return product
 
 
 async def list_stores(
-    session: AsyncSession, limit: int, offset: int
+    session: AsyncSession, limit: int, offset: int, viewer_id: uuid.UUID | None = None
 ) -> tuple[Sequence[Store], int]:
     return (
-        await catalog.list_stores(session, limit, offset),
-        await catalog.count_stores(session),
+        await catalog.list_stores(session, limit, offset, viewer_id),
+        await catalog.count_stores(session, viewer_id),
     )
 
 

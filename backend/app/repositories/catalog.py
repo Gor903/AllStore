@@ -2,12 +2,13 @@ import uuid
 from collections.abc import Sequence
 from typing import Any
 
-from sqlalchemy import Select, func, or_, select
+from sqlalchemy import ColumnElement, Select, and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import contains_eager, selectinload
 
 from app.models import (
     Business,
+    BusinessCustomerBlock,
     BusinessStatus,
     Category,
     CategoryStatus,
@@ -49,6 +50,29 @@ PUBLIC_STORE = (
 )
 
 
+def visible_to(viewer_id: uuid.UUID | None) -> ColumnElement[bool]:
+    """The one condition that depends on who is asking: a shop that has barred this buyer.
+
+    A seller may decide who is welcome in their own shop. Applied here rather than in each
+    route, so the shop disappears from the listing, from the search, from the storefront and
+    from a saved link in one stroke — instead of in whichever places somebody remembered.
+
+    A guest is barred by nobody, so the clause folds away and the query is the one every
+    anonymous visitor has always run.
+    """
+    if viewer_id is None:
+        return and_(True)
+    return (
+        ~select(BusinessCustomerBlock.id)
+        .where(
+            BusinessCustomerBlock.business_id == Business.id,
+            BusinessCustomerBlock.buyer_user_id == viewer_id,
+            BusinessCustomerBlock.revoked_at.is_(None),
+        )
+        .exists()
+    )
+
+
 def like_pattern(query: str) -> str:
     """% and _ are wildcards, so a query containing them must not widen the search."""
     escaped = (
@@ -71,8 +95,8 @@ def with_public_joins[S: Select[Any]](statement: S) -> S:
     return statement
 
 
-def _public_products() -> Select[tuple[Product]]:
-    return with_public_joins(select(Product)).where(*PUBLIC_PRODUCT)
+def _public_products(viewer_id: uuid.UUID | None) -> Select[tuple[Product]]:
+    return with_public_joins(select(Product)).where(*PUBLIC_PRODUCT, visible_to(viewer_id))
 
 
 def _narrow[S: Select[Any]](
@@ -108,8 +132,9 @@ async def list_products(
     subdomain: str | None,
     limit: int,
     offset: int,
+    viewer_id: uuid.UUID | None,
 ) -> Sequence[Product]:
-    statement = _narrow(_public_products(), query, category_ids, subdomain)
+    statement = _narrow(_public_products(viewer_id), query, category_ids, subdomain)
     result = await session.execute(
         statement.options(
             contains_eager(Product.business).contains_eager(Business.store),
@@ -131,6 +156,7 @@ async def list_matching_ids(
     category_ids: Sequence[uuid.UUID] | None,
     subdomain: str | None,
     limit: int,
+    viewer_id: uuid.UUID | None,
 ) -> list[uuid.UUID]:
     """Identifiers of the exact matches, newest first — the same set the listing shows.
 
@@ -138,7 +164,7 @@ async def list_matching_ids(
     throw most of them away would be the alternative.
     """
     statement = _narrow(
-        with_public_joins(select(Product.id)).where(*PUBLIC_PRODUCT),
+        with_public_joins(select(Product.id)).where(*PUBLIC_PRODUCT, visible_to(viewer_id)),
         query,
         category_ids,
         subdomain,
@@ -155,6 +181,7 @@ async def keep_public(
     *,
     category_ids: Sequence[uuid.UUID] | None,
     subdomain: str | None,
+    viewer_id: uuid.UUID | None,
 ) -> set[uuid.UUID]:
     """Which of these products a visitor may actually see.
 
@@ -165,7 +192,9 @@ async def keep_public(
     if not ids:
         return set()
     statement = _narrow(
-        with_public_joins(select(Product.id)).where(*PUBLIC_PRODUCT, Product.id.in_(ids)),
+        with_public_joins(select(Product.id)).where(
+            *PUBLIC_PRODUCT, visible_to(viewer_id), Product.id.in_(ids)
+        ),
         None,
         category_ids,
         subdomain,
@@ -174,13 +203,13 @@ async def keep_public(
 
 
 async def list_products_by_ids(
-    session: AsyncSession, ids: Sequence[uuid.UUID]
+    session: AsyncSession, ids: Sequence[uuid.UUID], viewer_id: uuid.UUID | None
 ) -> Sequence[Product]:
     """The products behind an already-decided order; the caller restores that order."""
     if not ids:
         return []
     result = await session.execute(
-        _public_products()
+        _public_products(viewer_id)
         .options(
             contains_eager(Product.business).contains_eager(Business.store),
             selectinload(Product.images),
@@ -197,9 +226,12 @@ async def count_products(
     query: str | None,
     category_ids: Sequence[uuid.UUID] | None,
     subdomain: str | None,
+    viewer_id: uuid.UUID | None,
 ) -> int:
     statement = _narrow(
-        with_public_joins(select(func.count()).select_from(Product)).where(*PUBLIC_PRODUCT),
+        with_public_joins(select(func.count()).select_from(Product)).where(
+            *PUBLIC_PRODUCT, visible_to(viewer_id)
+        ),
         query,
         category_ids,
         subdomain,
@@ -207,9 +239,11 @@ async def count_products(
     return (await session.execute(statement)).scalar_one()
 
 
-async def get_product(session: AsyncSession, product_id: uuid.UUID) -> Product | None:
+async def get_product(
+    session: AsyncSession, product_id: uuid.UUID, viewer_id: uuid.UUID | None
+) -> Product | None:
     result = await session.execute(
-        _public_products()
+        _public_products(viewer_id)
         .options(
             contains_eager(Product.business).contains_eager(Business.store),
             # the card shows how to reach the seller, and a lazy load has nowhere to run here
@@ -222,13 +256,15 @@ async def get_product(session: AsyncSession, product_id: uuid.UUID) -> Product |
     return result.unique().scalar_one_or_none()
 
 
-async def list_stores(session: AsyncSession, limit: int, offset: int) -> Sequence[Store]:
+async def list_stores(
+    session: AsyncSession, limit: int, offset: int, viewer_id: uuid.UUID | None
+) -> Sequence[Store]:
     result = await session.execute(
         select(Store)
         .join(Store.business)
         .join(Business.owner)
         .options(contains_eager(Store.business).selectinload(Business.social_links))
-        .where(*PUBLIC_STORE)
+        .where(*PUBLIC_STORE, visible_to(viewer_id))
         .order_by(Store.created_at.desc(), Store.id)
         .limit(limit)
         .offset(offset)
@@ -236,13 +272,13 @@ async def list_stores(session: AsyncSession, limit: int, offset: int) -> Sequenc
     return result.unique().scalars().all()
 
 
-async def count_stores(session: AsyncSession) -> int:
+async def count_stores(session: AsyncSession, viewer_id: uuid.UUID | None) -> int:
     result = await session.execute(
         select(func.count())
         .select_from(Store)
         .join(Store.business)
         .join(Business.owner)
-        .where(*PUBLIC_STORE)
+        .where(*PUBLIC_STORE, visible_to(viewer_id))
     )
     return result.scalar_one()
 

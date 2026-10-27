@@ -6,6 +6,7 @@ from app.models.auth import PasswordResetToken, RefreshToken
 from app.models.business import Business, BusinessStatus
 from app.models.category import Category, CategoryStatus
 from app.models.contact import PHONE_PLATFORMS, ContactPlatform, SocialLink
+from app.models.customer_block import BusinessCustomerBlock
 from app.models.embedding import EMBEDDING_DIMENSIONS, ProductEmbedding
 from app.models.invitation import InvitationStatus, ModeratorInvitation
 from app.models.moderation import (
@@ -31,6 +32,7 @@ __all__ = [
     "AccountBlock",
     "AuditLog",
     "Business",
+    "BusinessCustomerBlock",
     "BusinessDecision",
     "BusinessModerationReview",
     "BusinessStatus",

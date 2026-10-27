@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Image from "next/image";
+import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 
 import { ReportButton } from "@/components/ReportButton";
@@ -8,7 +9,7 @@ import { StoreHeader } from "@/components/StoreHeader";
 import { StoreTheme } from "@/components/StoreTheme";
 import { Pagination } from "@/components/catalog/Pagination";
 import { ProductCard } from "@/components/catalog/ProductCard";
-import { PAGE_SIZE, fetchCatalogProducts, fetchStorefront } from "@/lib/api";
+import { PAGE_SIZE, STORE_BLOCKED, fetchCatalogProducts, fetchStorefront } from "@/lib/api";
 import { parseCatalogQuery, toSearchParams } from "@/lib/catalog-query";
 import { currentSubdomain } from "@/lib/request-host";
 import { productHref, storeUrl } from "@/lib/urls";
@@ -22,6 +23,9 @@ export async function generateMetadata({ params }: PageProps<"/s/[subdomain]">):
   const store = await fetchStorefront(subdomain);
   if (store === null) {
     return { title: "Магазин не найден", robots: { index: false } };
+  }
+  if (store === STORE_BLOCKED) {
+    return { title: "Доступ в магазин ограничен", robots: { index: false } };
   }
   const description =
     store.description?.slice(0, DESCRIPTION_LENGTH) ??
@@ -51,6 +55,22 @@ export default async function StorefrontPage({
   const [store, host] = await Promise.all([fetchStorefront(subdomain), currentSubdomain()]);
   if (store === null) {
     notFound();
+  }
+  // the shop decided this, not the platform: the visitor knows it exists, so they are told
+  // rather than shown a riddle. Everything else on the site goes on working for them.
+  if (store === STORE_BLOCKED) {
+    return (
+      <main className="mx-auto flex max-w-xl flex-col gap-4 px-6 py-16">
+        <h1 className="text-2xl font-semibold">Магазин ограничил вам доступ</h1>
+        <p className="text-ink-muted">
+          Продавец закрыл этот магазин для вашего аккаунта. Остальная площадка работает как обычно:
+          каталог, другие магазины и жалобы по-прежнему вам доступны.
+        </p>
+        <Link href="/catalog" className="self-start text-brand">
+          Вернуться в каталог
+        </Link>
+      </main>
+    );
   }
   // the shop has one address, its own; the path on the marketplace only points there
   if (host !== subdomain) {

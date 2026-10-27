@@ -1,4 +1,5 @@
 import secrets
+import uuid
 from collections.abc import Awaitable, Callable
 from typing import Annotated
 
@@ -6,7 +7,7 @@ from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
-from app.core.errors import AuthenticationError, PermissionDeniedError
+from app.core.errors import AppError, AuthenticationError, PermissionDeniedError
 from app.core.tokens import InvalidAccessToken, decode_access_token
 from app.db.session import get_session
 from app.deps.settings import settings_dep
@@ -30,6 +31,37 @@ async def get_current_user(request: Request, settings: SettingsDep, session: Ses
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+async def get_optional_user(
+    request: Request, settings: SettingsDep, session: SessionDep
+) -> User | None:
+    """Whoever is signed in, or nobody.
+
+    Public routes need this for two unrelated reasons. A guest may file a complaint —
+    somebody who has just been cheated is not going to register first. And a signed-in buyer
+    may have been barred from one particular shop, which the catalogue filter has to know
+    about. Neither case may fail: a barred or missing account browses as a guest does.
+    """
+    token = request.cookies.get(settings.access_cookie_name)
+    if not token:
+        return None
+    try:
+        payload = decode_access_token(settings, token)
+    except InvalidAccessToken:
+        return None
+    try:
+        return await auth_service.get_active_user(session, payload.user_id)
+    except AppError:
+        return None
+
+
+OptionalUser = Annotated[User | None, Depends(get_optional_user)]
+
+
+def viewer_id_of(user: User | None) -> uuid.UUID | None:
+    """What the public catalogue filter asks for: an identifier, or nobody."""
+    return None if user is None else user.id
 
 
 def require_role(*roles: UserRole) -> Callable[[User], Awaitable[User]]:

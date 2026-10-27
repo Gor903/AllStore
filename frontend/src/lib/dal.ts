@@ -11,6 +11,7 @@ import type {
   Business,
   BusinessList,
   ContactList,
+  CustomerBlockList,
   InvitationList,
   ModerationProductList,
   Product,
@@ -75,6 +76,11 @@ export async function getMyStore(): Promise<Store | null> {
 /** An empty set is a valid answer; null means the seller has no shop to ask about. */
 export async function getMyContacts(): Promise<ContactList | null> {
   return backendGet<ContactList>("/stores/me/contacts");
+}
+
+/** The shop's own door: who this seller will not serve, lifted entries included. */
+export async function getMyBlockedBuyers(): Promise<CustomerBlockList | null> {
+  return backendGet<CustomerBlockList>(`/stores/me/blocked-buyers?limit=${SELLER_PAGE_SIZE}`);
 }
 
 export async function getMyProducts(): Promise<ProductList | null> {

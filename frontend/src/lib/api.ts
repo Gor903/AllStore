@@ -1,3 +1,5 @@
+import { cookies } from "next/headers";
+
 import type { components } from "@/lib/api-types";
 import { catalogSearchParams, type CatalogQuery } from "@/lib/catalog-query";
 import { API_PREFIX, env } from "@/lib/env";
@@ -32,6 +34,8 @@ export type InvitationList = components["schemas"]["InvitationListResponse"];
 // the secret travels exactly once, in the answer to the request that created it
 export type InvitationCreated = components["schemas"]["InvitationCreated"];
 export type AccountBlockList = components["schemas"]["AccountBlockListResponse"];
+export type CustomerBlock = components["schemas"]["CustomerBlockRead"];
+export type CustomerBlockList = components["schemas"]["CustomerBlockListResponse"];
 // one line of the assistant stream: the halves of an answer arrive as they become ready
 export type AssistantLine =
   | components["schemas"]["AssistantProducts"]
@@ -43,10 +47,37 @@ export type AuditEntry = components["schemas"]["AuditLogRead"];
 
 export const PAGE_SIZE = 24;
 
+/** Answered when a shop has closed its door to the signed-in buyer, see the backend's
+ *  services/customer_blocks.py. Not null, because "not found" would be a riddle to somebody
+ *  who was shopping there last week. */
+export const STORE_BLOCKED = "store-blocked";
+
+class ApiStatusError extends Error {
+  constructor(readonly status: number) {
+    super(`request failed with ${status}`);
+  }
+}
+
+/**
+ * The viewer's cookies travel with public reads.
+ *
+ * Most of what the catalogue shows is the same for everyone, but not all of it: a shop that
+ * has barred this buyer drops out of their listings and their search. The backend decides
+ * that, and it can only decide it if it knows who is asking — rendering as an anonymous
+ * visitor would quietly show the buyer a shop the API would refuse them.
+ */
+async function viewerHeaders(): Promise<HeadersInit> {
+  const jar = (await cookies()).toString();
+  return jar === "" ? {} : { cookie: jar };
+}
+
 async function apiGet<T>(path: string): Promise<T> {
-  const response = await fetch(`${env.apiUrl}${path}`, { cache: "no-store" });
+  const response = await fetch(`${env.apiUrl}${path}`, {
+    cache: "no-store",
+    headers: await viewerHeaders(),
+  });
   if (!response.ok) {
-    throw new Error(`GET ${path} failed with ${response.status}`);
+    throw new ApiStatusError(response.status);
   }
   return (await response.json()) as T;
 }
@@ -63,11 +94,14 @@ export async function fetchBackendHealth(): Promise<BackendHealth | null> {
  * Addressed by subdomain, not by Host: rendering happens on the server, and Node's fetch
  * replaces a Host header with the authority of the URL it dials.
  */
-export async function fetchStorefront(subdomain: string): Promise<Storefront | null> {
+export async function fetchStorefront(
+  subdomain: string,
+): Promise<Storefront | typeof STORE_BLOCKED | null> {
   try {
     return await apiGet<Storefront>(`${API_PREFIX}/storefront/${encodeURIComponent(subdomain)}`);
-  } catch {
-    return null;
+  } catch (error) {
+    // the shop is there and the visitor knows it; saying so is kinder than a 404 riddle
+    return error instanceof ApiStatusError && error.status === 403 ? STORE_BLOCKED : null;
   }
 }
 

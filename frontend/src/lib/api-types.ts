@@ -66,6 +66,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/accounts/{user_id}/store-blocks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Store Blocks Of Buyer
+         * @description Which shops have closed their door to this person, from the staff side.
+         */
+        get: operations["read_store_blocks_of_buyer_api_v1_accounts__user_id__store_blocks_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/accounts/{user_id}/unblock": {
         parameters: {
             query?: never;
@@ -467,7 +487,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Read Product */
+        /**
+         * Read Product
+         * @description A saved link into a shop that has barred this buyer answers 404, the same as a product
+         *     that was taken down: the public filter decides, not the route.
+         */
         get: operations["read_product_api_v1_catalog_products__product_id__get"];
         put?: never;
         post?: never;
@@ -873,6 +897,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/store-blocks/{block_id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revoke Store Block
+         * @description An administrator opening a door the seller closed. Recorded like any other decision.
+         */
+        post: operations["revoke_store_block_api_v1_store_blocks__block_id__revoke_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/storefront": {
         parameters: {
             query?: never;
@@ -949,6 +993,45 @@ export interface paths {
         head?: never;
         /** Update My Store */
         patch: operations["update_my_store_api_v1_stores_me_patch"];
+        trace?: never;
+    };
+    "/api/v1/stores/me/blocked-buyers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Blocked Buyers */
+        get: operations["read_blocked_buyers_api_v1_stores_me_blocked_buyers_get"];
+        put?: never;
+        /**
+         * Block Buyer
+         * @description Closes this shop to one buyer. Their account is untouched: they go on using the rest
+         *     of the platform, and go on being able to complain about this shop.
+         */
+        post: operations["block_buyer_api_v1_stores_me_blocked_buyers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/stores/me/blocked-buyers/{block_id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Unblock Buyer */
+        post: operations["unblock_buyer_api_v1_stores_me_blocked_buyers__block_id__revoke_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/stores/me/contacts": {
@@ -1511,6 +1594,55 @@ export interface components {
         ContactsResponse: {
             /** Items */
             items: components["schemas"]["ContactRead"][];
+        };
+        /** CustomerBlockListResponse */
+        CustomerBlockListResponse: {
+            /** Items */
+            items: components["schemas"]["CustomerBlockRead"][];
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /** Total */
+            total: number;
+        };
+        /** CustomerBlockRead */
+        CustomerBlockRead: {
+            /** Buyer Email */
+            buyer_email: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** In Force */
+            in_force: boolean;
+            /** Reason */
+            reason: string;
+            /** Revoked At */
+            revoked_at: string | null;
+            /** Revoked By Email */
+            revoked_by_email: string | null;
+            /** Store Name */
+            store_name: string | null;
+        };
+        /**
+         * CustomerBlockRequest
+         * @description By address: that is how a seller knows the person they fell out with.
+         */
+        CustomerBlockRequest: {
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
+            /** Reason */
+            reason: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -2226,6 +2358,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AccountBlockListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_store_blocks_of_buyer_api_v1_accounts__user_id__store_blocks_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerBlockListResponse"];
                 };
             };
             /** @description Validation Error */
@@ -3757,6 +3923,37 @@ export interface operations {
             };
         };
     };
+    revoke_store_block_api_v1_store_blocks__block_id__revoke_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                block_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerBlockRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     read_storefront_by_host_api_v1_storefront_get: {
         parameters: {
             query?: never;
@@ -3881,6 +4078,102 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StoreRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_blocked_buyers_api_v1_stores_me_blocked_buyers_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerBlockListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    block_buyer_api_v1_stores_me_blocked_buyers_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomerBlockRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerBlockRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unblock_buyer_api_v1_stores_me_blocked_buyers__block_id__revoke_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                block_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerBlockRead"];
                 };
             };
             /** @description Validation Error */

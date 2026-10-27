@@ -2,10 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { BlockedBuyers } from "@/components/dashboard/BlockedBuyers";
 import { ContactsForm } from "@/components/dashboard/ContactsForm";
 import { StoreImageField } from "@/components/dashboard/StoreImageField";
 import { StoreSettingsForm } from "@/components/dashboard/StoreSettingsForm";
-import { getMyContacts, getMyStore, requireRole } from "@/lib/dal";
+import { getMyBlockedBuyers, getMyContacts, getMyStore, requireRole } from "@/lib/dal";
 import { storeUrl } from "@/lib/urls";
 
 export const metadata: Metadata = {
@@ -15,7 +16,11 @@ export const metadata: Metadata = {
 
 export default async function StoreSettingsPage() {
   await requireRole("seller");
-  const [store, contacts] = await Promise.all([getMyStore(), getMyContacts()]);
+  const [store, contacts, blocked] = await Promise.all([
+    getMyStore(),
+    getMyContacts(),
+    getMyBlockedBuyers(),
+  ]);
   // nothing to dress until the shop exists; the cabinet is where it gets created
   if (store === null) {
     redirect("/dashboard");
@@ -64,6 +69,8 @@ export default async function StoreSettingsPage() {
         <h2 className="font-medium">Контакты</h2>
         <ContactsForm contacts={contacts?.items ?? []} />
       </section>
+
+      <BlockedBuyers items={blocked?.items ?? []} />
     </main>
   );
 }

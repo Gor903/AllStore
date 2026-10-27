@@ -58,10 +58,13 @@ export default async function ProductPage({ params }: PageProps<"/p/[productId]"
   const subdomain = await currentSubdomain();
   // the storefront is asked for by the host rather than by the product's shop: the two are
   // the same in every case that renders, and asking by host keeps the requests parallel
-  const [product, store] = await Promise.all([
+  const [product, storefront] = await Promise.all([
     fetchCatalogProduct(productId),
     subdomain === null ? Promise.resolve(null) : fetchStorefront(subdomain),
   ]);
+  // a buyer this shop has barred never gets this far — the product itself answers 404 for
+  // them — so the refusal only ever costs the page its colours
+  const store = typeof storefront === "string" ? null : storefront;
   // a product that is not public answers exactly as one that does not exist
   if (product === null) {
     notFound();
