@@ -19,6 +19,12 @@ export function ProductForm({ categories, product }: ProductFormProps) {
   const [error, setError] = useState<FormError | null>(null);
   const [pending, setPending] = useState(false);
 
+  // The moderated fields are prefilled from the edit that is waiting, not from the shelf:
+  // what the seller typed last is what they would carry on editing, and showing them the
+  // published text instead would quietly undo their own change the next time they saved.
+  const waiting = product?.pending_change ?? null;
+  const moderated = waiting ?? product ?? null;
+
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPending(true);
@@ -52,10 +58,24 @@ export function ProductForm({ categories, product }: ProductFormProps) {
 
   return (
     <form onSubmit={onSubmit} className="flex max-w-xl flex-col gap-4" noValidate>
+      {waiting === null ? null : (
+        <p className="rounded-lg bg-brand/10 px-3 py-2 text-sm text-brand">
+          Эта правка ждёт проверки. Покупатель пока видит прежнюю версию — она останется в каталоге,
+          пока модератор не одобрит новую.
+        </p>
+      )}
+
+      {product?.change_rejection_reason == null ? null : (
+        <p role="alert" className="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">
+          Прошлую правку отклонили: {product.change_rejection_reason} В каталоге осталась прежняя
+          версия.
+        </p>
+      )}
+
       <Field
         label="Название"
         name="name"
-        defaultValue={product?.name ?? ""}
+        defaultValue={moderated?.name ?? ""}
         error={error?.fieldErrors["name"]}
       />
 
@@ -63,7 +83,7 @@ export function ProductForm({ categories, product }: ProductFormProps) {
         <span className="font-medium">Категория</span>
         <select
           name="category_id"
-          defaultValue={product?.category_id ?? ""}
+          defaultValue={moderated?.category_id ?? ""}
           required
           className={field}
         >
@@ -110,7 +130,7 @@ export function ProductForm({ categories, product }: ProductFormProps) {
           name="description"
           rows={6}
           maxLength={5000}
-          defaultValue={product?.description ?? ""}
+          defaultValue={moderated?.description ?? ""}
           className={field}
         />
       </label>

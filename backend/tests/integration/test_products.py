@@ -6,7 +6,9 @@ from httpx import AsyncClient
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Business, CategoryStatus, ModerationStatus, Product
+from app.models import Business, CategoryStatus, Product
+from app.repositories import product_revisions as revisions_repo
+from app.services import moderation
 from tests.integration.conftest import (
     PRODUCTS_URL,
     create_product,
@@ -22,10 +24,14 @@ pytestmark = pytest.mark.integration
 
 
 async def approve(session: AsyncSession, product_id: str) -> None:
-    """Moderation itself lands in этап 5; here the verdict is set straight in the database."""
+    """The moderator's own suite is elsewhere; here the verdict is passed through the same
+    state machine the queue uses, so the product ends up in a state that can actually occur —
+    approved, published, and with no proposal left waiting."""
     product = await session.get(Product, uuid.UUID(product_id))
     assert product is not None
-    product.moderation_status = ModerationStatus.APPROVED
+    pending = await revisions_repo.get_pending(session, product.id)
+    assert pending is not None
+    moderation.approve_revision(product, pending)
     await session.flush()
 
 
@@ -373,9 +379,11 @@ async def test_only_the_description_may_be_cleared(
     assert nulled_name.status_code == 422
 
 
-async def test_editing_what_was_approved_sends_the_product_back_to_moderation(
+async def test_editing_what_was_approved_queues_the_change_and_leaves_the_listing_alone(
     api_client: AsyncClient, session: AsyncSession
 ) -> None:
+    """The listing a buyer is looking at stays exactly as it was until somebody judges the
+    new text. Before revisions this edit took the product off the shelf on the spot."""
     await register_seller(api_client)
     category = await seeded_category(session)
     created = (await create_product(api_client, category.id)).json()
@@ -387,8 +395,12 @@ async def test_editing_what_was_approved_sends_the_product_back_to_moderation(
         headers=csrf_headers(api_client),
     )
 
-    assert response.json()["moderation_status"] == "pending"
-    assert response.json()["publication_status"] == "draft"
+    body = response.json()
+    assert body["moderation_status"] == "approved"
+    assert body["publication_status"] == "published"
+    # what the buyer sees is untouched; what is waiting is carried separately
+    assert body["name"] == created["name"]
+    assert body["pending_change"]["name"] == "Совсем другой товар"
 
 
 async def test_changing_the_price_keeps_the_approval(

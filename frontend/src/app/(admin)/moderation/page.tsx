@@ -21,6 +21,10 @@ const VERDICTS: Verdict[] = [
   },
 ];
 
+// the queue holds proposals: a new product waiting for its first look, and an edit to one
+// that is already on the shelf. The second kind is marked, because refusing it takes away
+// nothing the seller had.
+
 export default async function ModerationProductsPage() {
   await requireRole("moderator", "admin");
   const [queue, businesses] = await Promise.all([
@@ -67,7 +71,9 @@ export default async function ModerationProductsPage() {
 
                 <div className="flex flex-1 flex-col gap-2">
                   <div className="flex flex-wrap items-baseline gap-2">
-                    <h2 className="text-lg font-medium">{product.name}</h2>
+                    <h2 className="text-lg font-medium">
+                      {product.proposed?.name ?? product.name}
+                    </h2>
                     <span className="text-lg font-semibold">
                       {formatPrice(product.price, product.currency)}
                     </span>
@@ -76,13 +82,37 @@ export default async function ModerationProductsPage() {
                     {product.seller_name}
                     {product.subdomain === null
                       ? " — без витрины"
-                      : ` · ${product.subdomain}`} · {product.category_name} · остаток{" "}
+                      : ` · ${product.subdomain}`} ·{" "}
+                    {product.proposed?.category_name ?? product.category_name} · остаток{" "}
                     {product.stock_quantity}
                   </p>
-                  {product.description === null ? (
+                  {(product.proposed?.description ?? product.description) === null ? (
                     <p className="text-sm text-ink-muted">Описания нет.</p>
                   ) : (
-                    <p className="whitespace-pre-line text-sm">{product.description}</p>
+                    <p className="whitespace-pre-line text-sm">
+                      {product.proposed?.description ?? product.description}
+                    </p>
+                  )}
+
+                  {/* a change to something already on the shelf is a different decision from
+                      a first look: what is at stake is replacing a live listing, not adding one */}
+                  {!product.is_change ? null : (
+                    <div className="flex flex-col gap-1 rounded-lg border border-brand/40 bg-brand/5 p-3 text-sm">
+                      <p className="font-medium text-brand">
+                        Это правка уже опубликованного товара
+                      </p>
+                      <p className="text-ink-muted">
+                        Покупатель сейчас видит: <span className="font-medium">{product.name}</span>
+                        {" · "}
+                        {product.category_name}
+                      </p>
+                      {product.description === null ? null : (
+                        <p className="whitespace-pre-line text-ink-muted">{product.description}</p>
+                      )}
+                      <p className="text-ink-muted">
+                        Отклонение оставит в каталоге прежнюю версию, товар с полки не уйдёт.
+                      </p>
+                    </div>
                   )}
                   {product.images.length > 1 ? (
                     <p className="text-sm text-ink-muted">

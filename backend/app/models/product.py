@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from app.models.business import Business
     from app.models.category import Category
     from app.models.moderation import ModerationReview
+    from app.models.product_revision import ProductRevision
 
 # a price is money, never a float: Numeric keeps the minor units exact
 PRICE_PRECISION = 12
@@ -110,6 +111,43 @@ class Product(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         cascade="all, delete-orphan",
         order_by="ModerationReview.created_at.desc()",
     )
+    # newest first, same reason: what was proposed last is what is being judged
+    revisions: Mapped[list["ProductRevision"]] = relationship(
+        back_populates="product",
+        cascade="all, delete-orphan",
+        order_by="ProductRevision.created_at.desc()",
+    )
+
+    @property
+    def pending_revision(self) -> "ProductRevision | None":
+        """The change waiting to be judged, if the seller has proposed one.
+
+        At most one exists: a unique partial index on `status = 'pending'` says so, which is
+        what lets a moderator act on "the product" without being asked which proposal.
+        """
+        return next((revision for revision in self.revisions if revision.is_pending), None)
+
+    @property
+    def change_rejection_reason(self) -> str | None:
+        """Why the last proposed change was refused, while the product itself stands.
+
+        Distinct from `rejection_reason`: that one is about a product that never made it
+        onto the shelf. This one is about a shop whose listing is still live and whose edit
+        was turned down — a case the seller has no other way of being told about.
+        """
+        from app.models.product_revision import RevisionStatus
+
+        latest = next(
+            (
+                revision
+                for revision in self.revisions
+                if revision.status in (RevisionStatus.APPROVED, RevisionStatus.REJECTED)
+            ),
+            None,
+        )
+        if latest is None or latest.status is not RevisionStatus.REJECTED:
+            return None
+        return latest.reason
 
     @property
     def rejection_reason(self) -> str | None:

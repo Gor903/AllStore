@@ -9,7 +9,9 @@ from app.models import (
     BusinessDecision,
     BusinessModerationReview,
     BusinessStatus,
+    ModerationStatus,
     Product,
+    ProductRevision,
     StoreStatus,
 )
 from app.schemas.product import ProductRead
@@ -30,6 +32,29 @@ class ModerationReasonRequest(BaseModel):
     reason: ModerationReason
 
 
+class ProposedChangeRead(BaseModel):
+    """What is actually being judged: the text the seller proposed, in words.
+
+    The product's own fields travel beside it and are what the buyer currently sees. For a
+    product nobody has approved yet the two are the same; for a change to a live listing
+    they differ, and the moderator is deciding whether to replace one with the other.
+    """
+
+    name: str
+    description: str | None
+    category_name: str
+    created_at: datetime
+
+    @classmethod
+    def of(cls, revision: ProductRevision) -> "ProposedChangeRead":
+        return cls(
+            name=revision.name,
+            description=revision.description,
+            category_name=revision.category.name,
+            created_at=revision.created_at,
+        )
+
+
 class ModerationProductRead(ProductRead):
     """The seller's view of a product plus who and what stands behind it — a moderator
     cannot judge a category and a shop that arrive as identifiers."""
@@ -37,15 +62,23 @@ class ModerationProductRead(ProductRead):
     category_name: str
     seller_name: str
     subdomain: str | None
+    # what is waiting to be judged, with its category spelled out
+    proposed: ProposedChangeRead | None
+    # a change to something already on the shelf, rather than a product nobody has seen. A
+    # refusal means very different things in the two cases, and so does an approval.
+    is_change: bool
 
     @classmethod
     def from_product(cls, product: Product) -> "ModerationProductRead":
         store = product.business.store
+        pending = product.pending_revision
         return cls(
-            **ProductRead.model_validate(product).model_dump(),
+            **ProductRead.of(product).model_dump(),
             category_name=product.category.name,
             seller_name=product.business.display_name,
             subdomain=None if store is None else store.subdomain,
+            proposed=None if pending is None else ProposedChangeRead.of(pending),
+            is_change=product.moderation_status is ModerationStatus.APPROVED,
         )
 
 

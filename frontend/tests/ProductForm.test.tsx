@@ -107,4 +107,39 @@ describe("ProductForm", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Не найдена");
   });
+
+  it("prefills a waiting edit rather than the version on the shelf", async () => {
+    // otherwise saving again would quietly undo the seller's own change: they would be
+    // editing the published text while their newer one sat in the queue
+    const waiting = {
+      ...PRODUCT,
+      name: "Кружка",
+      description: "Была",
+      pending_change: {
+        id: "66666666-6666-6666-6666-666666666666",
+        name: "Кружка керамическая",
+        description: "Стала",
+        category_id: CATEGORY_ID,
+        created_at: "2026-09-22T00:00:00Z",
+      },
+    } as Product;
+
+    render(<ProductForm categories={CATEGORIES} product={waiting} />);
+
+    expect(screen.getByLabelText("Название")).toHaveValue("Кружка керамическая");
+    expect(screen.getByLabelText("Описание")).toHaveValue("Стала");
+    expect(screen.getByText(/Покупатель пока видит прежнюю версию/)).toBeInTheDocument();
+  });
+
+  it("tells the seller a past edit was refused and that the listing survived it", () => {
+    const refused = {
+      ...PRODUCT,
+      change_rejection_reason: "Название обещает лишнее.",
+    } as Product;
+
+    render(<ProductForm categories={CATEGORIES} product={refused} />);
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Название обещает лишнее.");
+    expect(screen.getByRole("alert")).toHaveTextContent("прежняя версия");
+  });
 });

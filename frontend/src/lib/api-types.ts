@@ -1840,6 +1840,8 @@ export interface components {
             category_id: string;
             /** Category Name */
             category_name: string;
+            /** Change Rejection Reason */
+            change_rejection_reason?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -1856,11 +1858,15 @@ export interface components {
             id: string;
             /** Images */
             images: components["schemas"]["ProductImageRead"][];
+            /** Is Change */
+            is_change: boolean;
             moderation_status: components["schemas"]["ModerationStatus"];
             /** Name */
             name: string;
+            pending_change?: components["schemas"]["ProductChangeRead"] | null;
             /** Price */
             price: string;
+            proposed: components["schemas"]["ProposedChangeRead"] | null;
             publication_status: components["schemas"]["PublicationStatus"];
             /** Rejection Reason */
             rejection_reason: string | null;
@@ -1934,6 +1940,35 @@ export interface components {
          * @enum {string}
          */
         ProductAvailability: "in_stock" | "out_of_stock";
+        /**
+         * ProductChangeRead
+         * @description What the seller has proposed and a moderator has not judged yet.
+         *
+         *     Separate from the product's own fields on purpose: while this is filled, the two differ,
+         *     and the difference is the whole point — the buyer sees one and the seller is waiting on
+         *     the other.
+         */
+        ProductChangeRead: {
+            /**
+             * Category Id
+             * Format: uuid
+             */
+            category_id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Description */
+            description: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+        };
         /** ProductCreateRequest */
         ProductCreateRequest: {
             /** @default in_stock */
@@ -1993,6 +2028,8 @@ export interface components {
              * Format: uuid
              */
             category_id: string;
+            /** Change Rejection Reason */
+            change_rejection_reason?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -2012,6 +2049,7 @@ export interface components {
             moderation_status: components["schemas"]["ModerationStatus"];
             /** Name */
             name: string;
+            pending_change?: components["schemas"]["ProductChangeRead"] | null;
             /** Price */
             price: string;
             publication_status: components["schemas"]["PublicationStatus"];
@@ -2044,6 +2082,27 @@ export interface components {
             price?: number | string | null;
             /** Stock Quantity */
             stock_quantity?: number | null;
+        };
+        /**
+         * ProposedChangeRead
+         * @description What is actually being judged: the text the seller proposed, in words.
+         *
+         *     The product's own fields travel beside it and are what the buyer currently sees. For a
+         *     product nobody has approved yet the two are the same; for a change to a live listing
+         *     they differ, and the moderator is deciding whether to replace one with the other.
+         */
+        ProposedChangeRead: {
+            /** Category Name */
+            category_name: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Description */
+            description: string | null;
+            /** Name */
+            name: string;
         };
         /**
          * PublicationStatus

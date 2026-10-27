@@ -11,8 +11,10 @@ from app.models import (
     Category,
     ModerationStatus,
     Product,
+    ProductRevision,
 )
 from app.repositories import categories, products
+from app.repositories import product_revisions as revisions_repo
 from app.schemas.product import ProductCreateRequest, ProductUpdateRequest
 from app.services import contacts, moderation
 
@@ -49,9 +51,12 @@ async def create_product(
     # moderation and publication keep their model defaults: pending and draft, so the
     # product is invisible to buyers until a moderator has approved it
     product = await products.add(session, Product(business_id=business.id, **payload.model_dump()))
-    # both collections are empty but have to be loaded: the response carries them, and a
-    # lazy load in the async session would have nowhere to run
-    await session.refresh(product, attribute_names=["images", "reviews"])
+    # the first proposal is the product itself: a moderator judges a revision, and a product
+    # without one would sit in no queue at all
+    await _propose(session, product, {})
+    # the collections have to be loaded: the response carries them, and a lazy load in the
+    # async session would have nowhere to run
+    await session.refresh(product, attribute_names=["images", "reviews", "revisions"])
     return product
 
 
@@ -67,38 +72,92 @@ async def get_owned_product(
 
 async def update_product(
     session: AsyncSession,
-    business_id: uuid.UUID,
+    business: Business,
     product_id: uuid.UUID,
     payload: ProductUpdateRequest,
 ) -> Product:
-    product = await get_owned_product(session, business_id, product_id)
+    """Price and stock change at once; name, description and category are proposed.
+
+    The split is what keeps a live listing live. A buyer goes on seeing the approved text
+    while the new one waits, so fixing a typo no longer costs the seller their place on the
+    shelf for as long as the queue takes.
+    """
+    product = await get_owned_product(session, business.id, product_id)
     changes: dict[str, Any] = payload.model_dump(exclude_unset=True)
-    if "category_id" in changes:
-        await resolve_category(session, changes["category_id"])
+    proposed = {field: changes[field] for field in MODERATED_FIELDS & changes.keys()}
 
     for field, value in changes.items():
-        setattr(product, field, value)
-    if MODERATED_FIELDS & changes.keys() and product.moderation_status is ModerationStatus.APPROVED:
-        # the approved product is not the one on the shelf any more — back into the queue
-        moderation.submit_for_review(product)
+        if field not in MODERATED_FIELDS:
+            setattr(product, field, value)
+    if proposed:
+        if "category_id" in proposed:
+            await resolve_category(session, proposed["category_id"])
+        require_trading(business)
+        await contacts.require_contact(session, business.id)
+        await _propose(session, product, proposed)
 
     await session.flush()
     # updated_at is computed by the database on UPDATE, so the column comes back expired
-    await session.refresh(product, attribute_names=["updated_at"])
+    await session.refresh(product, attribute_names=["revisions", "updated_at"])
     return product
 
 
 async def submit_product_for_review(
     session: AsyncSession, business: Business, product_id: uuid.UUID
 ) -> Product:
-    """The seller sends a refused — or an already approved — product back into the queue."""
-    require_trading(business)
+    """Puts the product in front of a moderator again without changing a word of it.
+
+    Editing already does that by itself, so what is left for this is everything moderation
+    looks at that is not a moderated field — the photographs, above all. A seller who
+    replaced the picture that got them refused has nothing to retype and still needs a way
+    to ask again.
+    """
     product = await get_owned_product(session, business.id, product_id)
+    require_trading(business)
     await contacts.require_contact(session, business.id)
-    moderation.submit_for_review(product)
+    if product.pending_revision is not None:
+        raise moderation.InvalidTransitionError("Товар уже на проверке")
+
+    await _propose(session, product, {})
     await session.flush()
-    await session.refresh(product, attribute_names=["updated_at"])
+    await session.refresh(product, attribute_names=["revisions", "updated_at"])
     return product
+
+
+async def _propose(
+    session: AsyncSession, product: Product, changes: dict[str, Any]
+) -> ProductRevision:
+    """Files a proposal, built on whatever is already waiting rather than on the shelf.
+
+    Editing twice before a moderator gets to it must leave one proposal carrying both edits,
+    not a second one that silently drops the first. The earlier proposal is superseded — kept,
+    never deleted, because what a shop tried to publish is part of its record.
+    """
+    # asked of the database rather than of the loaded collection: a product created a
+    # moment ago has no collection to speak of, and a stale one would silently queue a
+    # second proposal beside the first
+    pending = await revisions_repo.get_pending(session, product.id)
+    base = pending or product
+    if pending is not None:
+        moderation.supersede(pending)
+
+    revision = await revisions_repo.add(
+        session,
+        ProductRevision(
+            product_id=product.id,
+            name=changes.get("name", base.name),
+            description=changes.get("description", base.description),
+            category_id=changes.get("category_id", base.category_id),
+        ),
+    )
+    if product.moderation_status is not ModerationStatus.APPROVED:
+        # nothing of this product is public, so there is no old version to protect: the
+        # cabinet shows what the seller just typed rather than what they typed yesterday
+        product.name = revision.name
+        product.description = revision.description
+        product.category_id = revision.category_id
+        product.moderation_status = ModerationStatus.PENDING
+    return revision
 
 
 def require_trading(business: Business) -> None:
@@ -120,6 +179,10 @@ async def archive_product(
     product.archived_at = datetime.now(UTC)
     # belt and braces: even a public query that forgets archived_at must not surface it
     moderation.withdraw(product)
+    pending = product.pending_revision
+    if pending is not None:
+        # a proposal for a product nobody sells any more is not something to judge
+        moderation.supersede(pending)
     await session.flush()
 
 

@@ -10,9 +10,9 @@ export type ProductStatus = {
 };
 
 /**
- * Two statuses live on a product — the moderator's verdict and where it stands on the
- * shelf — and a seller should not have to hold both in their head. This is the one
- * sentence that comes out of the pair.
+ * Three things live on a product now — the moderator's verdict, where it stands on the
+ * shelf, and whether an edit is waiting to be judged — and a seller should not have to hold
+ * all of them in their head. This is the one sentence that comes out of them.
  */
 export function productStatus(product: Product): ProductStatus {
   if (product.moderation_status === "pending") {
@@ -23,6 +23,22 @@ export function productStatus(product: Product): ProductStatus {
       label: "Отклонён",
       tone: "refused",
       hint: product.rejection_reason ?? "Причина не указана.",
+    };
+  }
+  // an edit to something already on the shelf: the buyer goes on seeing the approved
+  // version, and saying so is the difference between a working feature and a bug report
+  if (product.pending_change != null) {
+    return {
+      label: "Правка на проверке",
+      tone: "waiting",
+      hint: "Покупатель пока видит прежнюю версию — она останется, пока правку не одобрят.",
+    };
+  }
+  if (product.change_rejection_reason != null) {
+    return {
+      label: "Правка отклонена",
+      tone: "refused",
+      hint: `${product.change_rejection_reason} Товар остался в каталоге в прежнем виде.`,
     };
   }
   if (product.publication_status === "published") {
