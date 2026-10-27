@@ -3,7 +3,7 @@ import Link from "next/link";
 import { LogoutButton } from "@/components/auth/LogoutButton";
 
 type ModerationNavProps = {
-  current: "products" | "businesses" | "catalog" | "reports";
+  current: "products" | "businesses" | "catalog" | "reports" | "accounts";
   products: number;
   businesses: number;
   reports?: number;
@@ -27,6 +27,9 @@ export function ModerationNav({ current, products, businesses, reports = 0 }: Mo
         </Link>
         <Link href="/moderation/reports" className={style(current === "reports")}>
           Жалобы ({reports})
+        </Link>
+        <Link href="/moderation/accounts" className={style(current === "accounts")}>
+          Аккаунты
         </Link>
         <Link href="/moderation/catalog" className={style(current === "catalog")}>
           Поиск по каталогу

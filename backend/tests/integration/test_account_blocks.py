@@ -443,3 +443,59 @@ async def test_a_refused_ban_writes_nothing_down(
 
     written = await session.execute(select(func.count()).select_from(AccountBlock))
     assert written.scalar_one() == 0
+
+
+async def test_a_moderator_sees_only_the_accounts_they_can_act_on(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    """A row whose buttons answer 403 is a row that should not have been offered."""
+    await a_buyer(api_client)
+    await seed_staff(session, UserRole.ADMIN)
+    other = await seed_staff(session, UserRole.MODERATOR)
+    moderator = await seed_staff(session, UserRole.MODERATOR)
+    await act_as(api_client, moderator)
+
+    body = (await api_client.get(ACCOUNTS)).json()
+
+    listed = {item["id"] for item in body["items"]}
+    assert str(other.id) not in listed
+    assert str(moderator.id) not in listed
+    assert all(item["role"] in ("buyer", "seller") for item in body["items"])
+
+
+async def test_an_administrator_sees_moderators_too(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    moderator = await seed_staff(session, UserRole.MODERATOR)
+    admin = await seed_staff(session, UserRole.ADMIN)
+    await act_as(api_client, admin)
+
+    body = (await api_client.get(ACCOUNTS)).json()
+
+    listed = {item["id"] for item in body["items"]}
+    assert str(moderator.id) in listed
+    # not themselves: nobody may act on their own account, so no row for it
+    assert str(admin.id) not in listed
+
+
+async def test_the_listing_searches_by_part_of_an_address(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    await a_buyer(api_client)
+    moderator = await seed_staff(session, UserRole.MODERATOR)
+    await act_as(api_client, moderator)
+
+    body = (await api_client.get(ACCOUNTS, params={"q": "buyer-"})).json()
+
+    assert body["total"] >= 1
+    assert all("buyer-" in item["email"] for item in body["items"])
+
+
+@pytest.mark.parametrize("role", [UserRole.BUYER, UserRole.SELLER])
+async def test_the_listing_is_staff_only(
+    api_client: AsyncClient, session: AsyncSession, role: UserRole
+) -> None:
+    actor = await seed_staff(session, role)
+    await act_as(api_client, actor)
+
+    assert (await api_client.get(ACCOUNTS)).status_code == 403

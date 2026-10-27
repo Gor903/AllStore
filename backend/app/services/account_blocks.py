@@ -21,6 +21,7 @@ from app.core.errors import ConflictError
 from app.models import AccountBlock, User, UserStatus
 from app.repositories import account_blocks as blocks_repo
 from app.repositories import auth_tokens
+from app.repositories import users as users_repo
 from app.services import admin_users, audit, permissions
 
 ENTITY = "user"
@@ -79,3 +80,19 @@ async def history(
 ) -> tuple[Sequence[AccountBlock], int]:
     await admin_users.find(session, user_id)
     return await blocks_repo.history(session, user_id, limit, offset)
+
+
+async def list_reachable(
+    session: AsyncSession, actor: User, query: str | None, limit: int, offset: int
+) -> tuple[Sequence[User], int]:
+    """The accounts this actor may actually do something about.
+
+    A moderator's list holds buyers and sellers, an administrator's holds moderators too.
+    Filtered from the same ranks the individual checks use, so the screen offers exactly the
+    rows whose buttons will work rather than rows that answer 403 when pressed.
+    """
+    roles = permissions.reachable_roles(actor.role)
+    return (
+        await users_repo.search(session, query, limit, offset, roles),
+        await users_repo.count_matching(session, query, roles),
+    )

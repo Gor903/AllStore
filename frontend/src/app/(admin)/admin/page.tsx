@@ -2,10 +2,11 @@ import type { Metadata } from "next";
 
 import { AdminNav } from "@/components/admin/AdminNav";
 import { RoleSelect } from "@/components/admin/RoleSelect";
+import { TransferAdmin } from "@/components/admin/TransferAdmin";
 import { Pagination } from "@/components/catalog/Pagination";
-import { VerdictButtons, type Verdict } from "@/components/moderation/VerdictButtons";
-import { ADMIN_PAGE_SIZE, getAdminUsers, requireRole } from "@/lib/dal";
+import { AccountRows } from "@/components/moderation/AccountRows";
 import { parseCatalogQuery, toSearchParams } from "@/lib/catalog-query";
+import { ADMIN_PAGE_SIZE, getAdminUsers, requireRole } from "@/lib/dal";
 
 export const dynamic = "force-dynamic";
 
@@ -13,23 +14,6 @@ export const metadata: Metadata = {
   title: "Пользователи",
   robots: { index: false, follow: false },
 };
-
-const STATUS: Record<string, string> = {
-  active: "активен",
-  suspended: "приостановлен",
-  blocked: "заблокирован",
-};
-
-const BLOCK: Verdict[] = [
-  {
-    label: "Заблокировать",
-    action: "block",
-    reasonPrompt: "За что? Причина останется в журнале.",
-    danger: true,
-  },
-];
-
-const UNBLOCK: Verdict[] = [{ label: "Разблокировать", action: "unblock" }];
 
 export default async function AdminUsersPage({ searchParams }: PageProps<"/admin">) {
   const user = await requireRole("admin");
@@ -40,7 +24,11 @@ export default async function AdminUsersPage({ searchParams }: PageProps<"/admin
   return (
     <main className="mx-auto flex max-w-5xl flex-col gap-6 px-6 py-10">
       <AdminNav current="users" />
-      <p className="text-sm text-ink-muted">Вы вошли как {user.email}.</p>
+      <p className="text-sm text-ink-muted">
+        Вы вошли как {user.email}. Администратор на площадке один: роль не снимают, её передают.
+        Модератора назначают приглашением на вкладке рядом — смена роли здесь годится для аккаунта,
+        который уже есть.
+      </p>
 
       <form method="get" className="flex flex-wrap gap-2">
         <label className="sr-only" htmlFor="q">
@@ -64,26 +52,20 @@ export default async function AdminUsersPage({ searchParams }: PageProps<"/admin
         <p className="text-ink-muted">Никого не нашлось.</p>
       ) : (
         <>
-          <ul className="flex flex-col divide-y divide-ink-muted/15 rounded-card border border-ink-muted/20">
-            {page.items.map((item) => (
-              <li key={item.id} className="flex flex-wrap items-start gap-4 p-4">
-                <div className="min-w-48 flex-1">
-                  <p className="font-medium">{item.email}</p>
-                  <p className="text-sm text-ink-muted">
-                    {STATUS[item.status] ?? item.status}
-                    {item.id === user.id ? " — это вы" : ""}
-                  </p>
+          <AccountRows
+            items={page.items}
+            viewerId={user.id}
+            extra={(item) =>
+              item.id === user.id ? null : (
+                <div className="flex flex-wrap items-start gap-2">
+                  <RoleSelect userId={item.id} role={item.role} />
+                  {item.role === "moderator" ? (
+                    <TransferAdmin userId={item.id} email={item.email} />
+                  ) : null}
                 </div>
-                <RoleSelect userId={item.id} role={item.role} />
-                {/* /accounts, not /admin: barring is a moderator's action too, so it is one
-                    route with one rule rather than one per panel */}
-                <VerdictButtons
-                  basePath={`/accounts/${item.id}`}
-                  verdicts={item.status === "blocked" ? UNBLOCK : BLOCK}
-                />
-              </li>
-            ))}
-          </ul>
+              )
+            }
+          />
           <Pagination
             path="/admin"
             params={q === null ? new URLSearchParams() : new URLSearchParams({ q })}

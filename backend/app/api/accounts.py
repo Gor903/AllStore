@@ -20,6 +20,7 @@ from app.schemas.account import (
     BlockRequest,
     UnblockRequest,
 )
+from app.schemas.admin import UserListResponse
 from app.schemas.auth import UserRead
 from app.services import account_blocks
 
@@ -27,10 +28,35 @@ router = APIRouter(prefix="/accounts", tags=["accounts"])
 
 DEFAULT_PAGE_SIZE = 20
 MAX_PAGE_SIZE = 100
+QUERY_MAX_LENGTH = 320
 
 StaffUser = Annotated[User, Depends(require_role(UserRole.MODERATOR, UserRole.ADMIN))]
 Limit = Annotated[int, Query(ge=1, le=MAX_PAGE_SIZE)]
 Offset = Annotated[int, Query(ge=0)]
+SearchQuery = Annotated[str | None, Query(min_length=1, max_length=QUERY_MAX_LENGTH)]
+
+
+@router.get("", response_model=UserListResponse)
+async def list_accounts(
+    actor: StaffUser,
+    session: SessionDep,
+    q: SearchQuery = None,
+    limit: Limit = DEFAULT_PAGE_SIZE,
+    offset: Offset = 0,
+) -> UserListResponse:
+    """Only the accounts the caller outranks.
+
+    A moderator's list holds buyers and sellers, an administrator's holds moderators too.
+    The screen then offers exactly the rows whose buttons will work, rather than rows that
+    answer 403 when pressed.
+    """
+    items, total = await account_blocks.list_reachable(session, actor, q, limit, offset)
+    return UserListResponse(
+        items=[UserRead.model_validate(item) for item in items],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.post("/{user_id}/block", response_model=UserRead, dependencies=[Depends(require_csrf)])

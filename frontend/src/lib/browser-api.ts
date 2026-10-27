@@ -89,6 +89,11 @@ function withJson(body: unknown): RequestInit {
   return { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
 }
 
+/** For data a screen loads on demand rather than on render — a history nobody asked for yet. */
+export async function apiGet<T>(path: string): Promise<ApiResult<T>> {
+  return send<T>("GET", path, {});
+}
+
 export async function apiPost<T>(path: string, body: unknown): Promise<ApiResult<T>> {
   return send<T>("POST", path, withJson(body));
 }

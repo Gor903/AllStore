@@ -104,3 +104,18 @@ def test_changing_your_own_role_is_refused_in_its_own_words() -> None:
 def test_a_moderator_may_not_change_a_role() -> None:
     with pytest.raises(NotAllowedError):
         permissions.ensure_may_change_role(account(MODERATOR), account(BUYER))
+
+
+@pytest.mark.parametrize(
+    ("actor", "expected"),
+    [
+        (BUYER, []),
+        (SELLER, []),
+        (MODERATOR, [BUYER, SELLER]),
+        (ADMIN, [BUYER, SELLER, MODERATOR]),
+    ],
+)
+def test_which_roles_each_actor_can_reach(actor: UserRole, expected: list[UserRole]) -> None:
+    """What a staff listing may contain. An administrator never reaches their own rank, so
+    the one account nobody may act on is also the one no screen offers buttons for."""
+    assert sorted(permissions.reachable_roles(actor)) == sorted(expected)
