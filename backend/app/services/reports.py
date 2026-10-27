@@ -17,7 +17,9 @@ from app.core.errors import ConflictError, NotFoundError
 from app.models import Business, Product, Report, ReportStatus, User
 from app.repositories import reports as reports_repo
 from app.repositories.reports import OpenSubject
-from app.services import business_moderation, moderation_queue
+from app.services import audit, business_moderation, moderation_queue
+
+ENTITY = "report"
 
 
 class ReportSubjectNotFoundError(NotFoundError):
@@ -149,6 +151,19 @@ async def _close(
     )
     if closed == 0:
         raise NothingToResolveError("По этому предмету нет открытых жалоб")
+
+    # The closure gets its own line even when upholding also writes a moderation verdict:
+    # the two answer different questions. One says what happened to the product, the other
+    # says that somebody complained and how that complaint was answered.
+    subject = product_id if product_id is not None else business_id
+    assert subject is not None  # noqa: S101 — the callers always pass exactly one
+    details: dict[str, object] = {
+        "subject": "product" if product_id is not None else "business",
+        "closed": closed,
+    }
+    if reason is not None:
+        details["reason"] = reason
+    await audit.record(session, moderator, f"report.{status.value}", ENTITY, subject, **details)
     return closed
 
 

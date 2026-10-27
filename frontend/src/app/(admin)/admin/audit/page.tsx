@@ -15,20 +15,48 @@ export const metadata: Metadata = {
 /** Every action the backend writes down, in the words an administrator reads it in. */
 const ACTION: Record<string, string> = {
   "user.role_changed": "сменил роль",
+  "user.admin_transferred": "передал администрирование",
   "user.blocked": "заблокировал",
   "user.unblocked": "разблокировал",
+  "moderator.invited": "пригласил модератора",
+  "moderator.invite_revoked": "отозвал приглашение",
+  "moderator.invite_accepted": "принял приглашение модератора",
+  "business.approved": "допустил продавца",
+  "business.rejected": "отклонил заявку продавца",
+  "business.resubmitted": "подал заявку снова",
+  "business.suspended": "приостановил магазин",
+  "business.blocked": "заблокировал магазин",
+  "business.restored": "восстановил магазин",
+  "product.approved": "одобрил товар",
+  "product.rejected": "отклонил товар",
+  "product.hidden": "снял товар с публикации",
+  "product.published": "вернул товар в каталог",
+  "store.customer_blocked": "закрыл магазин покупателю",
+  "store.customer_unblocked": "вернул покупателю доступ в магазин",
+  "report.upheld": "признал жалобу обоснованной",
+  "report.dismissed": "отклонил жалобу",
   "category.created": "завёл категорию",
   "category.renamed": "переименовал категорию",
   "category.hidden": "скрыл категорию",
   "category.shown": "вернул категорию",
 };
 
+const DETAIL: Record<string, string> = {
+  from: "было",
+  to: "стало",
+  reason: "причина",
+  name: "название",
+  slug: "адрес",
+  email: "адрес",
+  buyer: "покупатель",
+  subject: "предмет",
+  closed: "закрыто жалоб",
+};
+
 function described(details: Record<string, unknown>): string {
-  const parts = Object.entries(details).map(([key, value]) => {
-    const label = { from: "было", to: "стало", reason: "причина", name: "название", slug: "адрес" };
-    return `${label[key as keyof typeof label] ?? key}: ${String(value)}`;
-  });
-  return parts.join(", ");
+  return Object.entries(details)
+    .map(([key, value]) => `${DETAIL[key] ?? key}: ${String(value)}`)
+    .join(", ");
 }
 
 export default async function AuditLogPage({ searchParams }: PageProps<"/admin/audit">) {
@@ -40,7 +68,8 @@ export default async function AuditLogPage({ searchParams }: PageProps<"/admin/a
     <main className="mx-auto flex max-w-4xl flex-col gap-6 px-6 py-10">
       <AdminNav current="audit" />
       <p className="text-sm text-ink-muted">
-        Кто, что и когда. Записи не редактируются и не удаляются — в этом их смысл.
+        Кто, что и когда — включая решения модераторов. Записи не редактируются и не удаляются: в
+        этом их смысл, и кнопки, которая бы их убрала, здесь нет ни у кого.
       </p>
 
       {page === null ? (

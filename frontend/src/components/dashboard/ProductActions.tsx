@@ -11,7 +11,9 @@ export function ProductActions({ product }: { product: Product }) {
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const waiting = product.moderation_status === "pending";
+  // a proposal in the queue, whether it is the product's first look or an edit to a
+  // listing that is already on the shelf — in both cases there is nothing left to press
+  const waiting = product.pending_change !== null;
 
   async function onSubmitForReview() {
     setBusy(true);
