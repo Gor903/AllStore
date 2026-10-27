@@ -9,10 +9,14 @@ from app.models import Business, User, UserRole, UserStatus
 from app.repositories.catalog import LIKE_ESCAPE, like_pattern
 
 
-def _narrow[S: Select[Any]](statement: S, query: str | None) -> S:
+def _narrow[S: Select[Any]](
+    statement: S, query: str | None, roles: Sequence[UserRole] | None = None
+) -> S:
     """Shared by the listing and its count, so the two cannot disagree on what matches."""
     if query:
         statement = statement.where(User.email.ilike(like_pattern(query), escape=LIKE_ESCAPE))
+    if roles is not None:
+        statement = statement.where(User.role.in_(roles))
     return statement
 
 
@@ -53,11 +57,15 @@ async def add_business(session: AsyncSession, business: Business) -> Business:
 
 
 async def search(
-    session: AsyncSession, query: str | None, limit: int, offset: int
+    session: AsyncSession,
+    query: str | None,
+    limit: int,
+    offset: int,
+    roles: Sequence[UserRole] | None = None,
 ) -> Sequence[User]:
     """Newest first, so an account registered a minute ago is the one on top."""
     result = await session.execute(
-        _narrow(select(User), query)
+        _narrow(select(User), query, roles)
         .order_by(User.created_at.desc(), User.id)
         .limit(limit)
         .offset(offset)
@@ -65,8 +73,10 @@ async def search(
     return result.scalars().all()
 
 
-async def count_matching(session: AsyncSession, query: str | None) -> int:
-    statement = _narrow(select(func.count()).select_from(User), query)
+async def count_matching(
+    session: AsyncSession, query: str | None, roles: Sequence[UserRole] | None = None
+) -> int:
+    statement = _narrow(select(func.count()).select_from(User), query, roles)
     return (await session.execute(statement)).scalar_one()
 
 

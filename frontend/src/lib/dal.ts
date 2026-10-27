@@ -102,6 +102,18 @@ export async function getAdminUsers(query: string, offset: number): Promise<User
   return backendGet<UserList>(`/admin/users?${params}`);
 }
 
+/** The accounts the signed-in moderator or administrator may actually act on. */
+export async function getReachableAccounts(
+  query: string,
+  offset: number,
+): Promise<UserList | null> {
+  const params = new URLSearchParams({ limit: String(ADMIN_PAGE_SIZE), offset: String(offset) });
+  if (query !== "") {
+    params.set("q", query);
+  }
+  return backendGet<UserList>(`/accounts?${params}`);
+}
+
 export async function getAdminCategories(): Promise<AdminCategory[] | null> {
   return backendGet<AdminCategory[]>("/admin/categories");
 }

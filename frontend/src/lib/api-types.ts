@@ -4,6 +4,30 @@
  */
 
 export interface paths {
+    "/api/v1/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Accounts
+         * @description Only the accounts the caller outranks.
+         *
+         *     A moderator's list holds buyers and sellers, an administrator's holds moderators too.
+         *     The screen then offers exactly the rows whose buttons will work, rather than rows that
+         *     answer 403 when pressed.
+         */
+        get: operations["list_accounts_api_v1_accounts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/accounts/{user_id}/block": {
         parameters: {
             query?: never;
@@ -2113,6 +2137,39 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    list_accounts_api_v1_accounts_get: {
+        parameters: {
+            query?: {
+                q?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     block_account_api_v1_accounts__user_id__block_post: {
         parameters: {
             query?: never;

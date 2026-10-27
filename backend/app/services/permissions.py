@@ -51,6 +51,12 @@ def may_read_audit_log(actor: UserRole) -> bool:
     return actor is UserRole.ADMIN
 
 
+def reachable_roles(actor: UserRole) -> list[UserRole]:
+    """The roles this actor may act on. What a staff listing is allowed to contain, derived
+    from the same ranks the individual checks use rather than listed a second time."""
+    return [role for role in UserRole if outranks(actor, role)]
+
+
 def ensure_may_block(actor: User, target: User) -> None:
     if actor.id == target.id:
         # the rank rule already refuses it; the message is what differs, because locking
