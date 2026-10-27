@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, SecretStr, StringCo
 
 from app.core.security import MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH
 from app.models import BusinessStatus, UserRole, UserStatus
+from app.models.business import Business as BusinessModel
 
 Password = Annotated[
     SecretStr, Field(min_length=MIN_PASSWORD_LENGTH, max_length=MAX_PASSWORD_LENGTH)
@@ -66,7 +67,21 @@ class BusinessRead(BaseModel):
     display_name: str
     description: str | None
     status: BusinessStatus
+    # Why the shop is where it is, when a moderator said why. A refusal the seller cannot
+    # read is a refusal they cannot answer — and answering it is the whole point of
+    # `rejected` being a separate status from `blocked`.
+    #
+    # Filled by `of` rather than read off the model: it comes from the verdict history, and
+    # a field that fetched it by itself would make every answer carrying a business load it.
+    status_reason: str | None = None
     created_at: datetime
+
+    @classmethod
+    def of(cls, business: BusinessModel) -> "BusinessRead":
+        """For the callers that loaded the history — the seller's own cabinet."""
+        return cls.model_validate(business).model_copy(
+            update={"status_reason": business.latest_reason}
+        )
 
 
 class SellerRegisterResponse(BaseModel):

@@ -24,7 +24,9 @@ async def list_pending(session: AsyncSession, limit: int, offset: int) -> Sequen
     """Oldest first: whoever registered earliest waits least."""
     result = await session.execute(
         select(Business)
-        .options(selectinload(Business.store))
+        # the history comes along: an applicant who was refused once and answered it is not
+        # the same case as one nobody has looked at yet
+        .options(selectinload(Business.store), selectinload(Business.reviews))
         .where(Business.status == BusinessStatus.PENDING)
         .order_by(Business.created_at, Business.id)
         .limit(limit)

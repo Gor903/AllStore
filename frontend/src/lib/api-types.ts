@@ -572,6 +572,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/moderation/businesses/{business_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reject Business
+         * @description Refusal, not a ban: the applicant reads the reason in their cabinet and may answer it.
+         */
+        post: operations["reject_business_api_v1_moderation_businesses__business_id__reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/moderation/businesses/{business_id}/restore": {
         parameters: {
             query?: never;
@@ -1098,10 +1118,33 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Read My Business */
+        /**
+         * Read My Business
+         * @description With the verdicts attached: a refusal the seller cannot read is one they cannot answer.
+         */
         get: operations["read_my_business_api_v1_users_me_business_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/me/business/resubmit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resubmit My Business
+         * @description The applicant answering a refusal: back into the queue, with the history intact.
+         */
+        post: operations["resubmit_my_business_api_v1_users_me_business_resubmit_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1313,6 +1356,25 @@ export interface components {
             /** File */
             file: string;
         };
+        /**
+         * BusinessDecision
+         * @enum {string}
+         */
+        BusinessDecision: "approved" | "rejected" | "suspended" | "blocked" | "restored" | "resubmitted";
+        /**
+         * BusinessDecisionRead
+         * @description One verdict that was passed on this applicant, and why.
+         */
+        BusinessDecisionRead: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            decision: components["schemas"]["BusinessDecision"];
+            /** Reason */
+            reason: string | null;
+        };
         /** BusinessListResponse */
         BusinessListResponse: {
             /** Items */
@@ -1343,6 +1405,8 @@ export interface components {
             /** Legal Name */
             legal_name: string;
             status: components["schemas"]["BusinessStatus"];
+            /** Status Reason */
+            status_reason?: string | null;
         };
         /**
          * BusinessReviewRead
@@ -1358,6 +1422,8 @@ export interface components {
             description: string | null;
             /** Display Name */
             display_name: string;
+            /** History */
+            history: components["schemas"]["BusinessDecisionRead"][];
             /**
              * Id
              * Format: uuid
@@ -1374,7 +1440,7 @@ export interface components {
          * BusinessStatus
          * @enum {string}
          */
-        BusinessStatus: "pending" | "active" | "suspended" | "blocked";
+        BusinessStatus: "pending" | "active" | "rejected" | "suspended" | "blocked";
         /** BuyerRegisterRequest */
         BuyerRegisterRequest: {
             /**
@@ -3271,6 +3337,41 @@ export interface operations {
             };
         };
     };
+    reject_business_api_v1_moderation_businesses__business_id__reject_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                business_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModerationReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusinessReviewRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     restore_business_api_v1_moderation_businesses__business_id__restore_post: {
         parameters: {
             query?: never;
@@ -4327,6 +4428,26 @@ export interface operations {
         };
     };
     read_my_business_api_v1_users_me_business_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusinessRead"];
+                };
+            };
+        };
+    };
+    resubmit_my_business_api_v1_users_me_business_resubmit_post: {
         parameters: {
             query?: never;
             header?: never;

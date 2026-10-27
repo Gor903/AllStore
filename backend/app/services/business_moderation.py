@@ -1,7 +1,13 @@
 """Admission of a seller to the platform, and the only place a business status moves.
 
     pending ──approve──> active ──suspend──> suspended ──restore──> active
+    pending ──reject───> rejected ──resubmit──> pending
     any except blocked ──block──> blocked ──restore──> active
+
+Refusal and suspension are different things and have different words. A refusal is a verdict
+on an applicant: it comes with a reason, the shop was never on the air, and the seller may fix
+what was wrong and ask again. A suspension is a verdict on a shop that was already admitted,
+and only a moderator takes it back.
 
 The storefront follows the business that runs it: there is no case where one is barred and
 the other is on the air.
@@ -22,10 +28,17 @@ from app.models import (
     User,
 )
 from app.repositories import businesses as businesses_repo
+from app.services import audit
 from app.services.moderation import InvalidTransitionError
+
+ENTITY = "business"
 
 STORE_STATUS_OF = {
     BusinessStatus.ACTIVE: StoreStatus.ACTIVE,
+    # back to a draft rather than to a verdict of its own: the storefront was never public,
+    # and it goes on waiting while the applicant fixes what was wrong
+    BusinessStatus.PENDING: StoreStatus.DRAFT,
+    BusinessStatus.REJECTED: StoreStatus.DRAFT,
     BusinessStatus.SUSPENDED: StoreStatus.SUSPENDED,
     BusinessStatus.BLOCKED: StoreStatus.BLOCKED,
 }
@@ -50,6 +63,31 @@ async def approve(session: AsyncSession, moderator: User, business_id: uuid.UUID
     _require(business.status is BusinessStatus.PENDING, "Одобрить можно только бизнес на проверке")
     _move(business, BusinessStatus.ACTIVE)
     await _record(session, business, moderator, BusinessDecision.APPROVED, None)
+    await audit.record(session, moderator, "business.approved", ENTITY, business.id)
+    return business
+
+
+async def reject(
+    session: AsyncSession, moderator: User, business_id: uuid.UUID, reason: str
+) -> Business:
+    """Refusal, not a ban: the applicant is told what is wrong and may answer it."""
+    business = await _find(session, business_id)
+    _require(business.status is BusinessStatus.PENDING, "Отклонить можно только бизнес на проверке")
+    _move(business, BusinessStatus.REJECTED)
+    await _record(session, business, moderator, BusinessDecision.REJECTED, reason)
+    await audit.record(session, moderator, "business.rejected", ENTITY, business.id, reason=reason)
+    return business
+
+
+async def resubmit(session: AsyncSession, seller: User, business: Business) -> Business:
+    """The applicant answering a refusal. Theirs to do, which is why the actor is a seller."""
+    _require(
+        business.status is BusinessStatus.REJECTED,
+        "Повторно подать можно только отклонённую заявку",
+    )
+    _move(business, BusinessStatus.PENDING)
+    await _record(session, business, seller, BusinessDecision.RESUBMITTED, None)
+    await audit.record(session, seller, "business.resubmitted", ENTITY, business.id)
     return business
 
 
@@ -62,6 +100,7 @@ async def suspend(
     )
     _move(business, BusinessStatus.SUSPENDED)
     await _record(session, business, moderator, BusinessDecision.SUSPENDED, reason)
+    await audit.record(session, moderator, "business.suspended", ENTITY, business.id, reason=reason)
     return business
 
 
@@ -72,6 +111,7 @@ async def block(
     _require(business.status is not BusinessStatus.BLOCKED, "Бизнес уже заблокирован")
     _move(business, BusinessStatus.BLOCKED)
     await _record(session, business, moderator, BusinessDecision.BLOCKED, reason)
+    await audit.record(session, moderator, "business.blocked", ENTITY, business.id, reason=reason)
     return business
 
 
@@ -84,6 +124,7 @@ async def restore(session: AsyncSession, moderator: User, business_id: uuid.UUID
     )
     _move(business, BusinessStatus.ACTIVE)
     await _record(session, business, moderator, BusinessDecision.RESTORED, None)
+    await audit.record(session, moderator, "business.restored", ENTITY, business.id)
     return business
 
 

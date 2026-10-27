@@ -13,12 +13,27 @@ export const metadata: Metadata = {
 const VERDICTS: Verdict[] = [
   { label: "Допустить", action: "approve" },
   {
+    label: "Отклонить",
+    action: "reject",
+    reasonPrompt: "Что продавцу исправить? Он прочитает это в кабинете и подаст заявку снова.",
+    danger: true,
+  },
+  {
     label: "Заблокировать",
     action: "block",
-    reasonPrompt: "Почему продавец не допускается? Причина останется в истории решений.",
+    reasonPrompt: "Почему продавец не допускается совсем? Причина останется в истории решений.",
     danger: true,
   },
 ];
+
+const DECISION: Record<string, string> = {
+  approved: "допущен",
+  rejected: "отклонён",
+  resubmitted: "подал заявку снова",
+  suspended: "приостановлен",
+  blocked: "заблокирован",
+  restored: "восстановлен",
+};
 
 export default async function ModerationBusinessesPage() {
   await requireRole("moderator", "admin");
@@ -37,7 +52,8 @@ export default async function ModerationBusinessesPage() {
 
       <p className="text-sm text-ink-muted">
         Пока продавец не допущен, его магазин никому не виден, а товары не публикуются, даже если
-        одобрены по отдельности.
+        одобрены по отдельности. Отклонение — не бан: продавец прочитает причину, исправит и подаст
+        заявку снова. Блокировка закрывает дорогу совсем.
       </p>
 
       {businesses === null ? (
@@ -61,6 +77,22 @@ export default async function ModerationBusinessesPage() {
                   ? "Витрину ещё не создал"
                   : `Адрес: ${business.subdomain}.${env.baseDomain}`}
               </p>
+              {business.history.length === 0 ? null : (
+                <details className="text-sm">
+                  <summary className="cursor-pointer text-ink-muted">
+                    Эту заявку уже смотрели ({business.history.length})
+                  </summary>
+                  <ul className="mt-2 flex flex-col gap-1">
+                    {business.history.map((entry) => (
+                      <li key={entry.created_at} className="text-ink-muted">
+                        {new Date(entry.created_at).toLocaleString("ru-RU")} —{" "}
+                        {DECISION[entry.decision] ?? entry.decision}
+                        {entry.reason === null ? "" : `: ${entry.reason}`}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
               <VerdictButtons
                 basePath={`/moderation/businesses/${business.id}`}
                 verdicts={VERDICTS}

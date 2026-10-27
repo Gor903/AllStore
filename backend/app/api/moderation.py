@@ -149,6 +149,23 @@ async def approve_business(
 
 
 @router.post(
+    "/businesses/{business_id}/reject",
+    response_model=BusinessReviewRead,
+    dependencies=[Depends(require_csrf)],
+)
+async def reject_business(
+    business_id: uuid.UUID,
+    payload: ModerationReasonRequest,
+    moderator: ModeratorUser,
+    session: SessionDep,
+) -> BusinessReviewRead:
+    """Refusal, not a ban: the applicant reads the reason in their cabinet and may answer it."""
+    business = await business_moderation.reject(session, moderator, business_id, payload.reason)
+    await session.commit()
+    return BusinessReviewRead.from_business(business)
+
+
+@router.post(
     "/businesses/{business_id}/suspend",
     response_model=BusinessReviewRead,
     dependencies=[Depends(require_csrf)],

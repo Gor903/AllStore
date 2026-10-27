@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { LogoutButton } from "@/components/auth/LogoutButton";
 import { StatusPill } from "@/components/dashboard/StatusPill";
+import { ResubmitBusiness } from "@/components/dashboard/ResubmitBusiness";
 import { StoreForm } from "@/components/dashboard/StoreForm";
 import { getMyBusiness, getMyContacts, getMyProducts, getMyStore, requireUser } from "@/lib/dal";
 import { formatPrice } from "@/lib/format";
@@ -17,6 +18,7 @@ export const metadata: Metadata = {
 const BUSINESS_STATUS: Record<string, string> = {
   pending: "на проверке модератором",
   active: "активен",
+  rejected: "заявка отклонена",
   suspended: "приостановлен",
   blocked: "заблокирован",
 };
@@ -70,6 +72,23 @@ export default async function DashboardPage() {
               Пока заявка на проверке, магазин никому не виден. Товары можно готовить уже сейчас —
               их проверят отдельно.
             </p>
+          ) : null}
+
+          {business.status_reason === null ? null : (
+            <p className="text-sm">
+              <span className="text-ink-muted">Модератор написал: </span>
+              {business.status_reason}
+            </p>
+          )}
+
+          {business.status === "rejected" ? (
+            <>
+              <p className="text-sm text-ink-muted">
+                Это не блокировка: исправьте то, что указано выше, и подайте заявку снова — она
+                вернётся в очередь вместе с историей решений.
+              </p>
+              <ResubmitBusiness />
+            </>
           ) : null}
 
           {store === null ? (

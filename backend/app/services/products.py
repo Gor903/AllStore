@@ -4,9 +4,10 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import NotFoundError, ValidationFailedError
+from app.core.errors import NotFoundError, PermissionDeniedError, ValidationFailedError
 from app.models import (
     Business,
+    BusinessStatus,
     Category,
     ModerationStatus,
     Product,
@@ -18,6 +19,12 @@ from app.services import contacts, moderation
 # what a moderator judged; changing any of it invalidates the verdict, price and stock do not
 MODERATED_FIELDS = frozenset({"name", "description", "category_id"})
 
+# A shop may fill its shelves while it waits to be admitted — nothing is public until a
+# moderator says so, and a seller who cannot prepare anything has nothing to be admitted for.
+# Once refused, suspended or barred it may not: queueing new goods would be a way of
+# outlasting the verdict rather than answering it.
+TRADING_STATUSES = frozenset({BusinessStatus.PENDING, BusinessStatus.ACTIVE})
+
 
 class ProductNotFoundError(NotFoundError):
     code = "product_not_found"
@@ -27,9 +34,14 @@ class CategoryNotFoundError(ValidationFailedError):
     code = "category_not_found"
 
 
+class BusinessNotTradingError(PermissionDeniedError):
+    code = "business_not_trading"
+
+
 async def create_product(
     session: AsyncSession, business: Business, payload: ProductCreateRequest
 ) -> Product:
+    require_trading(business)
     await resolve_category(session, payload.category_id)
     # creating a product already files it into the queue, so the contact is required here
     # and not only at submit — otherwise the rule would be bypassed by never resubmitting
@@ -77,15 +89,28 @@ async def update_product(
 
 
 async def submit_product_for_review(
-    session: AsyncSession, business_id: uuid.UUID, product_id: uuid.UUID
+    session: AsyncSession, business: Business, product_id: uuid.UUID
 ) -> Product:
     """The seller sends a refused — or an already approved — product back into the queue."""
-    product = await get_owned_product(session, business_id, product_id)
-    await contacts.require_contact(session, business_id)
+    require_trading(business)
+    product = await get_owned_product(session, business.id, product_id)
+    await contacts.require_contact(session, business.id)
     moderation.submit_for_review(product)
     await session.flush()
     await session.refresh(product, attribute_names=["updated_at"])
     return product
+
+
+def require_trading(business: Business) -> None:
+    """A shop under a verdict does not add to the queue.
+
+    Not a silent no-op and not a 404: the seller is told, because what they have to do about
+    it — answer the refusal, wait out the suspension — is a different thing in each case.
+    """
+    if business.status not in TRADING_STATUSES:
+        raise BusinessNotTradingError(
+            "Магазин под решением модератора: новые товары на проверку сейчас не принимаются"
+        )
 
 
 async def archive_product(
