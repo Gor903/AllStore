@@ -5,9 +5,17 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import UserRole
-from tests.integration.conftest import csrf_headers, register_seller
-from tests.integration.test_admin_users import act_as, seed_staff
-from tests.integration.test_catalog import Shop, a_live_shop, a_product, a_published_product, switch
+from tests.integration.conftest import (
+    Shop,
+    a_live_shop,
+    a_product,
+    a_published_product,
+    act_as,
+    csrf_headers,
+    register_seller,
+    seed_staff,
+    switch,
+)
 
 pytestmark = pytest.mark.integration
 

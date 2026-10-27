@@ -9,10 +9,13 @@ from app.core.config import get_settings
 from app.core.storage import key_from_url
 from app.services.product_images import BYTES_IN_MB
 from tests.integration.conftest import (
+    a_live_shop,
+    anonymous,
     csrf_headers,
     register_buyer,
     register_seller,
     seeded_category,
+    switch,
 )
 from tests.integration.test_product_images import JPEG, PNG, bucket_keys, stored_object
 
@@ -309,7 +312,6 @@ async def test_dressing_a_shop_without_the_csrf_header_is_forbidden(
 async def test_the_storefront_shows_what_the_seller_set(
     api_client: AsyncClient, session: AsyncSession, object_storage: None
 ) -> None:
-    from tests.integration.test_catalog import a_live_shop, anonymous, switch
 
     shop = await a_live_shop(api_client, session, "cups")
     switch(api_client, shop.seller)

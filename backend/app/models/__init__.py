@@ -1,5 +1,6 @@
 """Модели реэкспортируются здесь, чтобы Alembic autogenerate видел полную метадату."""
 
+from app.models.account_block import AccountBlock
 from app.models.audit import AuditLog
 from app.models.auth import PasswordResetToken, RefreshToken
 from app.models.business import Business, BusinessStatus
@@ -26,6 +27,7 @@ from app.models.user import User, UserRole, UserStatus
 __all__ = [
     "EMBEDDING_DIMENSIONS",
     "PHONE_PLATFORMS",
+    "AccountBlock",
     "AuditLog",
     "Business",
     "BusinessDecision",

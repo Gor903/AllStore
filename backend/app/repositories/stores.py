@@ -14,10 +14,14 @@ async def get_by_subdomain(session: AsyncSession, subdomain: str) -> Store | Non
 
 async def get_with_business_by_subdomain(session: AsyncSession, subdomain: str) -> Store | None:
     """Business is loaded with the store: the storefront shows its name, description and
-    the ways to reach the seller."""
+    the ways to reach the seller. The owner comes along because whether the shop is public
+    at all depends on their standing as much as on the shop's."""
     result = await session.execute(
         select(Store)
-        .options(joinedload(Store.business).selectinload(Business.social_links))
+        .options(
+            joinedload(Store.business).selectinload(Business.social_links),
+            joinedload(Store.business).joinedload(Business.owner),
+        )
         .where(Store.subdomain == subdomain)
     )
     return result.scalar_one_or_none()

@@ -1,5 +1,4 @@
 import uuid
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
@@ -10,12 +9,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Product, Store
 from tests.integration.conftest import (
+    BUSINESS_MODERATION,
+    PRODUCT_MODERATION,
     PRODUCTS_URL,
+    STORES_URL,
+    a_live_shop,
+    a_product,
+    a_published_product,
+    anonymous,
     become_moderator,
     create_product,
     csrf_headers,
     register_seller,
     seeded_category,
+    switch,
 )
 
 pytestmark = pytest.mark.integration
@@ -23,9 +30,6 @@ pytestmark = pytest.mark.integration
 CATALOG_PRODUCTS = "/api/v1/catalog/products"
 CATALOG_STORES = "/api/v1/catalog/stores"
 CATALOG_CATEGORIES = "/api/v1/catalog/categories"
-STORES_URL = "/api/v1/stores"
-BUSINESS_MODERATION = "/api/v1/moderation/businesses"
-PRODUCT_MODERATION = "/api/v1/moderation/products"
 
 PUBLIC_PRODUCT_FIELDS = {
     "id",
@@ -39,72 +43,6 @@ PUBLIC_PRODUCT_FIELDS = {
     "images",
     "created_at",
 }
-
-
-@dataclass
-class Shop:
-    """A seller admitted to the platform, with a storefront on the air."""
-
-    business_id: str
-    subdomain: str
-    seller: dict[str, str]
-    moderator: dict[str, str]
-
-
-def switch(client: AsyncClient, cookies: dict[str, str]) -> None:
-    client.cookies.clear()
-    client.cookies.update(cookies)
-
-
-async def a_live_shop(client: AsyncClient, session: AsyncSession, subdomain: str) -> Shop:
-    # cookies restored by switch() carry no domain, so a fresh Set-Cookie would sit beside
-    # them rather than replace them — the jar is emptied before a new session starts
-    client.cookies.clear()
-    registered = await register_seller(client, email=f"seller-{uuid.uuid4().hex}@example.com")
-    business_id = str(registered.json()["business"]["id"])
-    created = await client.post(
-        STORES_URL, json={"subdomain": subdomain}, headers=csrf_headers(client)
-    )
-    assert created.status_code == 201
-    seller = dict(client.cookies)
-
-    await become_moderator(client, session)
-    approved = await client.post(
-        f"{BUSINESS_MODERATION}/{business_id}/approve", headers=csrf_headers(client)
-    )
-    assert approved.status_code == 200
-    return Shop(business_id, subdomain, seller, dict(client.cookies))
-
-
-async def a_product(
-    client: AsyncClient,
-    session: AsyncSession,
-    shop: Shop,
-    *,
-    category_slug: str = "smartphones",
-    **fields: Any,
-) -> str:
-    switch(client, shop.seller)
-    category = await seeded_category(session, category_slug)
-    created = await create_product(client, category.id, **fields)
-    assert created.status_code == 201
-    return str(created.json()["id"])
-
-
-async def a_published_product(
-    client: AsyncClient, session: AsyncSession, shop: Shop, **fields: Any
-) -> str:
-    product_id = await a_product(client, session, shop, **fields)
-    switch(client, shop.moderator)
-    approved = await client.post(
-        f"{PRODUCT_MODERATION}/{product_id}/approve", headers=csrf_headers(client)
-    )
-    assert approved.status_code == 200
-    return product_id
-
-
-async def anonymous(client: AsyncClient) -> None:
-    client.cookies.clear()
 
 
 async def born_on(

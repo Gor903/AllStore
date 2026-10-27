@@ -2,9 +2,13 @@
 
     docker compose exec backend python -m scripts.grant_role moderator@example.com secret moderator
 
-Moderator and admin have no self-registration on purpose, so the first one of each has to
-be written where accounts are written at all. Re-running is safe: an existing account keeps
-its password and only changes role.
+Break-glass, not the normal path. A moderator is appointed by an administrator through a
+personal invitation (`/admin/moderators`); this exists for the cases where there is no
+administrator to do it yet, and for the end-to-end suite, which needs a moderator before it
+has a browser. Re-running is safe: an existing account keeps its password and only changes role.
+
+The administrator role is not granted here — there is exactly one, and it comes from
+`scripts.bootstrap_admin`, which is idempotent and takes a lock.
 """
 
 import argparse
@@ -58,7 +62,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("email")
     parser.add_argument("password", help="используется только при создании аккаунта")
-    parser.add_argument("role", choices=[role.value for role in UserRole])
+    parser.add_argument(
+        "role",
+        # admin is missing on purpose: the platform has one, and it is bootstrapped
+        choices=[role.value for role in UserRole if role is not UserRole.ADMIN],
+    )
     arguments = parser.parse_args()
     outcome = asyncio.run(grant(arguments.email, arguments.password, UserRole(arguments.role)))
     # the project forbids print; a script that reports to a person still has to talk

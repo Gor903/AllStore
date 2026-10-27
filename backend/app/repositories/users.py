@@ -70,6 +70,13 @@ async def count_matching(session: AsyncSession, query: str | None) -> int:
     return (await session.execute(statement)).scalar_one()
 
 
+async def get_admin(session: AsyncSession) -> User | None:
+    """The administrator, whatever their status. There is at most one: a unique partial index
+    on `role = 'admin'` is what makes `scalar_one_or_none` safe to say here."""
+    result = await session.execute(select(User).where(User.role == UserRole.ADMIN))
+    return result.scalar_one_or_none()
+
+
 async def count_active_admins(session: AsyncSession) -> int:
     result = await session.execute(
         select(func.count())

@@ -78,6 +78,11 @@ class Settings(BaseSettings):
     csrf_cookie_name: str = "allstore_csrf"
     csrf_header_name: str = "X-CSRF-Token"
 
+    # the first administrator, read once by scripts/bootstrap_admin.py and never again: after
+    # that the database is the authority on who administers the platform, not the environment
+    admin_email: str | None = None
+    admin_password: SecretStr | None = None
+
     s3_endpoint_url: str
     s3_region: str = "us-east-1"
     s3_access_key: str

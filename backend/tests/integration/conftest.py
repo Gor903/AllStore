@@ -1,4 +1,5 @@
 import uuid
+from dataclasses import dataclass
 from typing import Any
 
 from httpx import AsyncClient, Response
@@ -11,6 +12,9 @@ from app.models import Category, User, UserRole
 
 PRODUCTS_URL = "/api/v1/products"
 CONTACTS_URL = "/api/v1/stores/me/contacts"
+STORES_URL = "/api/v1/stores"
+BUSINESS_MODERATION = "/api/v1/moderation/businesses"
+PRODUCT_MODERATION = "/api/v1/moderation/products"
 
 BUYER_PAYLOAD = {"email": "Buyer@Example.com", "password": "buyer-password-1"}
 SELLER_PAYLOAD = {
@@ -38,18 +42,35 @@ async def login(client: AsyncClient, email: str, password: str) -> Response:
     return await client.post("/api/v1/auth/login", json={"email": email, "password": password})
 
 
-async def become_moderator(client: AsyncClient, session: AsyncSession) -> User:
-    """There is no self-registration for moderators, so the account is seeded and then logged in."""
-    password = "moderator-password-1"
+STAFF_PASSWORD = "staff-password-1"
+
+
+async def seed_staff(session: AsyncSession, role: UserRole) -> User:
+    """Moderators and administrators have no self-registration, so they are seeded.
+
+    An administrator seeded here is the only one the platform may have: the unique partial
+    index on the role sees to that, and a test that wants two is describing a platform this
+    one is not.
+    """
     user = User(
-        email=f"moderator-{uuid.uuid4().hex}@example.com",
-        password_hash=hash_password(password),
-        role=UserRole.MODERATOR,
+        email=f"{role}-{uuid.uuid4().hex}@example.com",
+        password_hash=hash_password(STAFF_PASSWORD),
+        role=role,
     )
     session.add(user)
     await session.flush()
+    return user
+
+
+async def act_as(client: AsyncClient, user: User, password: str = STAFF_PASSWORD) -> None:
     client.cookies.clear()
     await login(client, user.email, password)
+
+
+async def become_moderator(client: AsyncClient, session: AsyncSession) -> User:
+    """There is no self-registration for moderators, so the account is seeded and then logged in."""
+    user = await seed_staff(session, UserRole.MODERATOR)
+    await act_as(client, user)
     return user
 
 
@@ -88,3 +109,71 @@ async def create_product(client: AsyncClient, category_id: uuid.UUID, **override
     return await client.post(
         PRODUCTS_URL, json=product_payload(category_id, **overrides), headers=csrf_headers(client)
     )
+
+
+@dataclass
+class Shop:
+    """A seller admitted to the platform, with a storefront on the air."""
+
+    business_id: str
+    seller_id: str
+    subdomain: str
+    seller: dict[str, str]
+    moderator: dict[str, str]
+
+
+def switch(client: AsyncClient, cookies: dict[str, str]) -> None:
+    client.cookies.clear()
+    client.cookies.update(cookies)
+
+
+async def anonymous(client: AsyncClient) -> None:
+    client.cookies.clear()
+
+
+async def a_live_shop(client: AsyncClient, session: AsyncSession, subdomain: str) -> Shop:
+    # cookies restored by switch() carry no domain, so a fresh Set-Cookie would sit beside
+    # them rather than replace them — the jar is emptied before a new session starts
+    client.cookies.clear()
+    registered = await register_seller(client, email=f"seller-{uuid.uuid4().hex}@example.com")
+    business_id = str(registered.json()["business"]["id"])
+    seller_id = str(registered.json()["user"]["id"])
+    created = await client.post(
+        STORES_URL, json={"subdomain": subdomain}, headers=csrf_headers(client)
+    )
+    assert created.status_code == 201
+    seller = dict(client.cookies)
+
+    await become_moderator(client, session)
+    approved = await client.post(
+        f"{BUSINESS_MODERATION}/{business_id}/approve", headers=csrf_headers(client)
+    )
+    assert approved.status_code == 200
+    return Shop(business_id, seller_id, subdomain, seller, dict(client.cookies))
+
+
+async def a_product(
+    client: AsyncClient,
+    session: AsyncSession,
+    shop: Shop,
+    *,
+    category_slug: str = "smartphones",
+    **fields: Any,
+) -> str:
+    switch(client, shop.seller)
+    category = await seeded_category(session, category_slug)
+    created = await create_product(client, category.id, **fields)
+    assert created.status_code == 201
+    return str(created.json()["id"])
+
+
+async def a_published_product(
+    client: AsyncClient, session: AsyncSession, shop: Shop, **fields: Any
+) -> str:
+    product_id = await a_product(client, session, shop, **fields)
+    switch(client, shop.moderator)
+    approved = await client.post(
+        f"{PRODUCT_MODERATION}/{product_id}/approve", headers=csrf_headers(client)
+    )
+    assert approved.status_code == 200
+    return product_id

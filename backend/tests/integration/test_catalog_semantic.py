@@ -15,14 +15,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
 from app.services import search_client
-from tests.integration.conftest import csrf_headers
-from tests.integration.test_catalog import (
-    CATALOG_PRODUCTS,
+from tests.integration.conftest import (
     PRODUCT_MODERATION,
     a_live_shop,
     a_published_product,
     anonymous,
+    csrf_headers,
     switch,
+)
+from tests.integration.test_catalog import (
+    CATALOG_PRODUCTS,
 )
 
 pytestmark = pytest.mark.integration
