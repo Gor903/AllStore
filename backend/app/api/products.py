@@ -44,7 +44,7 @@ async def create_product(
     await session.commit()
     # the seller's answer does not wait for the search to catch up (docs/rag-first.md, раздел 25)
     background.add_task(search_client.product_changed, settings, product.id)
-    return ProductRead.model_validate(product)
+    return ProductRead.of(product)
 
 
 @router.get("", response_model=ProductListResponse)
@@ -56,7 +56,7 @@ async def list_products(
 ) -> ProductListResponse:
     items = await products_repo.list_for_business(session, business.id, limit, offset)
     return ProductListResponse(
-        items=[ProductRead.model_validate(item) for item in items],
+        items=[ProductRead.of(item) for item in items],
         total=await products_repo.count_for_business(session, business.id),
         limit=limit,
         offset=offset,
@@ -68,7 +68,7 @@ async def read_product(
     product_id: uuid.UUID, business: CurrentBusiness, session: SessionDep
 ) -> ProductRead:
     product = await products_service.get_owned_product(session, business.id, product_id)
-    return ProductRead.model_validate(product)
+    return ProductRead.of(product)
 
 
 @router.patch("/{product_id}", response_model=ProductRead, dependencies=[Depends(require_csrf)])
@@ -80,10 +80,10 @@ async def update_product(
     background: BackgroundTasks,
     settings: SettingsDep,
 ) -> ProductRead:
-    product = await products_service.update_product(session, business.id, product_id, payload)
+    product = await products_service.update_product(session, business, product_id, payload)
     await session.commit()
     background.add_task(search_client.product_changed, settings, product.id)
-    return ProductRead.model_validate(product)
+    return ProductRead.of(product)
 
 
 @router.delete(
@@ -108,7 +108,7 @@ async def submit_product_for_review(
     """Sends the product back to the queue after a refusal, once the seller has fixed it."""
     product = await products_service.submit_product_for_review(session, business, product_id)
     await session.commit()
-    return ProductRead.model_validate(product)
+    return ProductRead.of(product)
 
 
 @router.post(

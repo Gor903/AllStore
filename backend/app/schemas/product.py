@@ -5,7 +5,13 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
-from app.models import ModerationStatus, ProductAvailability, PublicationStatus
+from app.models import (
+    ModerationStatus,
+    Product,
+    ProductAvailability,
+    ProductRevision,
+    PublicationStatus,
+)
 from app.models.product import PRICE_PRECISION, PRICE_SCALE
 
 DESCRIPTION_MAX_LENGTH = 5000
@@ -70,6 +76,31 @@ class ProductImageRead(BaseModel):
     alt_text: str | None
 
 
+class ProductChangeRead(BaseModel):
+    """What the seller has proposed and a moderator has not judged yet.
+
+    Separate from the product's own fields on purpose: while this is filled, the two differ,
+    and the difference is the whole point — the buyer sees one and the seller is waiting on
+    the other.
+    """
+
+    id: uuid.UUID
+    name: str
+    description: str | None
+    category_id: uuid.UUID
+    created_at: datetime
+
+    @classmethod
+    def of(cls, revision: ProductRevision) -> "ProductChangeRead":
+        return cls(
+            id=revision.id,
+            name=revision.name,
+            description=revision.description,
+            category_id=revision.category_id,
+            created_at=revision.created_at,
+        )
+
+
 class ProductRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -86,9 +117,28 @@ class ProductRead(BaseModel):
     publication_status: PublicationStatus
     # filled only while the product stands refused, see Product.rejection_reason
     rejection_reason: str | None
+    # What the seller changed and a moderator has yet to judge. The fields above stay as the
+    # buyer knows them while this is set — that is what keeps a live listing live.
+    #
+    # Filled by `of` rather than read off the model: the proposals are a lazy relationship,
+    # and a field that fetched them by itself would make every answer carrying a product
+    # load a history it has no use for.
+    pending_change: ProductChangeRead | None = None
+    # why the last proposed change was refused, while the product itself stands
+    change_rejection_reason: str | None = None
     images: list[ProductImageRead]
     created_at: datetime
     updated_at: datetime
+
+    @classmethod
+    def of(cls, product: Product) -> "ProductRead":
+        pending = product.pending_revision
+        return cls.model_validate(product).model_copy(
+            update={
+                "pending_change": None if pending is None else ProductChangeRead.of(pending),
+                "change_rejection_reason": product.change_rejection_reason,
+            }
+        )
 
 
 class ProductListResponse(BaseModel):

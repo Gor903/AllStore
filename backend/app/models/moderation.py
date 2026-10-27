@@ -40,6 +40,11 @@ class ModerationReview(UUIDPrimaryKeyMixin, Base):
     product_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("products.id", ondelete="CASCADE"), index=True, nullable=False
     )
+    # which proposal this verdict was about. Nullable: verdicts that predate revisions were
+    # about the product as a whole, and hide/publish still are
+    revision_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("product_revisions.id", ondelete="SET NULL")
+    )
     # SET NULL: a moderator's account may go, the record of what they decided may not
     moderator_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), index=True

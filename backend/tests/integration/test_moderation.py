@@ -197,6 +197,8 @@ async def test_a_refusal_without_a_usable_reason_is_refused(
 async def test_a_rejected_product_returns_to_the_queue_after_a_fix(
     api_client: AsyncClient, session: AsyncSession
 ) -> None:
+    """Fixing it is the whole answer: the edit files the proposal, and there is nothing left
+    to press afterwards."""
     await register_seller(api_client)
     category = await seeded_category(session)
     product_id = str((await create_product(api_client, category.id)).json()["id"])
@@ -207,20 +209,18 @@ async def test_a_rejected_product_returns_to_the_queue_after_a_fix(
     api_client.cookies.clear()
     api_client.cookies.update(seller_cookies)
     seen = await api_client.get(f"{PRODUCTS_URL}/{product_id}")
-    await api_client.patch(
+    fixed = await api_client.patch(
         f"{PRODUCTS_URL}/{product_id}",
         json={"name": "Исправленное название"},
         headers=csrf_headers(api_client),
     )
-    resubmitted = await api_client.post(
-        f"{PRODUCTS_URL}/{product_id}/submit", headers=csrf_headers(api_client)
-    )
 
     assert seen.json()["rejection_reason"] == REASON
-    assert resubmitted.status_code == 200
-    assert resubmitted.json()["moderation_status"] == "pending"
+    assert fixed.status_code == 200
+    assert fixed.json()["moderation_status"] == "pending"
+    assert fixed.json()["name"] == "Исправленное название"
     # the refusal no longer stands, so there is nothing for the seller to act on
-    assert resubmitted.json()["rejection_reason"] is None
+    assert fixed.json()["rejection_reason"] is None
     # the history keeps the refusal even though the product moved on
     assert [review.decision for review in await reviews_of(session, product_id)] == [
         ModerationDecision.REJECTED

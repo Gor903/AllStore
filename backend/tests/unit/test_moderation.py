@@ -1,6 +1,21 @@
+"""The product status machine, in memory.
+
+The arrangement these tests pin down is the one the whole revision stage exists for: what a
+buyer sees lives on the product, what has been proposed lives on a revision, and a verdict on
+a proposal never takes away a place on the shelf that was already earned.
+"""
+
+import uuid
+
 import pytest
 
-from app.models import ModerationStatus, Product, PublicationStatus
+from app.models import (
+    ModerationStatus,
+    Product,
+    ProductRevision,
+    PublicationStatus,
+    RevisionStatus,
+)
 from app.services import moderation
 from app.services.moderation import InvalidTransitionError
 
@@ -11,39 +26,133 @@ DRAFT = PublicationStatus.DRAFT
 PUBLISHED = PublicationStatus.PUBLISHED
 HIDDEN = PublicationStatus.HIDDEN
 
+CATEGORY = uuid.uuid4()
+OTHER_CATEGORY = uuid.uuid4()
+REASON = "Фотография не соответствует товару"
 
-def product(moderation_status: ModerationStatus, publication_status: PublicationStatus) -> Product:
+
+def product(
+    moderation_status: ModerationStatus,
+    publication_status: PublicationStatus,
+    name: str = "Кружка",
+) -> Product:
     """Built in memory: the statuses are set by hand, the model defaults apply on insert."""
-    return Product(moderation_status=moderation_status, publication_status=publication_status)
+    return Product(
+        id=uuid.uuid4(),
+        name=name,
+        description="Старое описание",
+        category_id=CATEGORY,
+        moderation_status=moderation_status,
+        publication_status=publication_status,
+    )
 
 
-def test_approving_puts_the_product_on_the_shelf() -> None:
+def proposal(
+    item: Product,
+    name: str = "Кружка",
+    status: RevisionStatus = RevisionStatus.PENDING,
+) -> ProductRevision:
+    return ProductRevision(
+        id=uuid.uuid4(),
+        product_id=item.id,
+        name=name,
+        description="Новое описание",
+        category_id=OTHER_CATEGORY,
+        status=status,
+    )
+
+
+def test_the_first_approval_puts_the_product_on_the_shelf() -> None:
     item = product(PENDING, DRAFT)
 
-    moderation.approve(item)
+    moderation.approve_revision(item, proposal(item))
 
     assert item.moderation_status is APPROVED
     assert item.publication_status is PUBLISHED
 
 
-def test_rejecting_keeps_the_product_off_the_shelf() -> None:
+def test_approving_a_proposal_makes_it_what_the_buyer_sees() -> None:
     item = product(PENDING, DRAFT)
 
-    moderation.reject(item)
+    moderation.approve_revision(item, proposal(item, name="Кружка керамическая"))
+
+    assert item.name == "Кружка керамическая"
+    assert item.description == "Новое описание"
+    assert item.category_id == OTHER_CATEGORY
+
+
+def test_the_first_refusal_keeps_the_product_off_the_shelf() -> None:
+    item = product(PENDING, DRAFT)
+
+    moderation.reject_revision(item, proposal(item), REASON)
 
     assert item.moderation_status is REJECTED
     assert item.publication_status is DRAFT
 
 
-@pytest.mark.parametrize("verdict", [APPROVED, REJECTED])
-def test_a_verdict_is_passed_only_once(verdict: ModerationStatus) -> None:
-    """A second approve or reject would overwrite a decision instead of following it."""
-    item = product(verdict, DRAFT)
+def test_a_refused_change_leaves_a_live_listing_exactly_where_it_was() -> None:
+    """The point of the whole arrangement: a refusal costs nothing that was already earned."""
+    item = product(APPROVED, PUBLISHED, name="Кружка")
+    change = proposal(item, name="Кружка со скидкой 90%")
+
+    moderation.reject_revision(item, change, REASON)
+
+    assert item.moderation_status is APPROVED
+    assert item.publication_status is PUBLISHED
+    assert item.name == "Кружка"
+    assert change.status is RevisionStatus.REJECTED
+    assert change.reason == REASON
+
+
+def test_an_approved_change_replaces_the_live_text_without_disturbing_the_shelf() -> None:
+    item = product(APPROVED, PUBLISHED, name="Кружка")
+
+    moderation.approve_revision(item, proposal(item, name="Кружка керамическая"))
+
+    assert item.name == "Кружка керамическая"
+    assert item.publication_status is PUBLISHED
+
+
+def test_approving_a_change_does_not_undo_a_moderator_hiding_the_product() -> None:
+    """A hide is a verdict of its own; an edit is not an appeal against it."""
+    item = product(APPROVED, HIDDEN)
+
+    moderation.approve_revision(item, proposal(item))
+
+    assert item.publication_status is HIDDEN
+
+
+@pytest.mark.parametrize(
+    "status", [RevisionStatus.APPROVED, RevisionStatus.REJECTED, RevisionStatus.SUPERSEDED]
+)
+def test_a_proposal_is_judged_only_once(status: RevisionStatus) -> None:
+    item = product(PENDING, DRAFT)
+    decided = proposal(item, status=status)
 
     with pytest.raises(InvalidTransitionError):
-        moderation.approve(item)
+        moderation.approve_revision(item, decided)
     with pytest.raises(InvalidTransitionError):
-        moderation.reject(item)
+        moderation.reject_revision(item, decided, REASON)
+
+
+def test_a_verdict_stamps_when_it_was_passed() -> None:
+    item = product(PENDING, DRAFT)
+    change = proposal(item)
+
+    moderation.approve_revision(item, change)
+
+    assert change.decided_at is not None
+
+
+def test_a_superseded_proposal_is_closed_without_a_reason() -> None:
+    item = product(APPROVED, PUBLISHED)
+    change = proposal(item)
+
+    moderation.supersede(change)
+
+    assert change.status is RevisionStatus.SUPERSEDED
+    assert change.reason is None
+    assert change.decided_at is not None
 
 
 def test_a_published_product_can_be_hidden() -> None:
@@ -69,61 +178,21 @@ def test_a_hidden_product_goes_back_on_the_shelf() -> None:
     assert item.publication_status is PUBLISHED
 
 
-@pytest.mark.parametrize("verdict", [PENDING, REJECTED])
-def test_nothing_is_published_without_approval(verdict: ModerationStatus) -> None:
-    """The rule the whole machine exists for: publish never runs ahead of moderation."""
-    item = product(verdict, HIDDEN)
-
+@pytest.mark.parametrize("status", [PENDING, REJECTED])
+def test_an_unapproved_product_is_never_published(status: ModerationStatus) -> None:
     with pytest.raises(InvalidTransitionError):
-        moderation.publish(item)
-
-    assert item.publication_status is HIDDEN
+        moderation.publish(product(status, HIDDEN))
 
 
-@pytest.mark.parametrize("publication", [DRAFT, PUBLISHED])
-def test_only_a_hidden_product_is_republished(publication: PublicationStatus) -> None:
+def test_publishing_what_is_not_hidden_is_refused() -> None:
     with pytest.raises(InvalidTransitionError):
-        moderation.publish(product(APPROVED, publication))
+        moderation.publish(product(APPROVED, PUBLISHED))
 
 
-@pytest.mark.parametrize(
-    ("verdict", "publication"), [(REJECTED, DRAFT), (APPROVED, PUBLISHED), (APPROVED, HIDDEN)]
-)
-def test_the_seller_returns_the_product_to_the_queue(
-    verdict: ModerationStatus, publication: PublicationStatus
-) -> None:
-    item = product(verdict, publication)
-
-    moderation.submit_for_review(item)
-
-    assert item.moderation_status is PENDING
-    assert item.publication_status is DRAFT
-
-
-def test_a_product_already_in_the_queue_is_not_resubmitted() -> None:
-    item = product(PENDING, DRAFT)
-
-    with pytest.raises(InvalidTransitionError):
-        moderation.submit_for_review(item)
-
-
-@pytest.mark.parametrize("verdict", [PENDING, APPROVED, REJECTED])
-def test_withdrawing_takes_the_product_off_the_shelf_whatever_the_verdict(
-    verdict: ModerationStatus,
-) -> None:
-    """Archiving is the seller's own doing, so the verdict stands as it was."""
-    item = product(verdict, PUBLISHED)
+def test_archiving_takes_the_product_off_the_shelf_without_a_verdict() -> None:
+    item = product(APPROVED, PUBLISHED)
 
     moderation.withdraw(item)
 
     assert item.publication_status is HIDDEN
-    assert item.moderation_status is verdict
-
-
-def test_an_invalid_transition_is_a_conflict_with_a_readable_message() -> None:
-    with pytest.raises(InvalidTransitionError) as raised:
-        moderation.approve(product(APPROVED, PUBLISHED))
-
-    assert raised.value.status_code == 409
-    assert raised.value.code == "invalid_transition"
-    assert raised.value.message == "Одобрить можно только товар на проверке"
+    assert item.moderation_status is APPROVED

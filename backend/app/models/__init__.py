@@ -22,6 +22,7 @@ from app.models.product import (
     ProductImage,
     PublicationStatus,
 )
+from app.models.product_revision import ProductRevision, RevisionStatus
 from app.models.report import Report, ReportStatus
 from app.models.store import Store, StoreStatus
 from app.models.user import User, UserRole, UserStatus
@@ -49,10 +50,12 @@ __all__ = [
     "ProductAvailability",
     "ProductEmbedding",
     "ProductImage",
+    "ProductRevision",
     "PublicationStatus",
     "RefreshToken",
     "Report",
     "ReportStatus",
+    "RevisionStatus",
     "SocialLink",
     "Store",
     "StoreStatus",

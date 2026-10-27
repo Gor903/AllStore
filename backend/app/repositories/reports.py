@@ -11,6 +11,7 @@ from sqlalchemy.orm import selectinload
 from app.models import (
     Business,
     Product,
+    ProductRevision,
     Report,
     ReportStatus,
     Store,
@@ -104,6 +105,7 @@ async def load_products(
             selectinload(Product.images),
             selectinload(Product.reviews),
             selectinload(Product.category),
+            selectinload(Product.revisions).selectinload(ProductRevision.category),
             selectinload(Product.business).selectinload(Business.store),
         )
         .where(Product.id.in_(ids))

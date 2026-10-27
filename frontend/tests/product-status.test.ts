@@ -17,6 +17,8 @@ function product(fields: Partial<Product>): Product {
     moderation_status: "pending",
     publication_status: "draft",
     rejection_reason: null,
+    pending_change: null,
+    change_rejection_reason: null,
     images: [],
     created_at: "2026-09-21T00:00:00Z",
     updated_at: "2026-09-21T00:00:00Z",
@@ -58,6 +60,38 @@ describe("productStatus", () => {
 
     expect(status.label).toBe("Скрыт модератором");
     expect(status.hint).toContain("повторную проверку");
+  });
+
+  it("says a live listing is untouched while an edit waits", () => {
+    const status = productStatus(
+      product({
+        moderation_status: "approved",
+        publication_status: "published",
+        pending_change: {
+          id: "44444444-4444-4444-4444-444444444444",
+          name: "Кружка керамическая",
+          description: null,
+          category_id: "33333333-3333-3333-3333-333333333333",
+          created_at: "2026-09-22T00:00:00Z",
+        },
+      }),
+    );
+
+    expect(status).toMatchObject({ label: "Правка на проверке", tone: "waiting" });
+    expect(status.hint).toContain("прежнюю версию");
+  });
+
+  it("says a refused edit cost the seller nothing they had", () => {
+    const status = productStatus(
+      product({
+        moderation_status: "approved",
+        publication_status: "published",
+        change_rejection_reason: "Название обещает лишнее.",
+      }),
+    );
+
+    expect(status).toMatchObject({ label: "Правка отклонена", tone: "refused" });
+    expect(status.hint).toContain("остался в каталоге");
   });
 
   it("covers the approved product that never reached the shelf", () => {
