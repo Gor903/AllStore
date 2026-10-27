@@ -114,6 +114,47 @@ export interface paths {
         patch: operations["update_category_api_v1_admin_categories__category_id__patch"];
         trace?: never;
     };
+    "/api/v1/admin/moderator-invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Moderator Invitations */
+        get: operations["list_moderator_invitations_api_v1_admin_moderator_invitations_get"];
+        put?: never;
+        /**
+         * Invite Moderator
+         * @description Issues the invitation and hands back its secret — the only time it is readable.
+         *
+         *     It is stored as a sha256, so there is no second chance to look it up: an administrator
+         *     who loses this answer revokes the invitation and issues another.
+         */
+        post: operations["invite_moderator_api_v1_admin_moderator_invitations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/moderator-invitations/{invitation_id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke Moderator Invitation */
+        post: operations["revoke_moderator_invitation_api_v1_admin_moderator_invitations__invitation_id__revoke_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/users": {
         parameters: {
             query?: never;
@@ -314,6 +355,30 @@ export interface paths {
         put?: never;
         /** Register Buyer */
         post: operations["register_buyer_api_v1_auth_register_buyer_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/register/moderator": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Register Moderator
+         * @description The only door to the moderator role, and it opens for one person with one link.
+         *
+         *     No CSRF gate, like the other registrations: the caller has no session to ride on yet.
+         *     What stands in for it is the invitation itself — 32 random bytes bound to one address,
+         *     spent in a single statement, behind an attempt limit.
+         */
+        post: operations["register_moderator_api_v1_auth_register_moderator_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1438,6 +1503,73 @@ export interface components {
              */
             status: "ok";
         };
+        /** InvitationCreateRequest */
+        InvitationCreateRequest: {
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
+        };
+        /**
+         * InvitationCreated
+         * @description The one and only time the secret is readable.
+         *
+         *     It is not stored in a form anyone can read back, so an administrator who loses this
+         *     answer revokes the invitation and issues another one rather than looking it up.
+         */
+        InvitationCreated: {
+            invitation: components["schemas"]["InvitationRead"];
+            /** Token */
+            token: string;
+        };
+        /** InvitationListResponse */
+        InvitationListResponse: {
+            /** Items */
+            items: components["schemas"]["InvitationRead"][];
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /** Total */
+            total: number;
+        };
+        /** InvitationRead */
+        InvitationRead: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By Email */
+            created_by_email: string | null;
+            /** Email */
+            email: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Revoked At */
+            revoked_at: string | null;
+            /** Revoked By Email */
+            revoked_by_email: string | null;
+            status: components["schemas"]["InvitationStatus"];
+            /** Used At */
+            used_at: string | null;
+        };
+        /**
+         * InvitationStatus
+         * @description Derived, never stored. Four columns already say everything this would, and a fifth
+         *     one repeating them is a fifth one to forget to update.
+         * @enum {string}
+         */
+        InvitationStatus: "pending" | "accepted" | "revoked" | "expired";
         /** LoginRequest */
         LoginRequest: {
             /**
@@ -1535,6 +1667,28 @@ export interface components {
          * @enum {string}
          */
         ModerationStatus: "pending" | "approved" | "rejected";
+        /**
+         * ModeratorRegisterRequest
+         * @description The address is sent back along with the token on purpose.
+         *
+         *     It is what binds the invitation to one person: a link forwarded to a colleague arrives
+         *     with the colleague's address and stops working. Nothing else travels from the client —
+         *     the role is not a field anyone may ask for.
+         */
+        ModeratorRegisterRequest: {
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
+            /**
+             * Password
+             * Format: password
+             */
+            password: string;
+            /** Token */
+            token: string;
+        };
         /** PasswordResetConfirmRequest */
         PasswordResetConfirmRequest: {
             /**
@@ -2183,6 +2337,102 @@ export interface operations {
             };
         };
     };
+    list_moderator_invitations_api_v1_admin_moderator_invitations_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    invite_moderator_api_v1_admin_moderator_invitations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvitationCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationCreated"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_moderator_invitation_api_v1_admin_moderator_invitations__invitation_id__revoke_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invitation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_users_api_v1_admin_users_get: {
         parameters: {
             query?: {
@@ -2493,6 +2743,39 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["BuyerRegisterRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    register_moderator_api_v1_auth_register_moderator_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModeratorRegisterRequest"];
             };
         };
         responses: {

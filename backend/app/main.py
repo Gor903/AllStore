@@ -23,6 +23,7 @@ from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging, get_logger
 from app.core.storage import ensure_bucket
 from app.db.session import dispose_engine
+from app.deps.rate_limit import build_invitation_limiter
 
 logger = get_logger(__name__)
 
@@ -56,6 +57,9 @@ def create_app() -> FastAPI:
             allow_methods=["*"],
             allow_headers=["*"],
         )
+
+    # per application, so every worker keeps its own tally — see app/core/rate_limit.py
+    app.state.invitation_limiter = build_invitation_limiter()
 
     register_exception_handlers(app)
     app.include_router(health_router)

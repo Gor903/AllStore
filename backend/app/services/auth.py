@@ -51,7 +51,7 @@ def _dummy_hash() -> str:
 
 
 async def register_buyer(session: AsyncSession, data: BuyerRegisterRequest) -> User:
-    await _ensure_identifiers_free(session, data.normalized_email, data.phone)
+    await ensure_identifiers_free(session, data.normalized_email, data.phone)
     user = User(
         email=data.normalized_email,
         phone=data.phone,
@@ -64,7 +64,7 @@ async def register_buyer(session: AsyncSession, data: BuyerRegisterRequest) -> U
 async def register_seller(
     session: AsyncSession, data: SellerRegisterRequest
 ) -> tuple[User, Business]:
-    await _ensure_identifiers_free(session, data.normalized_email, data.phone)
+    await ensure_identifiers_free(session, data.normalized_email, data.phone)
     user = await users.add(
         session,
         User(
@@ -82,7 +82,9 @@ async def register_seller(
     return user, business
 
 
-async def _ensure_identifiers_free(session: AsyncSession, email: str, phone: str | None) -> None:
+async def ensure_identifiers_free(session: AsyncSession, email: str, phone: str | None) -> None:
+    """Public: moderator registration goes through invitations rather than through this
+    module, and the two must refuse a taken address in the same words."""
     if await users.email_exists(session, email):
         raise ConflictError("Пользователь с таким email уже зарегистрирован")
     if phone is not None and await users.phone_exists(session, phone):

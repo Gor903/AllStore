@@ -4,7 +4,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, status
 
 from app.core.errors import NotFoundError
-from app.deps.auth import SessionDep, require_csrf, require_role
+from app.deps.auth import SessionDep, SettingsDep, require_csrf, require_role
 from app.models import User, UserRole
 from app.repositories import users as users_repo
 from app.schemas.admin import (
@@ -17,7 +17,13 @@ from app.schemas.admin import (
     UserListResponse,
 )
 from app.schemas.auth import UserRead
-from app.services import admin_categories, admin_users, audit
+from app.schemas.invitation import (
+    InvitationCreated,
+    InvitationCreateRequest,
+    InvitationListResponse,
+    InvitationRead,
+)
+from app.services import admin_categories, admin_users, audit, invitations
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -80,6 +86,57 @@ async def transfer_admin(user_id: uuid.UUID, admin: AdminUser, session: SessionD
     successor = await admin_users.transfer_admin(session, admin, user_id)
     await session.commit()
     return UserRead.model_validate(successor)
+
+
+@router.post(
+    "/moderator-invitations",
+    response_model=InvitationCreated,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_csrf)],
+)
+async def invite_moderator(
+    payload: InvitationCreateRequest,
+    admin: AdminUser,
+    settings: SettingsDep,
+    session: SessionDep,
+) -> InvitationCreated:
+    """Issues the invitation and hands back its secret — the only time it is readable.
+
+    It is stored as a sha256, so there is no second chance to look it up: an administrator
+    who loses this answer revokes the invitation and issues another.
+    """
+    invitation, token = await invitations.create(session, admin, settings, payload.email)
+    await session.commit()
+    return InvitationCreated(invitation=InvitationRead.from_invitation(invitation), token=token)
+
+
+@router.get("/moderator-invitations", response_model=InvitationListResponse)
+async def list_moderator_invitations(
+    _: AdminUser,
+    session: SessionDep,
+    limit: Limit = DEFAULT_PAGE_SIZE,
+    offset: Offset = 0,
+) -> InvitationListResponse:
+    items, total = await invitations.list_all(session, limit, offset)
+    return InvitationListResponse(
+        items=[InvitationRead.from_invitation(item) for item in items],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.post(
+    "/moderator-invitations/{invitation_id}/revoke",
+    response_model=InvitationRead,
+    dependencies=[Depends(require_csrf)],
+)
+async def revoke_moderator_invitation(
+    invitation_id: uuid.UUID, admin: AdminUser, session: SessionDep
+) -> InvitationRead:
+    invitation = await invitations.revoke(session, admin, invitation_id)
+    await session.commit()
+    return InvitationRead.from_invitation(invitation)
 
 
 @router.get("/audit-logs", response_model=AuditLogListResponse)

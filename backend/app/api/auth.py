@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, Request, Response, status
 from app.core.cookies import clear_auth_cookies, set_auth_cookies
 from app.core.errors import AuthenticationError
 from app.deps.auth import SessionDep, SettingsDep, require_csrf
+from app.deps.rate_limit import limit_invitation_attempts
 from app.schemas.auth import (
     BuyerRegisterRequest,
     LoginRequest,
@@ -13,7 +14,9 @@ from app.schemas.auth import (
     SellerRegisterResponse,
     UserRead,
 )
+from app.schemas.invitation import ModeratorRegisterRequest
 from app.services import auth as auth_service
+from app.services import invitations
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -52,6 +55,39 @@ async def register_seller(
     await session.commit()
     set_auth_cookies(response, settings, tokens)
     return SellerRegisterResponse.model_validate({"user": user, "business": business})
+
+
+@router.post(
+    "/register/moderator",
+    response_model=UserRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(limit_invitation_attempts)],
+)
+async def register_moderator(
+    payload: ModeratorRegisterRequest,
+    response: Response,
+    request: Request,
+    settings: SettingsDep,
+    session: SessionDep,
+) -> UserRead:
+    """The only door to the moderator role, and it opens for one person with one link.
+
+    No CSRF gate, like the other registrations: the caller has no session to ride on yet.
+    What stands in for it is the invitation itself — 32 random bytes bound to one address,
+    spent in a single statement, behind an attempt limit.
+    """
+    user = await invitations.accept(
+        session,
+        payload.token,
+        payload.normalized_email,
+        payload.password.get_secret_value(),
+    )
+    tokens = await auth_service.issue_tokens(
+        session, settings, user, request.headers.get("user-agent")
+    )
+    await session.commit()
+    set_auth_cookies(response, settings, tokens)
+    return UserRead.model_validate(user)
 
 
 @router.post("/login", response_model=UserRead)
