@@ -4,6 +4,7 @@ from typing import Any
 
 from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models import Business, User, UserRole, UserStatus
 from app.repositories.catalog import LIKE_ESCAPE, like_pattern
@@ -47,6 +48,21 @@ async def add(session: AsyncSession, user: User) -> User:
 
 async def get_business_of(session: AsyncSession, user_id: uuid.UUID) -> Business | None:
     result = await session.execute(select(Business).where(Business.owner_user_id == user_id))
+    return result.scalar_one_or_none()
+
+
+async def get_business_with_reviews(session: AsyncSession, user_id: uuid.UUID) -> Business | None:
+    """What the seller's own cabinet shows: the shop and every verdict passed on it, so a
+    refusal arrives with the reason attached rather than as a bare status.
+
+    The storefront comes along because a status change moves it too — see
+    services/business_moderation._move — and a lazy load there would have nowhere to run.
+    """
+    result = await session.execute(
+        select(Business)
+        .options(selectinload(Business.reviews), selectinload(Business.store))
+        .where(Business.owner_user_id == user_id)
+    )
     return result.scalar_one_or_none()
 
 

@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Text, func
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Text, text
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -53,8 +53,11 @@ class ModerationReview(UUIDPrimaryKeyMixin, Base):
         nullable=False,
     )
     reason: Mapped[str | None] = mapped_column(Text)
+    # clock_timestamp(), not now(): now() is the time the transaction began, so two verdicts
+    # written in one transaction would share a timestamp and the order between them — which
+    # is the whole meaning of "the verdict in force now" — would be decided at random
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        DateTime(timezone=True), server_default=text("clock_timestamp()"), nullable=False
     )
 
     product: Mapped["Product"] = relationship(back_populates="reviews")
@@ -63,9 +66,13 @@ class ModerationReview(UUIDPrimaryKeyMixin, Base):
 
 class BusinessDecision(enum.StrEnum):
     APPROVED = "approved"
+    # not yet admitted, and told why — the applicant can answer this one
+    REJECTED = "rejected"
     SUSPENDED = "suspended"
     BLOCKED = "blocked"
     RESTORED = "restored"
+    # the applicant answered the refusal and asked to be looked at again
+    RESUBMITTED = "resubmitted"
 
 
 class BusinessModerationReview(UUIDPrimaryKeyMixin, Base):
@@ -76,7 +83,9 @@ class BusinessModerationReview(UUIDPrimaryKeyMixin, Base):
     __table_args__ = (
         # taking a seller off the air without saying why leaves them nothing to fix
         CheckConstraint(
-            r"decision NOT IN ('suspended', 'blocked') "
+            # as text, so the clause asks nothing of an enum value added in the same
+            # transaction — see alembic/versions/0019
+            r"decision::text NOT IN ('rejected', 'suspended', 'blocked') "
             r"OR (reason IS NOT NULL AND reason ~ '\S')",
             name="ck_business_moderation_reviews_reason_for_refusal",
         ),
@@ -97,8 +106,10 @@ class BusinessModerationReview(UUIDPrimaryKeyMixin, Base):
         nullable=False,
     )
     reason: Mapped[str | None] = mapped_column(Text)
+    # clock_timestamp() for the same reason as above: a refusal and the answer to it may
+    # land in one transaction, and a history whose order is undefined is not a history
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        DateTime(timezone=True), server_default=text("clock_timestamp()"), nullable=False
     )
 
     business: Mapped["Business"] = relationship(back_populates="reviews")

@@ -42,8 +42,12 @@ def _on_subdomain(message: str) -> list[dict[str, Any]]:
 async def create_store(
     session: AsyncSession, settings: Settings, business: Business, subdomain: str
 ) -> Store:
-    if business.status in (BusinessStatus.SUSPENDED, BusinessStatus.BLOCKED):
-        raise BusinessNotEligibleError("Бизнес заблокирован, витрину создать нельзя")
+    if business.status not in (BusinessStatus.PENDING, BusinessStatus.ACTIVE):
+        # refused, suspended or barred: opening a storefront now would be a way around the
+        # verdict rather than an answer to it
+        raise BusinessNotEligibleError(
+            "Магазин под решением модератора, витрину сейчас создать нельзя"
+        )
     if await stores.get_by_business(session, business.id) is not None:
         raise StoreAlreadyExistsError("У этого бизнеса уже есть витрина")
     if subdomain in settings.reserved_subdomains:

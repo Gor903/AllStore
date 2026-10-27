@@ -106,7 +106,7 @@ async def submit_product_for_review(
     product_id: uuid.UUID, business: CurrentBusiness, session: SessionDep
 ) -> ProductRead:
     """Sends the product back to the queue after a refusal, once the seller has fixed it."""
-    product = await products_service.submit_product_for_review(session, business.id, product_id)
+    product = await products_service.submit_product_for_review(session, business, product_id)
     await session.commit()
     return ProductRead.model_validate(product)
 
