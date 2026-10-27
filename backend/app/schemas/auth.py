@@ -14,7 +14,7 @@ Phone = Annotated[str, StringConstraints(pattern=r"^\+?\d{6,20}$")]
 Name = Annotated[str, StringConstraints(min_length=2, max_length=255, strip_whitespace=True)]
 
 
-class _EmailOwner(BaseModel):
+class EmailOwner(BaseModel):
     email: EmailStr
 
     @property
@@ -23,7 +23,7 @@ class _EmailOwner(BaseModel):
         return self.email.strip().lower()
 
 
-class BuyerRegisterRequest(_EmailOwner):
+class BuyerRegisterRequest(EmailOwner):
     password: Password
     phone: Phone | None = None
 
@@ -33,11 +33,11 @@ class SellerRegisterRequest(BuyerRegisterRequest):
     display_name: Name
 
 
-class LoginRequest(_EmailOwner):
+class LoginRequest(EmailOwner):
     password: SecretStr
 
 
-class PasswordResetRequest(_EmailOwner):
+class PasswordResetRequest(EmailOwner):
     pass
 
 

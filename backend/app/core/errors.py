@@ -48,6 +48,11 @@ class ValidationFailedError(AppError):
     status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
 
 
+class TooManyRequestsError(AppError):
+    code = "too_many_requests"
+    status_code = status.HTTP_429_TOO_MANY_REQUESTS
+
+
 class PayloadTooLargeError(AppError):
     code = "payload_too_large"
     status_code = status.HTTP_413_CONTENT_TOO_LARGE

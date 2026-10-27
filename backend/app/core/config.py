@@ -73,6 +73,9 @@ class Settings(BaseSettings):
     access_token_ttl_minutes: int = 15
     refresh_token_ttl_days: int = 30
     password_reset_ttl_hours: int = 2
+    # long enough for an invitation to survive a weekend, short enough that a forgotten
+    # link in a mailbox stops working
+    moderator_invitation_ttl_hours: int = 72
     access_cookie_name: str = "allstore_access"
     refresh_cookie_name: str = "allstore_refresh"
     csrf_cookie_name: str = "allstore_csrf"

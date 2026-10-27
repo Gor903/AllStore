@@ -27,6 +27,11 @@ export type CategoryTree = components["schemas"]["CategoryTreeRead"];
 export type UserList = components["schemas"]["UserListResponse"];
 export type AdminCategory = components["schemas"]["AdminCategoryRead"];
 export type AuditLogList = components["schemas"]["AuditLogListResponse"];
+export type Invitation = components["schemas"]["InvitationRead"];
+export type InvitationList = components["schemas"]["InvitationListResponse"];
+// the secret travels exactly once, in the answer to the request that created it
+export type InvitationCreated = components["schemas"]["InvitationCreated"];
+export type AccountBlockList = components["schemas"]["AccountBlockListResponse"];
 // one line of the assistant stream: the halves of an answer arrive as they become ready
 export type AssistantLine =
   | components["schemas"]["AssistantProducts"]
