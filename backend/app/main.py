@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.accounts import router as accounts_router
 from app.api.admin import router as admin_router
 from app.api.assistant import router as assistant_router
 from app.api.auth import router as auth_router
@@ -68,6 +69,7 @@ def create_app() -> FastAPI:
     app.include_router(catalog_router, prefix=settings.api_prefix)
     app.include_router(assistant_router, prefix=settings.api_prefix)
     app.include_router(admin_router, prefix=settings.api_prefix)
+    app.include_router(accounts_router, prefix=settings.api_prefix)
     app.include_router(reports_public_router, prefix=settings.api_prefix)
     app.include_router(reports_router, prefix=settings.api_prefix)
     return app

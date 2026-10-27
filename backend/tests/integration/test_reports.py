@@ -8,14 +8,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.models import Report, ReportStatus, User, UserRole, UserStatus
-from tests.integration.conftest import csrf_headers, register_buyer
-from tests.integration.test_admin_users import act_as, seed_staff
-from tests.integration.test_catalog import (
-    CATALOG_PRODUCTS,
+from tests.integration.conftest import (
     a_live_shop,
     a_published_product,
+    act_as,
     anonymous,
+    csrf_headers,
+    register_buyer,
+    seed_staff,
     switch,
+)
+from tests.integration.test_catalog import (
+    CATALOG_PRODUCTS,
 )
 
 pytestmark = pytest.mark.integration

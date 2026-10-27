@@ -67,12 +67,19 @@ async def create_store(
 
 
 def is_public(store: Store) -> bool:
-    """A storefront goes public only once a moderator has approved the business behind it.
+    """A storefront goes public only once a moderator has approved the business behind it,
+    and stays public only while the person who owns it is in good standing.
 
     The DRAFT → ACTIVE transition belongs to moderation (этап 5); until then a created
-    storefront resolves to nothing, which is what PR1 reserved the draft status for.
+    storefront resolves to nothing, which is what PR1 reserved the draft status for. The
+    owner's status is the third condition, and the same one the catalogue filters on: barring
+    a seller takes their shelf down with them rather than leaving it selling.
     """
-    return store.status is StoreStatus.ACTIVE and store.business.status is BusinessStatus.ACTIVE
+    return (
+        store.status is StoreStatus.ACTIVE
+        and store.business.status is BusinessStatus.ACTIVE
+        and store.business.owner.is_active
+    )
 
 
 async def get_public_store(session: AsyncSession, subdomain: str) -> Store:

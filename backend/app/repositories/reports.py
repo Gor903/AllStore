@@ -10,14 +10,12 @@ from sqlalchemy.orm import selectinload
 
 from app.models import (
     Business,
-    BusinessStatus,
     Product,
     Report,
     ReportStatus,
     Store,
-    StoreStatus,
 )
-from app.repositories.catalog import PUBLIC_PRODUCT
+from app.repositories.catalog import PUBLIC_PRODUCT, PUBLIC_STORE, with_public_joins
 
 # how many complaints a moderator is shown per subject: enough to see a pattern, not a wall
 REASONS_SHOWN = 5
@@ -157,10 +155,7 @@ async def public_product_exists(session: AsyncSession, product_id: uuid.UUID) ->
     """Only what a visitor can actually see may be complained about. Anything else is
     either already off the shelf or never existed, and both answer the same."""
     result = await session.execute(
-        select(Product.id)
-        .join(Product.business)
-        .join(Business.store)
-        .where(Product.id == product_id, *PUBLIC_PRODUCT)
+        with_public_joins(select(Product.id)).where(Product.id == product_id, *PUBLIC_PRODUCT)
     )
     return result.scalar_one_or_none() is not None
 
@@ -171,10 +166,7 @@ async def live_business_by_subdomain(session: AsyncSession, subdomain: str) -> u
     result = await session.execute(
         select(Business.id)
         .join(Business.store)
-        .where(
-            Store.subdomain == subdomain,
-            Business.status == BusinessStatus.ACTIVE,
-            Store.status == StoreStatus.ACTIVE,
-        )
+        .join(Business.owner)
+        .where(Store.subdomain == subdomain, *PUBLIC_STORE)
     )
     return result.scalar_one_or_none()

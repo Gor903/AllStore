@@ -4,6 +4,61 @@
  */
 
 export interface paths {
+    "/api/v1/accounts/{user_id}/block": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Block Account */
+        post: operations["block_account_api_v1_accounts__user_id__block_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/accounts/{user_id}/blocks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Block History
+         * @description Every ban this account has ever had, lifted or not. A ban that is taken back still
+         *     happened, and the next moderator deciding about this person needs to know it did.
+         */
+        get: operations["read_block_history_api_v1_accounts__user_id__blocks_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/accounts/{user_id}/unblock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Unblock Account */
+        post: operations["unblock_account_api_v1_accounts__user_id__unblock_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/audit-logs": {
         parameters: {
             query?: never;
@@ -93,23 +148,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/admin/users/{user_id}/block": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Block User */
-        post: operations["block_user_api_v1_admin_users__user_id__block_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/admin/users/{user_id}/role": {
         parameters: {
             query?: never;
@@ -127,7 +165,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/admin/users/{user_id}/unblock": {
+    "/api/v1/admin/users/{user_id}/transfer-admin": {
         parameters: {
             query?: never;
             header?: never;
@@ -136,8 +174,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Unblock User */
-        post: operations["unblock_user_api_v1_admin_users__user_id__unblock_post"];
+        /**
+         * Transfer Admin
+         * @description Hands over the one administrator role. The caller is a moderator when this returns.
+         *
+         *     The platform has exactly one administrator, so there is no "appoint another" — the only
+         *     way the role moves is as a whole, in one transaction, from the person asking to the person
+         *     named. Blocking is not here at all: it is /accounts, where a moderator reaches it too.
+         */
+        post: operations["transfer_admin_api_v1_admin_users__user_id__transfer_admin_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -935,6 +980,42 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AccountBlockListResponse */
+        AccountBlockListResponse: {
+            /** Items */
+            items: components["schemas"]["AccountBlockRead"][];
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /** Total */
+            total: number;
+        };
+        /** AccountBlockRead */
+        AccountBlockRead: {
+            /** Actor Email */
+            actor_email: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** In Force */
+            in_force: boolean;
+            /** Reason */
+            reason: string;
+            /** Revoke Reason */
+            revoke_reason: string | null;
+            /** Revoked At */
+            revoked_at: string | null;
+            /** Revoked By Email */
+            revoked_by_email: string | null;
+        };
         /**
          * AdminCategoryRead
          * @description Unlike the public tree this one carries the status: an administrator manages what a
@@ -1806,6 +1887,14 @@ export interface components {
          * @enum {string}
          */
         Subject: "product" | "business";
+        /**
+         * UnblockRequest
+         * @description Lifting a restriction needs no justification — the reason is offered, not demanded.
+         */
+        UnblockRequest: {
+            /** Reason */
+            reason?: string | null;
+        };
         /** UserListResponse */
         UserListResponse: {
             /** Items */
@@ -1870,6 +1959,110 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    block_account_api_v1_accounts__user_id__block_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BlockRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_block_history_api_v1_accounts__user_id__blocks_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountBlockListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unblock_account_api_v1_accounts__user_id__unblock_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UnblockRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_audit_logs_api_v1_admin_audit_logs_get: {
         parameters: {
             query?: {
@@ -2054,41 +2247,6 @@ export interface operations {
             };
         };
     };
-    block_user_api_v1_admin_users__user_id__block_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                user_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["BlockRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["UserRead"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     change_role_api_v1_admin_users__user_id__role_post: {
         parameters: {
             query?: never;
@@ -2124,7 +2282,7 @@ export interface operations {
             };
         };
     };
-    unblock_user_api_v1_admin_users__user_id__unblock_post: {
+    transfer_admin_api_v1_admin_users__user_id__transfer_admin_post: {
         parameters: {
             query?: never;
             header?: never;

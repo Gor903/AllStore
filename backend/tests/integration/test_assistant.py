@@ -17,12 +17,12 @@ from app.core.config import get_settings
 from app.services.assistant import conversation
 from app.services.assistant.client import AssistantUnavailableError, Reply, ToolCall
 from app.services.assistant.tools import EXACT_SEARCH, SEMANTIC_SEARCH
-from tests.integration.conftest import csrf_headers
-from tests.integration.test_catalog import (
+from tests.integration.conftest import (
     PRODUCT_MODERATION,
     a_live_shop,
     a_published_product,
     anonymous,
+    csrf_headers,
     switch,
 )
 

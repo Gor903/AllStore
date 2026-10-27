@@ -5,13 +5,13 @@ from httpx import AsyncClient, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import hash_password
-from app.models import AuditLog, User, UserRole, UserStatus
+from app.models import AuditLog, User, UserRole
 from tests.integration.conftest import (
+    act_as,
     csrf_headers,
-    login,
     register_buyer,
     register_seller,
+    seed_staff,
     set_contacts,
 )
 
@@ -20,25 +20,6 @@ pytestmark = pytest.mark.integration
 ADMIN_USERS = "/api/v1/admin/users"
 AUDIT_LOGS = "/api/v1/admin/audit-logs"
 STORES_URL = "/api/v1/stores"
-PASSWORD = "staff-password-1"
-REASON = "Оскорбления в переписке с продавцом"
-
-
-async def seed_staff(session: AsyncSession, role: UserRole) -> User:
-    """Moderators and administrators have no self-registration, so they are seeded."""
-    user = User(
-        email=f"{role}-{uuid.uuid4().hex}@example.com",
-        password_hash=hash_password(PASSWORD),
-        role=role,
-    )
-    session.add(user)
-    await session.flush()
-    return user
-
-
-async def act_as(client: AsyncClient, user: User) -> None:
-    client.cookies.clear()
-    assert (await login(client, user.email, PASSWORD)).status_code == 200
 
 
 async def a_buyer(client: AsyncClient) -> str:
@@ -60,6 +41,12 @@ async def a_shopkeeper(client: AsyncClient) -> str:
 async def set_role(client: AsyncClient, user_id: str, role: str) -> Response:
     return await client.post(
         f"{ADMIN_USERS}/{user_id}/role", json={"role": role}, headers=csrf_headers(client)
+    )
+
+
+async def transfer_admin(client: AsyncClient, user_id: str) -> Response:
+    return await client.post(
+        f"{ADMIN_USERS}/{user_id}/transfer-admin", headers=csrf_headers(client)
     )
 
 
@@ -136,9 +123,11 @@ async def test_new_rights_apply_without_a_second_login(
     assert queue.status_code == 200
 
 
-async def test_the_last_administrator_keeps_their_role(
+async def test_the_administrator_role_is_never_taken_away_here(
     api_client: AsyncClient, session: AsyncSession
 ) -> None:
+    """There is one administrator and no screen that removes them: the role is handed over,
+    not dropped, or the platform is left with nobody able to appoint anybody."""
     admin = await seed_staff(session, UserRole.ADMIN)
     await act_as(api_client, admin)
 
@@ -149,17 +138,99 @@ async def test_the_last_administrator_keeps_their_role(
     assert (await api_client.get(f"{ADMIN_USERS}/{admin.id}")).json()["role"] == "admin"
 
 
-async def test_an_administrator_steps_down_once_another_exists(
+async def test_nobody_is_promoted_to_administrator_by_a_role_change(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    """A second administrator is not a thing this platform has, so the screen that would
+    create one refuses before the database has to."""
+    buyer_id = await a_buyer(api_client)
+    admin = await seed_staff(session, UserRole.ADMIN)
+    await act_as(api_client, admin)
+
+    response = await set_role(api_client, buyer_id, "admin")
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "admin_account"
+    assert (await api_client.get(f"{ADMIN_USERS}/{buyer_id}")).json()["role"] == "buyer"
+
+
+async def test_an_administrator_hands_the_role_over(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    """One action, one transaction: the platform is never without an administrator, and
+    never has two. The outgoing one stays staff — they were running the place a moment ago."""
+    admin = await seed_staff(session, UserRole.ADMIN)
+    successor = await seed_staff(session, UserRole.MODERATOR)
+    await act_as(api_client, admin)
+
+    response = await transfer_admin(api_client, str(successor.id))
+
+    assert response.status_code == 200
+    assert response.json()["role"] == "admin"
+    assert (await api_client.get(f"{ADMIN_USERS}/{admin.id}")).status_code == 403
+    await session.refresh(admin)
+    await session.refresh(successor)
+    assert admin.role is UserRole.MODERATOR
+    assert successor.role is UserRole.ADMIN
+
+
+async def test_the_handover_leaves_exactly_one_administrator(
     api_client: AsyncClient, session: AsyncSession
 ) -> None:
     admin = await seed_staff(session, UserRole.ADMIN)
-    await seed_staff(session, UserRole.ADMIN)
+    successor = await seed_staff(session, UserRole.MODERATOR)
     await act_as(api_client, admin)
 
-    response = await set_role(api_client, str(admin.id), "buyer")
+    await transfer_admin(api_client, str(successor.id))
 
-    assert response.status_code == 200
-    assert response.json()["role"] == "buyer"
+    admins = await session.execute(select(User).where(User.role == UserRole.ADMIN))
+    assert [user.id for user in admins.scalars().all()] == [successor.id]
+
+
+async def test_the_handover_is_recorded(api_client: AsyncClient, session: AsyncSession) -> None:
+    admin = await seed_staff(session, UserRole.ADMIN)
+    successor = await seed_staff(session, UserRole.MODERATOR)
+    await act_as(api_client, admin)
+
+    await transfer_admin(api_client, str(successor.id))
+
+    written = await entries(session)
+    assert [entry.action for entry in written] == ["user.admin_transferred"]
+    assert written[0].actor_user_id == admin.id
+    assert written[0].entity_id == successor.id
+    assert written[0].details == {"to": successor.email}
+
+
+async def test_a_blocked_account_is_not_handed_the_platform(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    admin = await seed_staff(session, UserRole.ADMIN)
+    successor = await seed_staff(session, UserRole.MODERATOR)
+    await act_as(api_client, admin)
+    await api_client.post(
+        f"/api/v1/accounts/{successor.id}/block",
+        json={"reason": "Нарушение регламента модерации"},
+        headers=csrf_headers(api_client),
+    )
+
+    response = await transfer_admin(api_client, str(successor.id))
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "admin_account"
+
+
+async def test_a_shopkeeper_is_not_handed_the_platform(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    """An administrator who owns a shop would be judging their own storefront."""
+    seller_id = await a_shopkeeper(api_client)
+    admin = await seed_staff(session, UserRole.ADMIN)
+    await act_as(api_client, admin)
+
+    response = await transfer_admin(api_client, seller_id)
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "seller_account"
 
 
 async def test_the_role_of_a_shopkeeper_is_not_changed_here(
@@ -171,94 +242,6 @@ async def test_the_role_of_a_shopkeeper_is_not_changed_here(
     await act_as(api_client, admin)
 
     response = await set_role(api_client, seller_id, "buyer")
-
-    assert response.status_code == 409
-    assert response.json()["error"]["code"] == "seller_account"
-
-
-async def test_an_admin_blocks_and_unblocks_a_buyer(
-    api_client: AsyncClient, session: AsyncSession
-) -> None:
-    buyer_id = await a_buyer(api_client)
-    admin = await seed_staff(session, UserRole.ADMIN)
-    await act_as(api_client, admin)
-
-    blocked = await api_client.post(
-        f"{ADMIN_USERS}/{buyer_id}/block", json={"reason": REASON}, headers=csrf_headers(api_client)
-    )
-    restored = await api_client.post(
-        f"{ADMIN_USERS}/{buyer_id}/unblock", headers=csrf_headers(api_client)
-    )
-
-    assert blocked.json()["status"] == "blocked"
-    assert restored.json()["status"] == "active"
-
-
-async def test_blocking_takes_the_session_away_at_once(
-    api_client: AsyncClient, session: AsyncSession
-) -> None:
-    buyer_id = await a_buyer(api_client)
-    buyer_cookies = dict(api_client.cookies)
-    admin = await seed_staff(session, UserRole.ADMIN)
-    await act_as(api_client, admin)
-    await api_client.post(
-        f"{ADMIN_USERS}/{buyer_id}/block", json={"reason": REASON}, headers=csrf_headers(api_client)
-    )
-
-    api_client.cookies.clear()
-    api_client.cookies.update(buyer_cookies)
-
-    # the status is re-read on every request, so the session dies without waiting for the
-    # access token to expire; 403 rather than 401 — the token is valid, the account is not
-    response = await api_client.get("/api/v1/users/me")
-    assert response.status_code == 403
-    assert response.json()["error"]["code"] == "account_not_active"
-
-
-async def test_blocking_without_a_reason_is_refused(
-    api_client: AsyncClient, session: AsyncSession
-) -> None:
-    buyer_id = await a_buyer(api_client)
-    admin = await seed_staff(session, UserRole.ADMIN)
-    await act_as(api_client, admin)
-
-    response = await api_client.post(
-        f"{ADMIN_USERS}/{buyer_id}/block", json={"reason": "   "}, headers=csrf_headers(api_client)
-    )
-
-    assert response.status_code == 422
-
-
-async def test_an_administrator_is_not_blocked_here(
-    api_client: AsyncClient, session: AsyncSession
-) -> None:
-    admin = await seed_staff(session, UserRole.ADMIN)
-    other = await seed_staff(session, UserRole.ADMIN)
-    await act_as(api_client, admin)
-
-    response = await api_client.post(
-        f"{ADMIN_USERS}/{other.id}/block",
-        json={"reason": REASON},
-        headers=csrf_headers(api_client),
-    )
-
-    assert response.status_code == 403
-    assert response.json()["error"]["code"] == "admin_account"
-
-
-async def test_a_shopkeeper_is_barred_through_business_moderation(
-    api_client: AsyncClient, session: AsyncSession
-) -> None:
-    """Blocking the account here would lock the owner out while the shop kept selling."""
-    seller_id = await a_shopkeeper(api_client)
-    admin = await seed_staff(session, UserRole.ADMIN)
-    await act_as(api_client, admin)
-
-    response = await api_client.post(
-        f"{ADMIN_USERS}/{seller_id}/block",
-        json={"reason": REASON},
-        headers=csrf_headers(api_client),
-    )
 
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "seller_account"
@@ -288,6 +271,7 @@ async def test_nobody_below_an_administrator_reaches_these_screens(
 
     assert (await api_client.get(ADMIN_USERS)).status_code == 403
     assert (await set_role(api_client, buyer_id, "moderator")).status_code == 403
+    assert (await transfer_admin(api_client, buyer_id)).status_code == 403
     assert (await api_client.get(AUDIT_LOGS)).status_code == 403
 
 
@@ -308,27 +292,20 @@ async def test_changing_a_role_without_the_csrf_header_is_forbidden(
     assert response.status_code == 403
 
 
-async def test_every_action_leaves_a_record(api_client: AsyncClient, session: AsyncSession) -> None:
+async def test_a_role_change_leaves_a_record(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
     buyer_id = await a_buyer(api_client)
     admin = await seed_staff(session, UserRole.ADMIN)
     await act_as(api_client, admin)
 
     await set_role(api_client, buyer_id, "moderator")
-    await api_client.post(
-        f"{ADMIN_USERS}/{buyer_id}/block", json={"reason": REASON}, headers=csrf_headers(api_client)
-    )
-    await api_client.post(f"{ADMIN_USERS}/{buyer_id}/unblock", headers=csrf_headers(api_client))
 
     written = await entries(session)
-    assert [entry.action for entry in written] == [
-        "user.role_changed",
-        "user.blocked",
-        "user.unblocked",
-    ]
-    assert all(entry.actor_user_id == admin.id for entry in written)
-    assert all(str(entry.entity_id) == buyer_id for entry in written)
+    assert [entry.action for entry in written] == ["user.role_changed"]
+    assert written[0].actor_user_id == admin.id
+    assert str(written[0].entity_id) == buyer_id
     assert written[0].details == {"from": "buyer", "to": "moderator"}
-    assert written[1].details == {"reason": REASON}
 
 
 async def test_a_refused_action_leaves_no_record(
@@ -364,32 +341,11 @@ async def test_the_journal_names_who_acted_and_reads_newest_first(
     admin = await seed_staff(session, UserRole.ADMIN)
     await act_as(api_client, admin)
     await set_role(api_client, buyer_id, "moderator")
-    await api_client.post(
-        f"{ADMIN_USERS}/{buyer_id}/block", json={"reason": REASON}, headers=csrf_headers(api_client)
-    )
+    await set_role(api_client, buyer_id, "buyer")
 
     body = (await api_client.get(AUDIT_LOGS)).json()
 
     assert body["total"] == 2
-    assert [item["action"] for item in body["items"]] == ["user.blocked", "user.role_changed"]
+    assert [item["action"] for item in body["items"]] == ["user.role_changed", "user.role_changed"]
     assert body["items"][0]["actor_email"] == admin.email
-    assert body["items"][0]["details"] == {"reason": REASON}
-
-
-async def test_a_blocked_account_cannot_log_back_in(
-    api_client: AsyncClient, session: AsyncSession
-) -> None:
-    buyer_id = await a_buyer(api_client)
-    buyer = await session.get(User, uuid.UUID(buyer_id))
-    assert buyer is not None
-    admin = await seed_staff(session, UserRole.ADMIN)
-    await act_as(api_client, admin)
-    await api_client.post(
-        f"{ADMIN_USERS}/{buyer_id}/block", json={"reason": REASON}, headers=csrf_headers(api_client)
-    )
-
-    api_client.cookies.clear()
-    response = await login(api_client, buyer.email, "buyer-password-1")
-
-    assert response.status_code in (401, 403)
-    assert buyer.status is UserStatus.BLOCKED
+    assert body["items"][0]["details"] == {"from": "moderator", "to": "buyer"}

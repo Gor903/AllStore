@@ -9,6 +9,10 @@ from app.models import Business
 from tests.integration.conftest import (
     CONTACTS_URL,
     PRODUCTS_URL,
+    Shop,
+    a_live_shop,
+    a_published_product,
+    anonymous,
     create_product,
     csrf_headers,
     product_payload,
@@ -16,15 +20,11 @@ from tests.integration.conftest import (
     register_seller,
     seeded_category,
     set_contacts,
+    switch,
 )
 from tests.integration.test_catalog import (
     CATALOG_PRODUCTS,
     CATALOG_STORES,
-    Shop,
-    a_live_shop,
-    a_published_product,
-    anonymous,
-    switch,
 )
 
 pytestmark = pytest.mark.integration

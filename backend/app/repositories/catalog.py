@@ -16,6 +16,8 @@ from app.models import (
     PublicationStatus,
     Store,
     StoreStatus,
+    User,
+    UserStatus,
 )
 
 LIKE_ESCAPE = "\\"
@@ -29,6 +31,21 @@ PUBLIC_PRODUCT = (
     Product.archived_at.is_(None),
     Business.status == BusinessStatus.ACTIVE,
     Store.status == StoreStatus.ACTIVE,
+    # the owner too: barring a seller has to take their shelf down with them, and a status
+    # copied onto the business would be a second thing to keep in step and a window in which
+    # the account is gone and the shop is still selling
+    User.status == UserStatus.ACTIVE,
+)
+
+# every public query joins the same three tables, because PUBLIC_PRODUCT names all three
+PUBLIC_JOIN = (Product.business, Business.owner, Business.store)
+
+# the same rule one level up: a shop is listed while the shop, the business and the person
+# behind it are all in good standing
+PUBLIC_STORE = (
+    Store.status == StoreStatus.ACTIVE,
+    Business.status == BusinessStatus.ACTIVE,
+    User.status == UserStatus.ACTIVE,
 )
 
 
@@ -42,8 +59,20 @@ def like_pattern(query: str) -> str:
     return f"%{escaped}%"
 
 
+def with_public_joins[S: Select[Any]](statement: S) -> S:
+    """The joins PUBLIC_PRODUCT needs, added in one call.
+
+    Public because every query filtering on PUBLIC_PRODUCT needs exactly these. A second
+    place spelling the joins out by hand is a second place to miss one when the rule grows a
+    table — which is what happened to the complaint form when the owner's status joined it.
+    """
+    for relationship in PUBLIC_JOIN:
+        statement = statement.join(relationship)
+    return statement
+
+
 def _public_products() -> Select[tuple[Product]]:
-    return select(Product).join(Product.business).join(Business.store).where(*PUBLIC_PRODUCT)
+    return with_public_joins(select(Product)).where(*PUBLIC_PRODUCT)
 
 
 def _narrow[S: Select[Any]](
@@ -109,7 +138,7 @@ async def list_matching_ids(
     throw most of them away would be the alternative.
     """
     statement = _narrow(
-        select(Product.id).join(Product.business).join(Business.store).where(*PUBLIC_PRODUCT),
+        with_public_joins(select(Product.id)).where(*PUBLIC_PRODUCT),
         query,
         category_ids,
         subdomain,
@@ -136,10 +165,7 @@ async def keep_public(
     if not ids:
         return set()
     statement = _narrow(
-        select(Product.id)
-        .join(Product.business)
-        .join(Business.store)
-        .where(*PUBLIC_PRODUCT, Product.id.in_(ids)),
+        with_public_joins(select(Product.id)).where(*PUBLIC_PRODUCT, Product.id.in_(ids)),
         None,
         category_ids,
         subdomain,
@@ -173,11 +199,7 @@ async def count_products(
     subdomain: str | None,
 ) -> int:
     statement = _narrow(
-        select(func.count())
-        .select_from(Product)
-        .join(Product.business)
-        .join(Business.store)
-        .where(*PUBLIC_PRODUCT),
+        with_public_joins(select(func.count()).select_from(Product)).where(*PUBLIC_PRODUCT),
         query,
         category_ids,
         subdomain,
@@ -204,8 +226,9 @@ async def list_stores(session: AsyncSession, limit: int, offset: int) -> Sequenc
     result = await session.execute(
         select(Store)
         .join(Store.business)
+        .join(Business.owner)
         .options(contains_eager(Store.business).selectinload(Business.social_links))
-        .where(Store.status == StoreStatus.ACTIVE, Business.status == BusinessStatus.ACTIVE)
+        .where(*PUBLIC_STORE)
         .order_by(Store.created_at.desc(), Store.id)
         .limit(limit)
         .offset(offset)
@@ -218,7 +241,8 @@ async def count_stores(session: AsyncSession) -> int:
         select(func.count())
         .select_from(Store)
         .join(Store.business)
-        .where(Store.status == StoreStatus.ACTIVE, Business.status == BusinessStatus.ACTIVE)
+        .join(Business.owner)
+        .where(*PUBLIC_STORE)
     )
     return result.scalar_one()
 

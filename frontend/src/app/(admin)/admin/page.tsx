@@ -75,8 +75,10 @@ export default async function AdminUsersPage({ searchParams }: PageProps<"/admin
                   </p>
                 </div>
                 <RoleSelect userId={item.id} role={item.role} />
+                {/* /accounts, not /admin: barring is a moderator's action too, so it is one
+                    route with one rule rather than one per panel */}
                 <VerdictButtons
-                  basePath={`/admin/users/${item.id}`}
+                  basePath={`/accounts/${item.id}`}
                   verdicts={item.status === "blocked" ? UNBLOCK : BLOCK}
                 />
               </li>

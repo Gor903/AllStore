@@ -11,7 +11,6 @@ from app.schemas.admin import (
     AdminCategoryRead,
     AuditLogListResponse,
     AuditLogRead,
-    BlockRequest,
     CategoryCreateRequest,
     CategoryUpdateRequest,
     RoleChangeRequest,
@@ -67,23 +66,20 @@ async def change_role(
 
 
 @router.post(
-    "/users/{user_id}/block", response_model=UserRead, dependencies=[Depends(require_csrf)]
+    "/users/{user_id}/transfer-admin",
+    response_model=UserRead,
+    dependencies=[Depends(require_csrf)],
 )
-async def block_user(
-    user_id: uuid.UUID, payload: BlockRequest, admin: AdminUser, session: SessionDep
-) -> UserRead:
-    user = await admin_users.block(session, admin, user_id, payload.reason)
-    await session.commit()
-    return UserRead.model_validate(user)
+async def transfer_admin(user_id: uuid.UUID, admin: AdminUser, session: SessionDep) -> UserRead:
+    """Hands over the one administrator role. The caller is a moderator when this returns.
 
-
-@router.post(
-    "/users/{user_id}/unblock", response_model=UserRead, dependencies=[Depends(require_csrf)]
-)
-async def unblock_user(user_id: uuid.UUID, admin: AdminUser, session: SessionDep) -> UserRead:
-    user = await admin_users.unblock(session, admin, user_id)
+    The platform has exactly one administrator, so there is no "appoint another" — the only
+    way the role moves is as a whole, in one transaction, from the person asking to the person
+    named. Blocking is not here at all: it is /accounts, where a moderator reaches it too.
+    """
+    successor = await admin_users.transfer_admin(session, admin, user_id)
     await session.commit()
-    return UserRead.model_validate(user)
+    return UserRead.model_validate(successor)
 
 
 @router.get("/audit-logs", response_model=AuditLogListResponse)

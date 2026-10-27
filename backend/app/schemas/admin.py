@@ -7,7 +7,6 @@ from pydantic import BaseModel, BeforeValidator, ConfigDict, StringConstraints
 from app.models import AuditLog, Category, CategoryStatus, UserRole
 from app.models.category import CATEGORY_SLUG_MAX_LENGTH, CATEGORY_SLUG_PATTERN
 from app.schemas.auth import UserRead
-from app.schemas.moderation import ModerationReason
 
 
 class UserListResponse(BaseModel):
@@ -21,14 +20,6 @@ class RoleChangeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     role: UserRole
-
-
-class BlockRequest(BaseModel):
-    """Blocking takes a person's access away, so the record carries why."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    reason: ModerationReason
 
 
 class AuditLogRead(BaseModel):
