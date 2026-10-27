@@ -1,3 +1,4 @@
+import uuid
 from typing import Any
 
 from sqlalchemy.exc import IntegrityError
@@ -12,6 +13,7 @@ from app.core.errors import (
 )
 from app.models import Business, BusinessStatus, Store, StoreStatus
 from app.repositories import stores
+from app.services import customer_blocks
 
 SUBDOMAIN_INDEX = "ix_stores_subdomain"
 
@@ -82,11 +84,18 @@ def is_public(store: Store) -> bool:
     )
 
 
-async def get_public_store(session: AsyncSession, subdomain: str) -> Store:
-    """Missing and not-yet-public storefronts answer the same: 404 tells the visitor nothing."""
+async def get_public_store(
+    session: AsyncSession, subdomain: str, viewer_id: uuid.UUID | None = None
+) -> Store:
+    """Missing and not-yet-public storefronts answer the same: 404 tells the visitor nothing.
+
+    A buyer this shop has barred is a different case and gets a different answer: they know
+    the shop is there, so 403 with a reason beats a riddle. See services/customer_blocks.py.
+    """
     store = await stores.get_with_business_by_subdomain(session, subdomain)
     if store is None or not is_public(store):
         raise NotFoundError("Магазин не найден")
+    await customer_blocks.ensure_may_see(session, store.business_id, viewer_id)
     return store
 
 

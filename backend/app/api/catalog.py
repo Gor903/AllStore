@@ -3,7 +3,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from app.deps.auth import SessionDep, SettingsDep
+from app.deps.auth import OptionalUser, SessionDep, SettingsDep, viewer_id_of
 from app.models.category import CATEGORY_SLUG_MAX_LENGTH
 from app.models.store import SUBDOMAIN_MAX_LENGTH
 from app.schemas.catalog import (
@@ -33,6 +33,9 @@ Subdomain = Annotated[str | None, Query(max_length=SUBDOMAIN_MAX_LENGTH)]
 async def search_products(
     session: SessionDep,
     settings: SettingsDep,
+    # a shop that has barred this buyer drops out of their catalogue, so the listing has to
+    # know who is asking; a guest is barred by nobody and sees what it has always shown
+    viewer: OptionalUser = None,
     q: SearchQuery = None,
     category: CategorySlug = None,
     store: Subdomain = None,
@@ -47,6 +50,7 @@ async def search_products(
         limit=limit,
         offset=offset,
         settings=settings,
+        viewer_id=viewer_id_of(viewer),
     )
     return CatalogProductListResponse(
         items=[CatalogProductRead.from_product(item) for item in page.items],
@@ -58,16 +62,23 @@ async def search_products(
 
 
 @router.get("/products/{product_id}", response_model=CatalogProductDetailRead)
-async def read_product(product_id: uuid.UUID, session: SessionDep) -> CatalogProductDetailRead:
-    product = await catalog_service.get_product(session, product_id)
+async def read_product(
+    product_id: uuid.UUID, session: SessionDep, viewer: OptionalUser = None
+) -> CatalogProductDetailRead:
+    """A saved link into a shop that has barred this buyer answers 404, the same as a product
+    that was taken down: the public filter decides, not the route."""
+    product = await catalog_service.get_product(session, product_id, viewer_id_of(viewer))
     return CatalogProductDetailRead.from_product(product)
 
 
 @router.get("/stores", response_model=CatalogStoreListResponse)
 async def list_stores(
-    session: SessionDep, limit: Limit = DEFAULT_PAGE_SIZE, offset: Offset = 0
+    session: SessionDep,
+    viewer: OptionalUser = None,
+    limit: Limit = DEFAULT_PAGE_SIZE,
+    offset: Offset = 0,
 ) -> CatalogStoreListResponse:
-    items, total = await catalog_service.list_stores(session, limit, offset)
+    items, total = await catalog_service.list_stores(session, limit, offset, viewer_id_of(viewer))
     return CatalogStoreListResponse(
         items=[CatalogStoreRead.from_store(item) for item in items],
         total=total,

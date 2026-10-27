@@ -17,6 +17,7 @@ vi.mock("next/headers", () => ({
 
 vi.mock("@/lib/api", () => ({
   PAGE_SIZE: 24,
+  STORE_BLOCKED: "store-blocked",
   fetchCatalogProduct: vi.fn(),
   fetchCatalogProducts: vi.fn(),
   fetchCatalogStores: vi.fn(),
@@ -336,5 +337,15 @@ describe("storefront page", () => {
 
     expect(container.querySelector("[style*='--color-brand']")).toBeNull();
     expect(container.querySelector("img")).toBeNull();
+  });
+  it("tells a barred buyer that the shop closed its door, instead of a 404 riddle", async () => {
+    // they were shopping there last week; pretending the shop vanished explains nothing
+    vi.mocked(fetchStorefront).mockResolvedValue("store-blocked" as never);
+
+    render(await StorefrontPage(storeProps("cups")));
+
+    expect(screen.getByRole("heading")).toHaveTextContent("Магазин ограничил вам доступ");
+    expect(screen.getByText(/Остальная площадка работает как обычно/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Вернуться в каталог" })).toBeInTheDocument();
   });
 });
