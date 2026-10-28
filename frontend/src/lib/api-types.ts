@@ -114,6 +114,9 @@ export interface paths {
         /**
          * List Audit Logs
          * @description Administrator only: the journal names who did what, and that is not a moderator's.
+         *
+         *     `action` matches by prefix, so `user.` asks for every decision about accounts without
+         *     naming each of them — and the names stay free to grow.
          */
         get: operations["list_audit_logs_api_v1_admin_audit_logs_get"];
         put?: never;
@@ -216,6 +219,29 @@ export interface paths {
          *     the administrator looks at moderators.
          */
         get: operations["list_moderators_api_v1_admin_moderators_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/moderators/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Moderator
+         * @description What this moderator has decided, counted from the decisions themselves.
+         *
+         *     Not from a tally kept beside them: a counter maintained in parallel can be wrong, and a
+         *     wrong one here would be read as evidence.
+         */
+        get: operations["read_moderator_api_v1_admin_moderators__user_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1982,6 +2008,23 @@ export interface components {
          */
         ModerationStatus: "pending" | "approved" | "rejected";
         /**
+         * ModeratorRecordRead
+         * @description One moderator's account and what they have decided with it.
+         */
+        ModeratorRecordRead: {
+            /** Accounts Blocked */
+            accounts_blocked: number;
+            /** Businesses Approved */
+            businesses_approved: number;
+            /** Businesses Refused */
+            businesses_refused: number;
+            moderator: components["schemas"]["UserRead"];
+            /** Products Approved */
+            products_approved: number;
+            /** Products Rejected */
+            products_rejected: number;
+        };
+        /**
          * ModeratorRegisterRequest
          * @description The address is sent back along with the token on purpose.
          *
@@ -2675,6 +2718,10 @@ export interface operations {
     list_audit_logs_api_v1_admin_audit_logs_get: {
         parameters: {
             query?: {
+                actor_id?: string | null;
+                action?: string | null;
+                since?: string | null;
+                until?: string | null;
                 limit?: number;
                 offset?: number;
             };
@@ -2908,6 +2955,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_moderator_api_v1_admin_moderators__user_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModeratorRecordRead"];
                 };
             };
             /** @description Validation Error */

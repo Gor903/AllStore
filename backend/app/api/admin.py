@@ -8,6 +8,7 @@ from app.core.errors import NotFoundError
 from app.deps.auth import SessionDep, SettingsDep, require_csrf, require_role
 from app.models import User, UserRole, UserStatus
 from app.repositories import users as users_repo
+from app.repositories.audit import JournalFilter
 from app.repositories.users import AccountFilter, AccountSort
 from app.schemas.admin import (
     AdminCategoryRead,
@@ -15,6 +16,7 @@ from app.schemas.admin import (
     AuditLogRead,
     CategoryCreateRequest,
     CategoryUpdateRequest,
+    ModeratorRecordRead,
     RoleChangeRequest,
     UserListResponse,
 )
@@ -31,6 +33,7 @@ from app.services import (
     admin_users,
     audit,
     invitations,
+    moderator_record,
     permissions,
 )
 
@@ -147,6 +150,18 @@ async def list_moderators(
     )
 
 
+@router.get("/moderators/{user_id}", response_model=ModeratorRecordRead)
+async def read_moderator(
+    user_id: uuid.UUID, _: AdminUser, session: SessionDep
+) -> ModeratorRecordRead:
+    """What this moderator has decided, counted from the decisions themselves.
+
+    Not from a tally kept beside them: a counter maintained in parallel can be wrong, and a
+    wrong one here would be read as evidence.
+    """
+    return ModeratorRecordRead.of(await moderator_record.record_of(session, user_id))
+
+
 @router.post(
     "/moderator-invitations",
     response_model=InvitationCreated,
@@ -202,11 +217,20 @@ async def revoke_moderator_invitation(
 async def list_audit_logs(
     _: AdminUser,
     session: SessionDep,
+    actor_id: uuid.UUID | None = None,
+    action: Annotated[str | None, Query(min_length=1, max_length=64)] = None,
+    since: Annotated[datetime | None, Query()] = None,
+    until: Annotated[datetime | None, Query()] = None,
     limit: Limit = DEFAULT_PAGE_SIZE,
     offset: Offset = 0,
 ) -> AuditLogListResponse:
-    """Administrator only: the journal names who did what, and that is not a moderator's."""
-    items, total = await audit.list_entries(session, limit, offset)
+    """Administrator only: the journal names who did what, and that is not a moderator's.
+
+    `action` matches by prefix, so `user.` asks for every decision about accounts without
+    naming each of them — and the names stay free to grow.
+    """
+    where = JournalFilter(actor_id=actor_id, action=action, since=since, until=until)
+    items, total = await audit.list_entries(session, where, limit, offset)
     return AuditLogListResponse(
         items=[AuditLogRead.from_entry(item) for item in items],
         total=total,

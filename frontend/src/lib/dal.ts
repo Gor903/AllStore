@@ -5,8 +5,8 @@ import { redirect } from "next/navigation";
 import { cache } from "react";
 
 import type {
-  AdminCategory,
   AccountBlockList,
+  AdminCategory,
   AuditLogList,
   Business,
   BusinessList,
@@ -14,6 +14,7 @@ import type {
   CustomerBlockList,
   InvitationList,
   ModerationProductList,
+  ModeratorRecord,
   Product,
   ProductList,
   ReportQueue,
@@ -159,9 +160,23 @@ export async function getAccountBlocks(userId: string): Promise<AccountBlockList
   return backendGet<AccountBlockList>(`/accounts/${encodeURIComponent(userId)}/blocks`);
 }
 
-export async function getAuditLogs(offset: number): Promise<AuditLogList | null> {
+export async function getAuditLogs(
+  offset: number,
+  filters: { actorId?: string; action?: string } = {},
+): Promise<AuditLogList | null> {
   const params = new URLSearchParams({ limit: String(ADMIN_PAGE_SIZE), offset: String(offset) });
+  if (filters.actorId !== undefined && filters.actorId !== "") {
+    params.set("actor_id", filters.actorId);
+  }
+  if (filters.action !== undefined && filters.action !== "") {
+    params.set("action", filters.action);
+  }
   return backendGet<AuditLogList>(`/admin/audit-logs?${params}`);
+}
+
+/** One moderator's account and what they have decided with it. */
+export async function getModeratorRecord(userId: string): Promise<ModeratorRecord | null> {
+  return backendGet<ModeratorRecord>(`/admin/moderators/${encodeURIComponent(userId)}`);
 }
 
 /** An empty query is not a search: the backend refuses it, so it is not asked. */

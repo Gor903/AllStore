@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { AdminNav } from "@/components/admin/AdminNav";
 import { InviteModerator } from "@/components/admin/InviteModerator";
@@ -49,7 +50,18 @@ export default async function ModeratorsPage({ searchParams }: PageProps<"/admin
         ) : moderators.items.length === 0 ? (
           <p className="text-ink-muted">Модераторов пока нет — пригласите первого.</p>
         ) : (
-          <AccountRows items={moderators.items} viewerId={viewer.id} />
+          <AccountRows
+            items={moderators.items}
+            viewerId={viewer.id}
+            extra={(item) => (
+              <Link
+                href={`/admin/moderators/${item.id}`}
+                className="rounded-lg border border-ink-muted/30 px-3 py-1.5 text-sm font-medium"
+              >
+                Что решил
+              </Link>
+            )}
+          />
         )}
       </section>
 

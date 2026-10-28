@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import AuditLog, User
 from app.repositories import audit
+from app.repositories.audit import JournalFilter
 
 
 async def record(
@@ -32,6 +33,9 @@ async def record(
 
 
 async def list_entries(
-    session: AsyncSession, limit: int, offset: int
+    session: AsyncSession, where: JournalFilter, limit: int, offset: int
 ) -> tuple[Sequence[AuditLog], int]:
-    return await audit.list_entries(session, limit, offset), await audit.count_entries(session)
+    return (
+        await audit.list_entries(session, where, limit, offset),
+        await audit.count_entries(session, where),
+    )
