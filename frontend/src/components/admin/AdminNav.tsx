@@ -3,10 +3,11 @@ import Link from "next/link";
 import { LogoutButton } from "@/components/auth/LogoutButton";
 
 type AdminNavProps = {
-  current: "users" | "moderators" | "categories" | "audit" | "security";
+  current: "system" | "users" | "moderators" | "categories" | "audit" | "security";
 };
 
 const TABS = [
+  { key: "system", href: "/admin/system", label: "Состояние" },
   { key: "users", href: "/admin", label: "Пользователи" },
   { key: "moderators", href: "/admin/moderators", label: "Модераторы" },
   { key: "categories", href: "/admin/categories", label: "Категории" },

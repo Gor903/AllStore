@@ -57,6 +57,9 @@ export interface paths {
          * Read Block History
          * @description Every ban this account has ever had, lifted or not. A ban that is taken back still
          *     happened, and the next moderator deciding about this person needs to know it did.
+         *
+         *     Only for accounts the caller may reach: an account they may not touch reads as one that
+         *     is not there, here as everywhere else.
          */
         get: operations["read_block_history_api_v1_accounts__user_id__blocks_get"];
         put?: never;
@@ -98,6 +101,26 @@ export interface paths {
         put?: never;
         /** Unblock Account */
         post: operations["unblock_account_api_v1_accounts__user_id__unblock_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Activity
+         * @description Registrations, logins, new products and complaints by day, aggregated on the spot.
+         */
+        get: operations["read_activity_api_v1_admin_activity_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -242,6 +265,30 @@ export interface paths {
          *     wrong one here would be read as evidence.
          */
         get: operations["read_moderator_api_v1_admin_moderators__user_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/system": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read System State
+         * @description Read at the moment it is asked for: nothing here is stored, so nothing can go stale.
+         *
+         *     Administrator only. The journal is not a moderator's and neither is this: knowing how
+         *     loaded the machine is says nothing about moderating, and says a good deal about the
+         *     platform to anybody who should not have it.
+         */
+        get: operations["read_system_state_api_v1_admin_system_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1328,6 +1375,14 @@ export interface components {
          */
         AccountSort: "registered" | "last_login" | "email";
         /**
+         * ActivityRead
+         * @description Oldest first, quiet days present and zeroed: a hole would read as a day not collected.
+         */
+        ActivityRead: {
+            /** Days */
+            days: components["schemas"]["DayOfActivityRead"][];
+        };
+        /**
          * AdminCategoryRead
          * @description Unlike the public tree this one carries the status: an administrator manages what a
          *     visitor must not see just as much as what they may.
@@ -1805,6 +1860,22 @@ export interface components {
             email: string;
             /** Reason */
             reason: string;
+        };
+        /** DayOfActivityRead */
+        DayOfActivityRead: {
+            /**
+             * Day
+             * Format: date
+             */
+            day: string;
+            /** Logins */
+            logins: number;
+            /** Products */
+            products: number;
+            /** Registrations */
+            registrations: number;
+            /** Reports */
+            reports: number;
         };
         /**
          * EmailChangeRequest
@@ -2469,6 +2540,42 @@ export interface components {
          */
         Subject: "product" | "business";
         /**
+         * SystemStateRead
+         * @description The machine and the platform, as they are at this moment. Nothing is stored.
+         */
+        SystemStateRead: {
+            /** Businesses Pending */
+            businesses_pending: number;
+            /** Cpu Percent */
+            cpu_percent: number;
+            /** Database Size Mb */
+            database_size_mb: number;
+            /** Disk Free Gb */
+            disk_free_gb: number;
+            /** Disk Percent */
+            disk_percent: number;
+            /** Disk Total Gb */
+            disk_total_gb: number;
+            /** Live Sessions */
+            live_sessions: number;
+            /** Memory Percent */
+            memory_percent: number;
+            /** Memory Total Mb */
+            memory_total_mb: number;
+            /** Memory Used Mb */
+            memory_used_mb: number;
+            /** Products */
+            products: number;
+            /** Reports Open */
+            reports_open: number;
+            /** Sellers */
+            sellers: number;
+            /** Uptime Seconds */
+            uptime_seconds: number;
+            /** Users */
+            users: number;
+        };
+        /**
          * UnblockRequest
          * @description Lifting a restriction needs no justification — the reason is offered, not demanded.
          */
@@ -2702,6 +2809,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_activity_api_v1_admin_activity_get: {
+        parameters: {
+            query?: {
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityRead"];
                 };
             };
             /** @description Validation Error */
@@ -2995,6 +3133,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_system_state_api_v1_admin_system_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemStateRead"];
                 };
             };
         };
