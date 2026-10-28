@@ -463,9 +463,11 @@ async def test_a_moderator_sees_only_the_accounts_they_can_act_on(
     assert all(item["role"] in ("buyer", "seller") for item in body["items"])
 
 
-async def test_an_administrator_sees_moderators_too(
+async def test_the_accounts_screen_is_about_the_people_the_platform_serves(
     api_client: AsyncClient, session: AsyncSession
 ) -> None:
+    """Moderators are not here, for an administrator either: they run the platform rather
+    than use it, and they are managed where that is the subject."""
     moderator = await seed_staff(session, UserRole.MODERATOR)
     admin = await seed_staff(session, UserRole.ADMIN)
     await act_as(api_client, admin)
@@ -473,9 +475,53 @@ async def test_an_administrator_sees_moderators_too(
     body = (await api_client.get(ACCOUNTS)).json()
 
     listed = {item["id"] for item in body["items"]}
+    assert str(moderator.id) not in listed
+    assert str(admin.id) not in listed
+    assert all(item["role"] in ("buyer", "seller") for item in body["items"])
+
+
+async def test_the_administrator_finds_moderators_in_their_own_panel(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    moderator = await seed_staff(session, UserRole.MODERATOR)
+    admin = await seed_staff(session, UserRole.ADMIN)
+    await act_as(api_client, admin)
+
+    body = (await api_client.get("/api/v1/admin/moderators")).json()
+
+    listed = {item["id"] for item in body["items"]}
     assert str(moderator.id) in listed
     # not themselves: nobody may act on their own account, so no row for it
     assert str(admin.id) not in listed
+
+
+async def test_the_administrator_can_still_bar_a_moderator(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    """The screen moved; the right did not. This is the invariant the split could have lost."""
+    moderator = await seed_staff(session, UserRole.MODERATOR)
+    admin = await seed_staff(session, UserRole.ADMIN)
+    await act_as(api_client, admin)
+
+    response = await api_client.post(
+        f"{ACCOUNTS}/{moderator.id}/block",
+        json={"reason": "Решения без причины"},
+        headers=csrf_headers(api_client),
+    )
+
+    assert response.status_code == 200
+    await session.refresh(moderator)
+    assert moderator.status is UserStatus.BLOCKED
+
+
+async def test_a_moderator_is_refused_the_administrators_panel(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    await act_as(api_client, await seed_staff(session, UserRole.MODERATOR))
+
+    response = await api_client.get("/api/v1/admin/moderators")
+
+    assert response.status_code == 403
 
 
 async def test_the_listing_searches_by_part_of_an_address(

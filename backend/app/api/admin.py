@@ -25,7 +25,14 @@ from app.schemas.invitation import (
     InvitationListResponse,
     InvitationRead,
 )
-from app.services import admin_categories, admin_users, audit, invitations
+from app.services import (
+    account_blocks,
+    admin_categories,
+    admin_users,
+    audit,
+    invitations,
+    permissions,
+)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -113,6 +120,31 @@ async def transfer_admin(user_id: uuid.UUID, admin: AdminUser, session: SessionD
     successor = await admin_users.transfer_admin(session, admin, user_id)
     await session.commit()
     return UserRead.model_validate(successor)
+
+
+@router.get("/moderators", response_model=UserListResponse)
+async def list_moderators(
+    admin: AdminUser,
+    session: SessionDep,
+    q: SearchQuery = None,
+    limit: Limit = DEFAULT_PAGE_SIZE,
+    offset: Offset = 0,
+) -> UserListResponse:
+    """The moderator accounts themselves, as against the invitations that created them.
+
+    They are not in `/accounts`: that list is about the people the platform serves. Barring a
+    moderator is the same action under the same rank rule, taken here because here is where
+    the administrator looks at moderators.
+    """
+    items, total = await account_blocks.list_in_scope(
+        session, admin, permissions.Scope.STAFF, q, limit, offset
+    )
+    return UserListResponse(
+        items=[UserRead.model_validate(item) for item in items],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.post(
