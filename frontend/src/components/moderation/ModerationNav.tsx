@@ -7,9 +7,17 @@ type ModerationNavProps = {
   products: number;
   businesses: number;
   reports?: number;
+  /** The administrator works both panels, so the way back has to be in this one too. */
+  isAdmin?: boolean;
 };
 
-export function ModerationNav({ current, products, businesses, reports = 0 }: ModerationNavProps) {
+export function ModerationNav({
+  current,
+  products,
+  businesses,
+  reports = 0,
+  isAdmin = false,
+}: ModerationNavProps) {
   const style = (active: boolean): string =>
     active
       ? "rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-white"
@@ -34,6 +42,11 @@ export function ModerationNav({ current, products, businesses, reports = 0 }: Mo
         <Link href="/moderation/catalog" className={style(current === "catalog")}>
           Поиск по каталогу
         </Link>
+        {isAdmin ? (
+          <Link href="/admin" className={style(false)}>
+            Админка
+          </Link>
+        ) : null}
       </nav>
       <div className="ml-auto">
         <LogoutButton />

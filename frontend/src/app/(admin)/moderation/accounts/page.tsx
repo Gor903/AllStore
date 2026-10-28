@@ -35,6 +35,7 @@ export default async function ModerationAccountsPage({
     <main className="mx-auto flex max-w-5xl flex-col gap-6 px-6 py-10">
       <ModerationNav
         current="accounts"
+        isAdmin={viewer.role === "admin"}
         products={queue?.total ?? 0}
         businesses={businesses?.total ?? 0}
       />

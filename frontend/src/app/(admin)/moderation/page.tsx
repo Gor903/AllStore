@@ -33,7 +33,7 @@ const VERDICTS: Verdict[] = [
 // nothing the seller had.
 
 export default async function ModerationProductsPage({ searchParams }: PageProps<"/moderation">) {
-  await requireRole("moderator", "admin");
+  const viewer = await requireRole("moderator", "admin");
   const { offset } = parseCatalogQuery(toSearchParams(await searchParams));
   const [queue, businesses] = await Promise.all([
     getModerationProducts(offset),
@@ -44,6 +44,7 @@ export default async function ModerationProductsPage({ searchParams }: PageProps
     <main className="mx-auto flex max-w-5xl flex-col gap-6 px-6 py-10">
       <ModerationNav
         current="products"
+        isAdmin={viewer.role === "admin"}
         products={queue?.total ?? 0}
         businesses={businesses?.total ?? 0}
       />

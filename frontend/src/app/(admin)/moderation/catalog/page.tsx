@@ -43,7 +43,7 @@ function verdictsFor(publication: string): Verdict[] | null {
 export default async function ModerationCatalogPage({
   searchParams,
 }: PageProps<"/moderation/catalog">) {
-  await requireRole("moderator", "admin");
+  const viewer = await requireRole("moderator", "admin");
   const { q, offset } = parseCatalogQuery(toSearchParams(await searchParams));
   const query = q ?? "";
   const [found, queue, businesses] = await Promise.all([
@@ -56,6 +56,7 @@ export default async function ModerationCatalogPage({
     <main className="mx-auto flex max-w-5xl flex-col gap-6 px-6 py-10">
       <ModerationNav
         current="catalog"
+        isAdmin={viewer.role === "admin"}
         products={queue?.total ?? 0}
         businesses={businesses?.total ?? 0}
       />

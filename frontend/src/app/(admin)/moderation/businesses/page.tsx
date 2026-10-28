@@ -45,7 +45,7 @@ const DECISION: Record<string, string> = {
 export default async function ModerationBusinessesPage({
   searchParams,
 }: PageProps<"/moderation/businesses">) {
-  await requireRole("moderator", "admin");
+  const viewer = await requireRole("moderator", "admin");
   const { offset } = parseCatalogQuery(toSearchParams(await searchParams));
   const [businesses, queue] = await Promise.all([
     getModerationBusinesses(offset),
@@ -56,6 +56,7 @@ export default async function ModerationBusinessesPage({
     <main className="mx-auto flex max-w-5xl flex-col gap-6 px-6 py-10">
       <ModerationNav
         current="businesses"
+        isAdmin={viewer.role === "admin"}
         products={queue?.total ?? 0}
         businesses={businesses?.total ?? 0}
       />

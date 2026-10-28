@@ -48,7 +48,7 @@ function basePathOf(subject: ReportedSubject): string {
 }
 
 export default async function ReportsPage({ searchParams }: PageProps<"/moderation/reports">) {
-  await requireRole("moderator", "admin");
+  const viewer = await requireRole("moderator", "admin");
   const { offset } = parseCatalogQuery(toSearchParams(await searchParams));
   const [queue, products, businesses] = await Promise.all([
     getReportQueue(offset),
@@ -60,6 +60,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/moderati
     <main className="mx-auto flex max-w-5xl flex-col gap-6 px-6 py-10">
       <ModerationNav
         current="reports"
+        isAdmin={viewer.role === "admin"}
         products={products?.total ?? 0}
         businesses={businesses?.total ?? 0}
         reports={queue?.total ?? 0}
