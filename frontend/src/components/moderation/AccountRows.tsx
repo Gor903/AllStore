@@ -41,7 +41,7 @@ const UNBLOCK: Verdict[] = [
  *
  * The rows are identical because the action is: barring somebody is one decision in the
  * access matrix, and who may take it against whom is settled by the backend's ranks. The
- * panels differ in what else they may do — roles and invitations are the administrator's —
+ * panels differ in what else they may do — roles and appointments are the administrator's —
  * not in how a ban looks.
  */
 export function AccountRows({ items, viewerId, extra }: AccountRowsProps) {

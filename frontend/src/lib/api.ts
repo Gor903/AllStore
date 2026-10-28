@@ -33,10 +33,6 @@ export type ModeratorRecord = components["schemas"]["ModeratorRecordRead"];
 export type SystemState = components["schemas"]["SystemStateRead"];
 export type Activity = components["schemas"]["ActivityRead"];
 export type IncidentList = components["schemas"]["IncidentListResponse"];
-export type Invitation = components["schemas"]["InvitationRead"];
-export type InvitationList = components["schemas"]["InvitationListResponse"];
-// the secret travels exactly once, in the answer to the request that created it
-export type InvitationCreated = components["schemas"]["InvitationCreated"];
 export type AccountBlockList = components["schemas"]["AccountBlockListResponse"];
 export type CustomerBlock = components["schemas"]["CustomerBlockRead"];
 export type CustomerBlockList = components["schemas"]["CustomerBlockListResponse"];

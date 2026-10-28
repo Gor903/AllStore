@@ -4,7 +4,6 @@ import pytest
 
 from app.core.config import get_settings
 from app.services.notifications import (
-    send_moderator_invitation_email,
     send_password_reset_email,
 )
 
@@ -32,28 +31,3 @@ async def test_outside_local_the_token_is_not_logged(
 
     assert "reset-token-value" not in caplog.text
     assert "no email provider is configured" in caplog.text
-
-
-async def test_an_invitation_link_is_logged_locally(caplog: pytest.LogCaptureFixture) -> None:
-    """Without the link in the log a local invitation cannot be accepted."""
-    with caplog.at_level(logging.INFO):
-        await send_moderator_invitation_email("invited@example.com", "invitation-token-value")
-
-    assert "invitation-token-value" in caplog.text
-
-
-async def test_outside_local_the_invitation_link_is_not_logged(
-    caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """An invitation is a credential, and a log line is not where credentials go."""
-    monkeypatch.setenv("APP_ENV", "production")
-    get_settings.cache_clear()
-
-    try:
-        with caplog.at_level(logging.INFO):
-            await send_moderator_invitation_email("invited@example.com", "invitation-token-value")
-    finally:
-        get_settings.cache_clear()
-
-    assert "invitation-token-value" not in caplog.text
-    assert "deliver the link by hand" in caplog.text

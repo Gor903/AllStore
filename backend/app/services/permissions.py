@@ -58,8 +58,15 @@ def may_change_role(actor: UserRole, target: UserRole) -> bool:
     return actor is UserRole.ADMIN and outranks(actor, target)
 
 
-def may_invite_moderator(actor: UserRole) -> bool:
+def may_appoint_moderator(actor: UserRole) -> bool:
+    """Appointing is the administrator's alone: a moderator who could appoint moderators
+    would be an administrator under another name."""
     return actor is UserRole.ADMIN
+
+
+def ensure_may_appoint_moderator(actor: User) -> None:
+    if not may_appoint_moderator(actor.role):
+        raise NotAllowedError("Модераторов назначает администратор")
 
 
 def may_read_audit_log(actor: UserRole) -> bool:

@@ -127,7 +127,7 @@ MATRIX = [
     probe("разблокировать аккаунт", "POST", f"/api/v1/accounts/{ANY_ID}/unblock", *STAFF),
     probe("история блокировок", "GET", f"/api/v1/accounts/{ANY_ID}/blocks", *STAFF),
     probe("чужие локальные блокировки", "GET", f"/api/v1/accounts/{ANY_ID}/store-blocks", *STAFF),
-    # Администрирование: роли, приглашения, настройки, журнал
+    # Администрирование: роли, модераторы, настройки, журнал
     probe("список всех аккаунтов", "GET", "/api/v1/admin/users", "admin"),
     probe(
         "сменить роль",
@@ -142,19 +142,20 @@ MATRIX = [
         f"/api/v1/admin/users/{ANY_ID}/transfer-admin",
         "admin",
     ),
-    probe("приглашения модераторов", "GET", "/api/v1/admin/moderator-invitations", "admin"),
+    probe("список модераторов", "GET", "/api/v1/admin/moderators", "admin"),
     probe(
-        "выдать приглашение",
+        "завести модератора",
         "POST",
-        "/api/v1/admin/moderator-invitations",
+        "/api/v1/admin/moderators",
         "admin",
-        body={"email": "invited@example.com"},
+        body={"email": "appointed@example.com", "password": "handed-over-password-1"},
     ),
     probe(
-        "отозвать приглашение",
+        "заменить пароль модератору",
         "POST",
-        f"/api/v1/admin/moderator-invitations/{ANY_ID}/revoke",
+        f"/api/v1/admin/moderators/{ANY_ID}/password",
         "admin",
+        body={"password": "handed-over-password-2"},
     ),
     probe("журнал аудита", "GET", "/api/v1/admin/audit-logs", "admin"),
     probe("категории в админке", "GET", "/api/v1/admin/categories", "admin"),

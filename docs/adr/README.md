@@ -24,3 +24,4 @@
 | 13 | [Семантический поиск](0013-semantic-search.md) | 16 | accepted |
 | 15 | [Иерархия ролей и модерация](0015-roles-and-moderation.md) | 18 | accepted |
 | 16 | [Админка: жизненный цикл, видимость, состояние](0016-admin-panel-and-visibility.md) | 19 | accepted |
+| 17 | [Модератора заводит администратор, приглашений нет](0017-moderators-appointed-directly.md) | 19 | accepted |
