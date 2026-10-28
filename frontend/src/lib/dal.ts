@@ -26,6 +26,7 @@ import type {
 } from "@/lib/api";
 import { accountApiParams, type AccountQuery } from "@/lib/account-query";
 import { API_PREFIX, env } from "@/lib/env";
+import { homeFor } from "@/lib/home";
 
 // the cabinet shows the whole shelf at once; pagination arrives when a shop outgrows it
 const SELLER_PAGE_SIZE = 100;
@@ -68,7 +69,9 @@ export async function requireUser(): Promise<User> {
 export async function requireRole(...roles: User["role"][]): Promise<User> {
   const user = await requireUser();
   if (!roles.includes(user.role)) {
-    redirect("/dashboard");
+    // home, not the cabinet: a moderator who wandered into /admin belongs in the queue, and
+    // sending them somewhere they have nothing to do reads as the site losing its place
+    redirect(homeFor(user.role));
   }
   return user;
 }

@@ -7,8 +7,20 @@ import { Field } from "@/components/auth/Field";
 import { apiPost } from "@/lib/browser-api";
 import type { FormError } from "@/lib/errors";
 import type { User } from "@/lib/api";
+import { homeFor } from "@/lib/home";
 
-export function LoginForm({ next }: { next: string }) {
+/**
+ * An account owing a password change goes to that screen and nowhere else: every other
+ * route would bounce it here anyway, and the bounce reads as a page that failed to load.
+ */
+function destinationFor(user: User, next: string | null): string {
+  if (user.must_change_password) {
+    return "/password";
+  }
+  return next ?? homeFor(user.role);
+}
+
+export function LoginForm({ next }: { next: string | null }) {
   const router = useRouter();
   const [error, setError] = useState<FormError | null>(null);
   const [pending, setPending] = useState(false);
@@ -27,7 +39,9 @@ export function LoginForm({ next }: { next: string }) {
       setError(result.error);
       return;
     }
-    router.push(next);
+    // where they were going wins over where their role lives: being bounced to the login
+    // screen and then somewhere else entirely is the thing `next` exists to prevent
+    router.push(destinationFor(result.data, next));
     // the session lives in httpOnly cookies, so server components must re-read it
     router.refresh();
   }

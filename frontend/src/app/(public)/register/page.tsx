@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 
 import { RegisterForm } from "@/components/auth/RegisterForm";
 import { getCurrentUser } from "@/lib/dal";
+import { homeFor } from "@/lib/home";
 
 export const metadata: Metadata = {
   title: "Регистрация",
@@ -11,8 +12,9 @@ export const metadata: Metadata = {
 };
 
 export default async function RegisterPage() {
-  if ((await getCurrentUser()) !== null) {
-    redirect("/dashboard");
+  const signedIn = await getCurrentUser();
+  if (signedIn !== null) {
+    redirect(homeFor(signedIn.role));
   }
 
   return (

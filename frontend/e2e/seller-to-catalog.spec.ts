@@ -145,9 +145,8 @@ test("продавец регистрируется, заводит магази
     await expect(page).toHaveURL(/\/login/);
     await signIn(page, MODERATOR.email, moderatorPassword);
 
-    // every role lands in the same cabinet; the queue is one link away from it
-    await expect(page).toHaveURL(/\/dashboard$/);
-    await page.getByRole("link", { name: "Очередь модерации" }).click();
+    // straight into the queue: a moderator has nothing of their own in the cabinet, and the
+    // login form knows the role by the time it decides where to go
     await expect(page).toHaveURL(/\/moderation$/);
   });
 
@@ -184,8 +183,8 @@ test("продавец регистрируется, заводит магази
   // Этап 18: the listing a buyer is looking at survives its own seller editing it. Before
   // revisions this half of the scenario took the product out of the catalogue on the spot.
   await test.step("продавец правит одобренный товар", async () => {
-    // the moderator is still signed in, and /login sends a signed-in visitor to the cabinet
-    await page.goto("/dashboard");
+    // the moderator is still signed in; their way out is from the queue they landed in
+    await page.goto("/moderation");
     await page.getByRole("button", { name: "Выйти" }).click();
     await expect(page).toHaveURL(/\/login/);
     await page.getByLabel("Email", { exact: true }).fill(seller.email);
@@ -215,7 +214,7 @@ test("продавец регистрируется, заводит магази
     // the one they chose earlier: the handed-over password stopped working when they did
     await signIn(page, MODERATOR.email, moderatorPassword);
     // the form navigates on its own; going somewhere else before it lands races with it
-    await expect(page).toHaveURL(/\/dashboard$/);
+    await expect(page).toHaveURL(/\/moderation$/);
 
     const queued = await queueRow(page, "/moderation", editedName);
     await expect(queued.getByText(/правка уже опубликованного товара/)).toBeVisible();

@@ -89,6 +89,57 @@ describe("LoginForm", () => {
     expect(refresh).toHaveBeenCalled();
   });
 
+  it.each([
+    ["admin", "/admin"],
+    ["moderator", "/moderation"],
+    ["seller", "/dashboard"],
+    ["buyer", "/dashboard"],
+  ])("без заданной цели %s попадает в %s", async (role, home) => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => mockResponse(200, { id: "1", email: "someone@example.com", role })),
+    );
+    render(<LoginForm next={null} />);
+
+    await submit("someone@example.com", "some-password-1");
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith(home));
+  });
+
+  it("куда шли, важнее того, где живёт роль", async () => {
+    // being bounced to the login screen and then somewhere else entirely is the thing
+    // `next` exists to prevent
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => mockResponse(200, { id: "1", email: "admin@example.com", role: "admin" })),
+    );
+    render(<LoginForm next="/moderation/reports" />);
+
+    await submit("admin@example.com", "admin-password-1");
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/moderation/reports"));
+  });
+
+  it("временный пароль ведёт на экран смены, а не домой", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        mockResponse(200, {
+          id: "1",
+          email: "admin@example.com",
+          role: "admin",
+          must_change_password: true,
+        }),
+      ),
+    );
+    render(<LoginForm next="/admin/system" />);
+
+    await submit("admin@example.com", "handed-over-1");
+
+    // every other route would bounce them there anyway, and the bounce reads as a failure
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/password"));
+  });
+
   it("sends the session cookie and the CSRF header", async () => {
     const fetchMock = vi.fn<(url: string, init: RequestInit) => Promise<Response>>(async () =>
       mockResponse(200, { id: "1" }),
