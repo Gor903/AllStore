@@ -69,6 +69,7 @@ class UserRead(BaseModel):
     phone: str | None
     role: UserRole
     status: UserStatus
+    last_login_at: datetime | None
     # the client needs this to send the owner to the right screen, not to decide anything:
     # the refusal itself comes from the server on every other route
     must_change_password: bool
