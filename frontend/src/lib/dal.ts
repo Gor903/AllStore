@@ -123,7 +123,7 @@ export async function getAdminUsers(query: string, offset: number): Promise<User
   return backendGet<UserList>(`/admin/users?${params}`);
 }
 
-/** The accounts the signed-in moderator or administrator may actually act on. */
+/** The people the platform serves: buyers and sellers, for a moderator and an administrator alike. */
 export async function getReachableAccounts(
   query: string,
   offset: number,
@@ -133,6 +133,15 @@ export async function getReachableAccounts(
     params.set("q", query);
   }
   return backendGet<UserList>(`/accounts?${params}`);
+}
+
+/** The moderator accounts themselves — the administrator's panel, not the accounts screen. */
+export async function getModerators(query: string, offset: number): Promise<UserList | null> {
+  const params = new URLSearchParams({ limit: String(ADMIN_PAGE_SIZE), offset: String(offset) });
+  if (query !== "") {
+    params.set("q", query);
+  }
+  return backendGet<UserList>(`/admin/moderators?${params}`);
 }
 
 export async function getAdminCategories(): Promise<AdminCategory[] | null> {

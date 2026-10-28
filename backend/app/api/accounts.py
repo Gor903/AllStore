@@ -22,7 +22,7 @@ from app.schemas.account import (
 )
 from app.schemas.admin import UserListResponse
 from app.schemas.auth import UserRead
-from app.services import account_blocks
+from app.services import account_blocks, permissions
 
 router = APIRouter(prefix="/accounts", tags=["accounts"])
 
@@ -44,13 +44,16 @@ async def list_accounts(
     limit: Limit = DEFAULT_PAGE_SIZE,
     offset: Offset = 0,
 ) -> UserListResponse:
-    """Only the accounts the caller outranks.
+    """The people the platform serves: buyers and sellers, for a moderator and an administrator
+    alike.
 
-    A moderator's list holds buyers and sellers, an administrator's holds moderators too.
-    The screen then offers exactly the rows whose buttons will work, rather than rows that
-    answer 403 when pressed.
+    Moderators are not here. They are not accounts the platform serves but accounts that run
+    it, and the administrator reaches them in `/admin/moderators`. Barring one is still the
+    same action with the same rank rule — only the screen it is taken on is different.
     """
-    items, total = await account_blocks.list_reachable(session, actor, q, limit, offset)
+    items, total = await account_blocks.list_in_scope(
+        session, actor, permissions.Scope.ACCOUNTS, q, limit, offset
+    )
     return UserListResponse(
         items=[UserRead.model_validate(item) for item in items],
         total=total,

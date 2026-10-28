@@ -10,6 +10,8 @@ all fall out of it without a special case, which is why the rule is a rank and n
 exceptions.
 """
 
+import enum
+
 from app.core.errors import PermissionDeniedError
 from app.models import User, UserRole
 
@@ -51,10 +53,35 @@ def may_read_audit_log(actor: UserRole) -> bool:
     return actor is UserRole.ADMIN
 
 
+class Scope(enum.StrEnum):
+    """Which screen is asking. Not a right — a subject."""
+
+    # the people who use the platform
+    ACCOUNTS = "accounts"
+    # the people who run it
+    STAFF = "staff"
+
+
 def reachable_roles(actor: UserRole) -> list[UserRole]:
-    """The roles this actor may act on. What a staff listing is allowed to contain, derived
-    from the same ranks the individual checks use rather than listed a second time."""
+    """Every role this actor may act on, whatever screen they are on.
+
+    This answers "may I", not "show me". The two were one function once, and merging them
+    meant the administrator's list of ordinary accounts had moderators in it — the right
+    answer to the wrong question.
+    """
     return [role for role in UserRole if outranks(actor, role)]
+
+
+def listable_roles(actor: UserRole, scope: Scope) -> list[UserRole]:
+    """What one screen shows, which is narrower than what the actor may do.
+
+    An administrator may bar a moderator, and does it in the panel that is about moderators.
+    Mixing them into the list of buyers and sellers would make that list mean two things, and
+    the one place that is about people who run the platform would not be the only one.
+    """
+    if scope is Scope.STAFF:
+        return [UserRole.MODERATOR] if actor is UserRole.ADMIN else []
+    return [role for role in (UserRole.BUYER, UserRole.SELLER) if outranks(actor, role)]
 
 
 def ensure_may_block(actor: User, target: User) -> None:

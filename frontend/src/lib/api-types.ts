@@ -13,11 +13,12 @@ export interface paths {
         };
         /**
          * List Accounts
-         * @description Only the accounts the caller outranks.
+         * @description The people the platform serves: buyers and sellers, for a moderator and an administrator
+         *     alike.
          *
-         *     A moderator's list holds buyers and sellers, an administrator's holds moderators too.
-         *     The screen then offers exactly the rows whose buttons will work, rather than rows that
-         *     answer 403 when pressed.
+         *     Moderators are not here. They are not accounts the platform serves but accounts that run
+         *     it, and the administrator reaches them in `/admin/moderators`. Barring one is still the
+         *     same action with the same rank rule — only the screen it is taken on is different.
          */
         get: operations["list_accounts_api_v1_accounts_get"];
         put?: never;
@@ -193,6 +194,30 @@ export interface paths {
         put?: never;
         /** Revoke Moderator Invitation */
         post: operations["revoke_moderator_invitation_api_v1_admin_moderator_invitations__invitation_id__revoke_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/moderators": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Moderators
+         * @description The moderator accounts themselves, as against the invitations that created them.
+         *
+         *     They are not in `/accounts`: that list is about the people the platform serves. Barring a
+         *     moderator is the same action under the same rank rule, taken here because here is where
+         *     the administrator looks at moderators.
+         */
+        get: operations["list_moderators_api_v1_admin_moderators_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2850,6 +2875,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InvitationRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_moderators_api_v1_admin_moderators_get: {
+        parameters: {
+            query?: {
+                q?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserListResponse"];
                 };
             };
             /** @description Validation Error */

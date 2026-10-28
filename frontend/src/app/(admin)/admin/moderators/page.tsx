@@ -2,10 +2,11 @@ import type { Metadata } from "next";
 
 import { AdminNav } from "@/components/admin/AdminNav";
 import { InviteModerator } from "@/components/admin/InviteModerator";
+import { AccountRows } from "@/components/moderation/AccountRows";
 import { Pagination } from "@/components/catalog/Pagination";
 import { VerdictButtons, type Verdict } from "@/components/moderation/VerdictButtons";
 import { parseCatalogQuery, toSearchParams } from "@/lib/catalog-query";
-import { ADMIN_PAGE_SIZE, getModeratorInvitations, requireRole } from "@/lib/dal";
+import { ADMIN_PAGE_SIZE, getModeratorInvitations, getModerators, requireRole } from "@/lib/dal";
 
 export const dynamic = "force-dynamic";
 
@@ -24,9 +25,12 @@ const STATUS: Record<string, string> = {
 const REVOKE: Verdict[] = [{ label: "Отозвать", action: "revoke", danger: true }];
 
 export default async function ModeratorsPage({ searchParams }: PageProps<"/admin/moderators">) {
-  await requireRole("admin");
+  const viewer = await requireRole("admin");
   const { offset } = parseCatalogQuery(toSearchParams(await searchParams));
-  const page = await getModeratorInvitations(offset);
+  const [page, moderators] = await Promise.all([
+    getModeratorInvitations(offset),
+    getModerators("", 0),
+  ]);
 
   return (
     <main className="mx-auto flex max-w-4xl flex-col gap-6 px-6 py-10">
@@ -37,6 +41,19 @@ export default async function ModeratorsPage({ searchParams }: PageProps<"/admin
         адреса, на который выписана.
       </p>
 
+      <section className="flex flex-col gap-3">
+        <h2 className="font-medium">Действующие модераторы</h2>
+        {/* not on the accounts screen: that one is about the people the platform serves */}
+        {moderators === null ? (
+          <p className="text-danger">Список сейчас недоступен, попробуйте обновить страницу.</p>
+        ) : moderators.items.length === 0 ? (
+          <p className="text-ink-muted">Модераторов пока нет — пригласите первого.</p>
+        ) : (
+          <AccountRows items={moderators.items} viewerId={viewer.id} />
+        )}
+      </section>
+
+      <h2 className="font-medium">Приглашения</h2>
       <InviteModerator />
 
       {page === null ? (

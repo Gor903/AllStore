@@ -83,16 +83,21 @@ async def history(
     return await blocks_repo.history(session, user_id, limit, offset)
 
 
-async def list_reachable(
-    session: AsyncSession, actor: User, query: str | None, limit: int, offset: int
+async def list_in_scope(
+    session: AsyncSession,
+    actor: User,
+    scope: permissions.Scope,
+    query: str | None,
+    limit: int,
+    offset: int,
 ) -> tuple[Sequence[User], int]:
-    """The accounts this actor may actually do something about.
+    """One screen's worth of accounts: who it is about, narrowed to who this actor may touch.
 
-    A moderator's list holds buyers and sellers, an administrator's holds moderators too.
-    Filtered from the same ranks the individual checks use, so the screen offers exactly the
-    rows whose buttons will work rather than rows that answer 403 when pressed.
+    The accounts screen holds buyers and sellers — for a moderator and for an administrator
+    alike. Moderators are not people the platform serves but people who run it, and they live
+    in the panel that is about running it.
     """
-    where = AccountFilter(query=query, roles=permissions.reachable_roles(actor.role))
+    where = AccountFilter(query=query, roles=permissions.listable_roles(actor.role, scope))
     return (
         await users_repo.search(session, where, limit, offset),
         await users_repo.count_matching(session, where),
