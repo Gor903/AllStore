@@ -30,7 +30,7 @@ cd frontend && E2E_BASE_URL=http://localhost:8080 npx playwright test
 В роль `moderator` нельзя зарегистрироваться — её выдаёт скрипт:
 
 ```bash
-docker compose exec backend python -m scripts.grant_role e2e-moderator@e2e.allstore.am e2e-password-1 moderator
+docker compose exec backend python -m scripts.grant_role e2e-moderator@e2e.allstore.am e2e-password-1 moderator --reset-password
 ```
 
 Повторный запуск ничего не ломает. Адрес и пароль переопределяются переменными

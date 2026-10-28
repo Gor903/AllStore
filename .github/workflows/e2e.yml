@@ -42,7 +42,7 @@ jobs:
       - name: Moderator account
         run: >-
           docker compose exec -T backend python -m scripts.grant_role
-          "$E2E_MODERATOR_EMAIL" "$E2E_MODERATOR_PASSWORD" moderator
+          "$E2E_MODERATOR_EMAIL" "$E2E_MODERATOR_PASSWORD" moderator --reset-password
 
       - name: Scenario
         working-directory: frontend
