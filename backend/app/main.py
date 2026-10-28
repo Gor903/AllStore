@@ -19,12 +19,13 @@ from app.api.reports import router as reports_router
 from app.api.storefront import router as storefront_router
 from app.api.stores import router as stores_router
 from app.api.users import router as users_router
-from app.core.config import get_settings
+from app.core.config import Settings, get_settings
 from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging, get_logger
 from app.core.storage import ensure_bucket
-from app.db.session import dispose_engine
+from app.db.session import dispose_engine, get_sessionmaker
 from app.deps.rate_limit import build_invitation_limiter
+from app.services import admin_bootstrap
 
 logger = get_logger(__name__)
 
@@ -33,9 +34,19 @@ logger = get_logger(__name__)
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     await ensure_bucket(settings)
+    await _ensure_administrator(settings)
     logger.info("backend started in %s mode", settings.app_env)
     yield
     await dispose_engine()
+
+
+async def _ensure_administrator(settings: Settings) -> None:
+    """A platform that comes up without anybody who may appoint anybody is a platform nobody
+    can administer. Idempotent, so it belongs in the start-up path rather than in a runbook."""
+    async with get_sessionmaker()() as session:
+        outcome = await admin_bootstrap.bootstrap_on_startup(session, settings)
+    if outcome is not None:
+        logger.info("%s", outcome)
 
 
 def create_app() -> FastAPI:
