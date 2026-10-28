@@ -1,0 +1,150 @@
+"""A password somebody else chose gets the owner in once, and no further.
+
+The case this exists for is the administrator created from `ADMIN_PASSWORD`: that password is
+known to everyone who can read the deploy variables, so an account still carrying it is not
+yet anybody's. The refusal is on the server, on every route, rather than in a screen the
+client could skip.
+"""
+
+import pytest
+from httpx import AsyncClient
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.security import verify_password
+from app.models import RefreshToken, User
+from tests.integration.conftest import csrf_headers, login, register_buyer
+
+pytestmark = pytest.mark.integration
+
+EMAIL = "buyer@example.com"
+PASSWORD = "buyer-password-1"
+CHOSEN = "a-password-of-my-own-1"
+
+CHANGE_URL = "/api/v1/auth/password"
+
+
+async def owing_a_change(client: AsyncClient, session: AsyncSession) -> User:
+    """A registered account that has been handed its password rather than choosing it."""
+    await register_buyer(client)
+    user = (await session.execute(select(User).where(User.email == EMAIL))).scalars().one()
+    user.must_change_password = True
+    await session.flush()
+    return user
+
+
+async def test_an_owed_password_blocks_the_rest_of_the_site(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    await owing_a_change(api_client, session)
+
+    response = await api_client.get("/api/v1/users/me/business")
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "password_change_required"
+
+
+async def test_the_owner_can_still_ask_who_they_are(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    """Otherwise the client has no way to learn why everything else is refusing it."""
+    await owing_a_change(api_client, session)
+
+    response = await api_client.get("/api/v1/users/me")
+
+    assert response.status_code == 200
+    assert response.json()["must_change_password"] is True
+
+
+async def test_the_owner_can_still_leave(api_client: AsyncClient, session: AsyncSession) -> None:
+    await owing_a_change(api_client, session)
+
+    response = await api_client.post(
+        "/api/v1/auth/logout", headers=csrf_headers(api_client), json={}
+    )
+
+    assert response.status_code == 204
+
+
+async def test_choosing_a_password_opens_the_site(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    user = await owing_a_change(api_client, session)
+
+    change = await api_client.post(
+        CHANGE_URL,
+        json={"current_password": PASSWORD, "password": CHOSEN},
+        headers=csrf_headers(api_client),
+    )
+
+    assert change.status_code == 200
+    await session.refresh(user)
+    assert user.must_change_password is False
+    assert verify_password(CHOSEN, user.password_hash)
+
+
+async def test_the_old_password_has_to_be_known(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    """A session left open on somebody else's screen must not be enough to take the account."""
+    user = await owing_a_change(api_client, session)
+
+    response = await api_client.post(
+        CHANGE_URL,
+        json={"current_password": "not-the-one-1", "password": CHOSEN},
+        headers=csrf_headers(api_client),
+    )
+
+    assert response.status_code == 401
+    await session.refresh(user)
+    assert user.must_change_password is True
+
+
+async def test_the_change_ends_every_session(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    user = await owing_a_change(api_client, session)
+
+    await api_client.post(
+        CHANGE_URL,
+        json={"current_password": PASSWORD, "password": CHOSEN},
+        headers=csrf_headers(api_client),
+    )
+
+    live = await session.execute(
+        select(RefreshToken).where(
+            RefreshToken.user_id == user.id, RefreshToken.revoked_at.is_(None)
+        )
+    )
+    assert live.scalars().all() == []
+
+
+async def test_an_account_owing_nothing_is_not_asked_for_anything(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    """The gate must be invisible to everybody it is not for.
+
+    Checked by the code rather than the status: this route is a seller's, so a buyer is
+    refused either way, and only the reason tells the two refusals apart.
+    """
+    await register_buyer(api_client)
+
+    response = await api_client.get("/api/v1/users/me/business")
+
+    assert response.json()["error"]["code"] != "password_change_required"
+
+
+async def test_a_change_without_the_flag_is_an_ordinary_thing_to_do(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    await register_buyer(api_client)
+
+    change = await api_client.post(
+        CHANGE_URL,
+        json={"current_password": PASSWORD, "password": CHOSEN},
+        headers=csrf_headers(api_client),
+    )
+
+    assert change.status_code == 200
+    api_client.cookies.clear()
+    assert (await login(api_client, EMAIL, CHOSEN)).status_code == 200

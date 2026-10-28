@@ -7,7 +7,12 @@ from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
-from app.core.errors import AppError, AuthenticationError, PermissionDeniedError
+from app.core.errors import (
+    AppError,
+    AuthenticationError,
+    PasswordChangeRequiredError,
+    PermissionDeniedError,
+)
 from app.core.tokens import InvalidAccessToken, decode_access_token
 from app.db.session import get_session
 from app.deps.settings import settings_dep
@@ -16,6 +21,11 @@ from app.services import auth as auth_service
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 SettingsDep = Annotated[Settings, Depends(settings_dep)]
+
+
+# What an account owing a password change may still reach: the change itself, the way out,
+# and the question "who am I" the client asks to find out it owes one.
+ALLOWED_WHILE_PASSWORD_IS_OWED = ("/auth/password", "/auth/logout", "/users/me")
 
 
 async def get_current_user(request: Request, settings: SettingsDep, session: SessionDep) -> User:
@@ -27,7 +37,23 @@ async def get_current_user(request: Request, settings: SettingsDep, session: Ses
     except InvalidAccessToken as exc:
         raise AuthenticationError("Сессия недействительна, войдите заново") from exc
     # the status is re-read on every request: blocking an account must take effect at once
-    return await auth_service.get_active_user(session, payload.user_id)
+    user = await auth_service.get_active_user(session, payload.user_id)
+    _ensure_password_is_their_own(request, user)
+    return user
+
+
+def _ensure_password_is_their_own(request: Request, user: User) -> None:
+    """Checked here because here is the one place every authorized route passes through.
+
+    A list of routes to protect would go stale the first time somebody added one; a list of
+    routes to let through is short, and forgetting to extend it locks a door rather than
+    leaving one open.
+    """
+    if not user.must_change_password:
+        return
+    if request.url.path.endswith(ALLOWED_WHILE_PASSWORD_IS_OWED):
+        return
+    raise PasswordChangeRequiredError("Сначала задайте свой пароль")
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
