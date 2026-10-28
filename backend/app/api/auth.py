@@ -2,12 +2,13 @@ from fastapi import APIRouter, Depends, Request, Response, status
 
 from app.core.cookies import clear_auth_cookies, set_auth_cookies
 from app.core.errors import AuthenticationError
-from app.deps.auth import SessionDep, SettingsDep, require_csrf
+from app.deps.auth import CurrentUser, SessionDep, SettingsDep, require_csrf
 from app.deps.rate_limit import limit_invitation_attempts
 from app.schemas.auth import (
     BuyerRegisterRequest,
     LoginRequest,
     MessageResponse,
+    PasswordChangeRequest,
     PasswordResetConfirmRequest,
     PasswordResetRequest,
     SellerRegisterRequest,
@@ -135,6 +136,26 @@ async def logout(
         await auth_service.revoke_refresh_token(session, raw_refresh)
         await session.commit()
     clear_auth_cookies(response, settings)
+
+
+@router.post("/password", response_model=MessageResponse, dependencies=[Depends(require_csrf)])
+async def change_password(
+    payload: PasswordChangeRequest,
+    user: CurrentUser,
+    response: Response,
+    settings: SettingsDep,
+    session: SessionDep,
+) -> MessageResponse:
+    await auth_service.change_password(
+        session,
+        user,
+        payload.current_password.get_secret_value(),
+        payload.password.get_secret_value(),
+    )
+    await session.commit()
+    # every session ended with the change, so the cookies in hand are stale
+    clear_auth_cookies(response, settings)
+    return MessageResponse(message="Пароль изменён, войдите заново")
 
 
 @router.post(

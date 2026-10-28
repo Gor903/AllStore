@@ -52,6 +52,11 @@ export async function requireUser(): Promise<User> {
   if (user === null) {
     redirect("/login");
   }
+  // the server refuses every other route anyway; this is so the owner sees a screen with a
+  // form on it rather than a page that failed to load
+  if (user.must_change_password) {
+    redirect("/password");
+  }
   return user;
 }
 

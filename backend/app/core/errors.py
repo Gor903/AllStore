@@ -38,6 +38,16 @@ class PermissionDeniedError(AppError):
     status_code = status.HTTP_403_FORBIDDEN
 
 
+class PasswordChangeRequiredError(PermissionDeniedError):
+    """Signed in, allowed in principle, and not going any further until the password is theirs.
+
+    A distinct code rather than a bare 403: the client has something to do about this one, and
+    the thing to do is a screen, not a plea to an administrator.
+    """
+
+    code = "password_change_required"
+
+
 class ConflictError(AppError):
     code = "conflict"
     status_code = status.HTTP_409_CONFLICT

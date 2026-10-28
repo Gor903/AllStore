@@ -47,6 +47,14 @@ class PasswordResetConfirmRequest(BaseModel):
     password: Password
 
 
+class PasswordChangeRequest(BaseModel):
+    """The current password is asked for even when the account owes a change: a session left
+    open on somebody else's screen must not be enough to take the account over."""
+
+    current_password: SecretStr
+    password: Password
+
+
 class UserRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -55,6 +63,9 @@ class UserRead(BaseModel):
     phone: str | None
     role: UserRole
     status: UserStatus
+    # the client needs this to send the owner to the right screen, not to decide anything:
+    # the refusal itself comes from the server on every other route
+    must_change_password: bool
     email_verified_at: datetime | None
     created_at: datetime
 

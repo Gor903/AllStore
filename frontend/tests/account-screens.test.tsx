@@ -34,6 +34,7 @@ function account(overrides: Partial<User> = {}): User {
     status: "active",
     email_verified_at: null,
     created_at: "2026-10-01T10:00:00Z",
+    must_change_password: false,
     ...overrides,
   };
 }

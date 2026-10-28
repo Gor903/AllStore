@@ -196,6 +196,23 @@ async def reset_password(session: AsyncSession, raw_token: str, new_password: st
     return user
 
 
+async def change_password(
+    session: AsyncSession, user: User, current_password: str, new_password: str
+) -> None:
+    """A signed-in account replaces its own password, proving it knows the old one.
+
+    The proof matters most in the case this exists for: an administrator whose first password
+    came out of a deploy variable. Without it, an unattended session would be enough to take
+    the account over permanently.
+    """
+    if not verify_password(current_password, user.password_hash):
+        raise InvalidCredentialsError("Текущий пароль неверен")
+    user.password_hash = hash_password(new_password)
+    user.must_change_password = False
+    # same rule as a reset: a password change ends every session, this one included
+    await auth_tokens.revoke_all_for_user(session, user.id)
+
+
 async def get_active_user(session: AsyncSession, user_id: uuid.UUID) -> User:
     user = await users.get_by_id(session, user_id)
     if user is None:

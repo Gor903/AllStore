@@ -337,6 +337,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Change Password */
+        post: operations["change_password_api_v1_auth_password_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/password-reset/confirm": {
         parameters: {
             query?: never;
@@ -1917,6 +1934,23 @@ export interface components {
             /** Token */
             token: string;
         };
+        /**
+         * PasswordChangeRequest
+         * @description The current password is asked for even when the account owes a change: a session left
+         *     open on somebody else's screen must not be enough to take the account over.
+         */
+        PasswordChangeRequest: {
+            /**
+             * Current Password
+             * Format: password
+             */
+            current_password: string;
+            /**
+             * Password
+             * Format: password
+             */
+            password: string;
+        };
         /** PasswordResetConfirmRequest */
         PasswordResetConfirmRequest: {
             /**
@@ -2357,6 +2391,8 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Must Change Password */
+            must_change_password: boolean;
             /** Phone */
             phone: string | null;
             role: components["schemas"]["UserRole"];
@@ -2992,6 +3028,39 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    change_password_api_v1_auth_password_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordChangeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };
