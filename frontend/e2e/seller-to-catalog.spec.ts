@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 /**
  * The one path the whole product exists for: a seller signs up, opens a shop, files a
@@ -26,6 +26,36 @@ const seller = {
 };
 const productName = `Ваза e2e ${run}`;
 const editedName = `Ваза керамическая e2e ${run}`;
+
+/** A queue page holds twenty rows and no more, so nine pages is past any stand we run on. */
+const MAX_QUEUE_PAGES = 20;
+
+/**
+ * Finds a row in a paged moderation queue, turning pages until it shows up.
+ *
+ * The queues are oldest-first, so a row this run has just created is on the last page — and
+ * on a stand with a backlog that is not page one. Looking only at the first page passes on an
+ * empty database and fails everywhere else, which is the opposite of what an end-to-end test
+ * is for: it went red on a stand with 177 products in the queue while the code was fine.
+ */
+async function queueRow(page: Page, path: string, text: string): Promise<Locator> {
+  await page.goto(path);
+  for (let turned = 0; turned < MAX_QUEUE_PAGES; turned += 1) {
+    const row = page.getByRole("listitem").filter({ hasText: text });
+    if ((await row.count()) > 0) {
+      return row;
+    }
+    const next = page.getByRole("link", { name: "Вперёд" });
+    if ((await next.count()) === 0) {
+      break;
+    }
+    // the pages are addresses, so the turn is done when the address has changed
+    const before = page.url();
+    await next.click();
+    await page.waitForURL((url) => url.href !== before);
+  }
+  throw new Error(`«${text}» не нашлось в очереди ${path} ни на одной странице`);
+}
 
 test("продавец регистрируется, заводит магазин и товар, модератор пропускает, покупатель находит", async ({
   page,
@@ -93,16 +123,14 @@ test("продавец регистрируется, заводит магази
   });
 
   await test.step("модератор допускает продавца", async () => {
-    await page.getByRole("link", { name: /Продавцы/ }).click();
-    const application = page.getByRole("listitem").filter({ hasText: subdomain });
+    const application = await queueRow(page, "/moderation/businesses", subdomain);
     await application.getByRole("button", { name: "Допустить" }).click();
     // the queue holds applications awaiting a verdict, so a decided one leaves it
     await expect(application).toHaveCount(0);
   });
 
   await test.step("модератор одобряет товар", async () => {
-    await page.goto("/moderation");
-    const queued = page.getByRole("listitem").filter({ hasText: productName });
+    const queued = await queueRow(page, "/moderation", productName);
     await queued.getByRole("button", { name: "Одобрить" }).click();
     await expect(queued).toHaveCount(0);
   });
@@ -161,8 +189,7 @@ test("продавец регистрируется, заводит магази
     // the form navigates on its own; going somewhere else before it lands races with it
     await expect(page).toHaveURL(/\/dashboard$/);
 
-    await page.goto("/moderation");
-    const queued = page.getByRole("listitem").filter({ hasText: editedName });
+    const queued = await queueRow(page, "/moderation", editedName);
     await expect(queued.getByText(/правка уже опубликованного товара/)).toBeVisible();
     await queued.getByRole("button", { name: "Одобрить" }).click();
     await expect(queued).toHaveCount(0);
