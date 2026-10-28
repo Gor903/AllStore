@@ -22,6 +22,7 @@ from app.models import AccountBlock, User, UserStatus
 from app.repositories import account_blocks as blocks_repo
 from app.repositories import auth_tokens
 from app.repositories import users as users_repo
+from app.repositories.users import AccountFilter
 from app.services import admin_users, audit, permissions
 
 ENTITY = "user"
@@ -91,8 +92,8 @@ async def list_reachable(
     Filtered from the same ranks the individual checks use, so the screen offers exactly the
     rows whose buttons will work rather than rows that answer 403 when pressed.
     """
-    roles = permissions.reachable_roles(actor.role)
+    where = AccountFilter(query=query, roles=permissions.reachable_roles(actor.role))
     return (
-        await users_repo.search(session, query, limit, offset, roles),
-        await users_repo.count_matching(session, query, roles),
+        await users_repo.search(session, where, limit, offset),
+        await users_repo.count_matching(session, where),
     )

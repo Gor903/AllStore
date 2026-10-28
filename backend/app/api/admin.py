@@ -1,12 +1,14 @@
 import uuid
+from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, status
 
 from app.core.errors import NotFoundError
 from app.deps.auth import SessionDep, SettingsDep, require_csrf, require_role
-from app.models import User, UserRole
+from app.models import User, UserRole, UserStatus
 from app.repositories import users as users_repo
+from app.repositories.users import AccountFilter, AccountSort
 from app.schemas.admin import (
     AdminCategoryRead,
     AuditLogListResponse,
@@ -42,10 +44,35 @@ async def list_users(
     _: AdminUser,
     session: SessionDep,
     q: SearchQuery = None,
+    role: Annotated[list[UserRole] | None, Query()] = None,
+    status: Annotated[list[UserStatus] | None, Query()] = None,
+    registered_from: Annotated[datetime | None, Query()] = None,
+    registered_to: Annotated[datetime | None, Query()] = None,
+    last_login_from: Annotated[datetime | None, Query()] = None,
+    last_login_to: Annotated[datetime | None, Query()] = None,
+    has_bans: Annotated[bool | None, Query()] = None,
+    has_reports: Annotated[bool | None, Query()] = None,
+    sort: AccountSort = AccountSort.REGISTERED,
     limit: Limit = DEFAULT_PAGE_SIZE,
     offset: Offset = 0,
 ) -> UserListResponse:
-    items, total = await admin_users.list_users(session, q, limit, offset)
+    """Everybody, narrowed however the administrator asks. `q` matches the address or the phone.
+
+    An absent filter asks nothing; `has_bans=false` asks for the accounts that have never been
+    barred, which is a different question from not asking.
+    """
+    where = AccountFilter(
+        query=q,
+        roles=role,
+        statuses=status,
+        registered_from=registered_from,
+        registered_to=registered_to,
+        last_login_from=last_login_from,
+        last_login_to=last_login_to,
+        has_bans=has_bans,
+        has_reports=has_reports,
+    )
+    items, total = await admin_users.list_users(session, where, limit, offset, sort)
     return UserListResponse(
         items=[UserRead.model_validate(item) for item in items],
         total=total,
