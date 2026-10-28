@@ -21,6 +21,7 @@ import type {
   User,
   UserList,
 } from "@/lib/api";
+import { accountApiParams, type AccountQuery } from "@/lib/account-query";
 import { API_PREFIX, env } from "@/lib/env";
 
 // the cabinet shows the whole shelf at once; pagination arrives when a shop outgrows it
@@ -115,12 +116,12 @@ export async function getModerationBusinesses(offset = 0): Promise<BusinessList 
 }
 
 /** The administrator's screens. Every one of them is behind requireRole("admin"). */
-export async function getAdminUsers(query: string, offset: number): Promise<UserList | null> {
-  const params = new URLSearchParams({ limit: String(ADMIN_PAGE_SIZE), offset: String(offset) });
-  if (query !== "") {
-    params.set("q", query);
-  }
-  return backendGet<UserList>(`/admin/users?${params}`);
+export async function getAdminUsers(query: AccountQuery): Promise<UserList | null> {
+  return backendGet<UserList>(`/admin/users?${accountApiParams(query, ADMIN_PAGE_SIZE)}`);
+}
+
+export async function getAdminUser(userId: string): Promise<User | null> {
+  return backendGet<User>(`/admin/users/${encodeURIComponent(userId)}`);
 }
 
 /** The people the platform serves: buyers and sellers, for a moderator and an administrator alike. */
