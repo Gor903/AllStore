@@ -95,6 +95,17 @@ async def test_a_second_run_under_another_address_changes_nothing(
     assert [user.email for user in await admins(session)] == [first]
 
 
+async def test_the_created_administrator_has_to_choose_their_own_password(
+    session: AsyncSession,
+) -> None:
+    """The password came from a deploy variable, which is as good as written on a wall."""
+    email = an_email()
+
+    await bootstrap(session, email, PASSWORD)
+
+    assert (await admins(session))[0].must_change_password is True
+
+
 async def test_an_existing_account_is_promoted_and_keeps_its_password(
     session: AsyncSession,
 ) -> None:
@@ -108,6 +119,8 @@ async def test_an_existing_account_is_promoted_and_keeps_its_password(
     admin = (await admins(session))[0]
     assert admin.email == email
     assert verify_password(PASSWORD, admin.password_hash)
+    # nobody handed them this password: it is the one they registered with
+    assert admin.must_change_password is False
 
 
 async def test_promoting_a_barred_account_ends_the_ban_rather_than_hiding_it(
@@ -141,7 +154,10 @@ async def test_the_password_is_replaced_only_when_asked_for(session: AsyncSessio
     result = await bootstrap(session, email, OTHER_PASSWORD, reset_password=True)
 
     assert result.outcome is Outcome.PASSWORD_RESET
-    assert verify_password(OTHER_PASSWORD, (await admins(session))[0].password_hash)
+    admin = (await admins(session))[0]
+    assert verify_password(OTHER_PASSWORD, admin.password_hash)
+    # recovery hands out a password the same way the first run does, so it expires the same way
+    assert admin.must_change_password is True
 
 
 async def test_the_recovery_run_lets_a_locked_out_administrator_back_in(

@@ -84,7 +84,14 @@ async def bootstrap(
 
     await users_repo.add(
         session,
-        User(email=normalized, password_hash=hash_password(password), role=UserRole.ADMIN),
+        User(
+            email=normalized,
+            password_hash=hash_password(password),
+            role=UserRole.ADMIN,
+            # the password came out of a deploy variable, which is as good as written on a
+            # wall: it gets the administrator in once, and then they choose their own
+            must_change_password=True,
+        ),
     )
     return Result(Outcome.CREATED, normalized)
 
@@ -97,6 +104,8 @@ async def _keep_or_restore(
     if not reset_password:
         return Result(Outcome.UNCHANGED, admin.email)
     admin.password_hash = hash_password(password)
+    # same reasoning as a fresh bootstrap: whoever holds the server now knows this password
+    admin.must_change_password = True
     await _reactivate(session, admin)
     return Result(Outcome.PASSWORD_RESET, admin.email)
 

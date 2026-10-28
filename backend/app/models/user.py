@@ -2,7 +2,7 @@ import enum
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Index, String, text
+from sqlalchemy import Boolean, DateTime, Index, String, text
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -54,6 +54,11 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
     )
     email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # A password somebody else chose is not a password. Set when an account is created from
+    # the environment rather than by its owner, and cleared the moment they pick their own.
+    must_change_password: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("false"), nullable=False
+    )
 
     business: Mapped["Business | None"] = relationship(
         back_populates="owner", cascade="all, delete-orphan"
