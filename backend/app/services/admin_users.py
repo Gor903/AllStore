@@ -84,9 +84,9 @@ async def transfer_admin(session: AsyncSession, admin: User, user_id: uuid.UUID)
     """
     successor = await find(session, user_id)
     if successor.id == admin.id:
+        # the only way the successor can already be an administrator: there is one, and the
+        # caller is it
         raise AdminAccountError("Вы уже администратор")
-    if successor.role is UserRole.ADMIN:
-        raise AdminAccountError("Этот аккаунт уже администратор")
     if not successor.is_active:
         raise AdminAccountError("Нельзя передать администрирование заблокированному аккаунту")
     await _refuse_if_shopkeeper(session, successor)

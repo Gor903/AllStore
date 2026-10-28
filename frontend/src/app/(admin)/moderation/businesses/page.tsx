@@ -2,7 +2,14 @@ import type { Metadata } from "next";
 
 import { ModerationNav } from "@/components/moderation/ModerationNav";
 import { VerdictButtons, type Verdict } from "@/components/moderation/VerdictButtons";
-import { getModerationBusinesses, getModerationProducts, requireRole } from "@/lib/dal";
+import { Pagination } from "@/components/catalog/Pagination";
+import { parseCatalogQuery, toSearchParams } from "@/lib/catalog-query";
+import {
+  ADMIN_PAGE_SIZE,
+  getModerationBusinesses,
+  getModerationProducts,
+  requireRole,
+} from "@/lib/dal";
 import { env } from "@/lib/env";
 
 export const metadata: Metadata = {
@@ -35,10 +42,13 @@ const DECISION: Record<string, string> = {
   restored: "восстановлен",
 };
 
-export default async function ModerationBusinessesPage() {
+export default async function ModerationBusinessesPage({
+  searchParams,
+}: PageProps<"/moderation/businesses">) {
   await requireRole("moderator", "admin");
+  const { offset } = parseCatalogQuery(toSearchParams(await searchParams));
   const [businesses, queue] = await Promise.all([
-    getModerationBusinesses(),
+    getModerationBusinesses(offset),
     getModerationProducts(),
   ]);
 
@@ -61,45 +71,54 @@ export default async function ModerationBusinessesPage() {
       ) : businesses.items.length === 0 ? (
         <p className="text-ink-muted">Заявок нет — все продавцы рассмотрены.</p>
       ) : (
-        <ul className="flex flex-col gap-4">
-          {businesses.items.map((business) => (
-            <li
-              key={business.id}
-              className="flex flex-col gap-2 rounded-card border border-ink-muted/20 p-4"
-            >
-              <h2 className="text-lg font-medium">{business.display_name}</h2>
-              <p className="text-sm text-ink-muted">{business.legal_name}</p>
-              {business.description === null ? null : (
-                <p className="text-sm">{business.description}</p>
-              )}
-              <p className="text-sm text-ink-muted">
-                {business.subdomain === null
-                  ? "Витрину ещё не создал"
-                  : `Адрес: ${business.subdomain}.${env.baseDomain}`}
-              </p>
-              {business.history.length === 0 ? null : (
-                <details className="text-sm">
-                  <summary className="cursor-pointer text-ink-muted">
-                    Эту заявку уже смотрели ({business.history.length})
-                  </summary>
-                  <ul className="mt-2 flex flex-col gap-1">
-                    {business.history.map((entry) => (
-                      <li key={entry.created_at} className="text-ink-muted">
-                        {new Date(entry.created_at).toLocaleString("ru-RU")} —{" "}
-                        {DECISION[entry.decision] ?? entry.decision}
-                        {entry.reason === null ? "" : `: ${entry.reason}`}
-                      </li>
-                    ))}
-                  </ul>
-                </details>
-              )}
-              <VerdictButtons
-                basePath={`/moderation/businesses/${business.id}`}
-                verdicts={VERDICTS}
-              />
-            </li>
-          ))}
-        </ul>
+        <>
+          <ul className="flex flex-col gap-4">
+            {businesses.items.map((business) => (
+              <li
+                key={business.id}
+                className="flex flex-col gap-2 rounded-card border border-ink-muted/20 p-4"
+              >
+                <h2 className="text-lg font-medium">{business.display_name}</h2>
+                <p className="text-sm text-ink-muted">{business.legal_name}</p>
+                {business.description === null ? null : (
+                  <p className="text-sm">{business.description}</p>
+                )}
+                <p className="text-sm text-ink-muted">
+                  {business.subdomain === null
+                    ? "Витрину ещё не создал"
+                    : `Адрес: ${business.subdomain}.${env.baseDomain}`}
+                </p>
+                {business.history.length === 0 ? null : (
+                  <details className="text-sm">
+                    <summary className="cursor-pointer text-ink-muted">
+                      Эту заявку уже смотрели ({business.history.length})
+                    </summary>
+                    <ul className="mt-2 flex flex-col gap-1">
+                      {business.history.map((entry) => (
+                        <li key={entry.created_at} className="text-ink-muted">
+                          {new Date(entry.created_at).toLocaleString("ru-RU")} —{" "}
+                          {DECISION[entry.decision] ?? entry.decision}
+                          {entry.reason === null ? "" : `: ${entry.reason}`}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+                <VerdictButtons
+                  basePath={`/moderation/businesses/${business.id}`}
+                  verdicts={VERDICTS}
+                />
+              </li>
+            ))}
+          </ul>
+          <Pagination
+            path="/moderation/businesses"
+            params={new URLSearchParams()}
+            offset={offset}
+            pageSize={ADMIN_PAGE_SIZE}
+            total={businesses.total}
+          />
+        </>
       )}
     </main>
   );

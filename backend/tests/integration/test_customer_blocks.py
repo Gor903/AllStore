@@ -406,3 +406,21 @@ async def test_both_decisions_are_journalled(
     actions = [entry.action for entry in written]
     assert actions[-2:] == ["store.customer_blocked", "store.customer_unblocked"]
     assert written[-2].details == {"buyer": email}
+
+
+async def test_opening_a_door_that_is_already_open_is_refused(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    shop = await a_live_shop(api_client, session, "alreadyopen")
+    _, email, _ = await a_buyer(api_client)
+    switch(api_client, shop.seller)
+    created = await shut_out(api_client, email)
+    block_id = created.json()["id"]
+    await api_client.post(f"{BLOCKED_BUYERS}/{block_id}/revoke", headers=csrf_headers(api_client))
+
+    response = await api_client.post(
+        f"{BLOCKED_BUYERS}/{block_id}/revoke", headers=csrf_headers(api_client)
+    )
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "block_not_found"

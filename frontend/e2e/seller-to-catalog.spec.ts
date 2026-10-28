@@ -25,6 +25,7 @@ const seller = {
   displayName: `Магазин e2e ${run}`,
 };
 const productName = `Ваза e2e ${run}`;
+const editedName = `Ваза керамическая e2e ${run}`;
 
 test("продавец регистрируется, заводит магазин и товар, модератор пропускает, покупатель находит", async ({
   page,
@@ -121,5 +122,52 @@ test("продавец регистрируется, заводит магази
     await expect(
       page.getByRole("link", { name: new RegExp(PHONE.replace("+", "\\+")) }),
     ).toHaveAttribute("href", `tel:${PHONE}`);
+  });
+
+  // Этап 18: the listing a buyer is looking at survives its own seller editing it. Before
+  // revisions this half of the scenario took the product out of the catalogue on the spot.
+  await test.step("продавец правит одобренный товар", async () => {
+    // the moderator is still signed in, and /login sends a signed-in visitor to the cabinet
+    await page.goto("/dashboard");
+    await page.getByRole("button", { name: "Выйти" }).click();
+    await expect(page).toHaveURL(/\/login/);
+    await page.getByLabel("Email", { exact: true }).fill(seller.email);
+    await page.getByLabel("Пароль", { exact: true }).fill(PASSWORD);
+    await page.getByRole("button", { name: "Войти" }).click();
+    await expect(page).toHaveURL(/\/dashboard$/);
+
+    // the card of a product is also its edit form
+    await page.getByRole("link", { name: new RegExp(productName) }).click();
+    await page.getByLabel("Название").fill(editedName);
+    await page.getByRole("button", { name: "Сохранить" }).click();
+
+    await expect(page.getByText(/Правка на проверке/)).toBeVisible();
+  });
+
+  await test.step("покупатель всё ещё видит одобренную версию", async () => {
+    await page.goto(`/catalog?q=${encodeURIComponent(productName)}`);
+    await expect(page.getByRole("link", { name: new RegExp(productName) })).toBeVisible();
+    await page.goto(`/catalog?q=${encodeURIComponent(editedName)}`);
+    await expect(page.getByRole("link", { name: new RegExp(editedName) })).toHaveCount(0);
+  });
+
+  await test.step("модератор одобряет правку, и каталог догоняет", async () => {
+    await page.goto("/dashboard");
+    await page.getByRole("button", { name: "Выйти" }).click();
+    await expect(page).toHaveURL(/\/login/);
+    await page.getByLabel("Email", { exact: true }).fill(MODERATOR.email);
+    await page.getByLabel("Пароль", { exact: true }).fill(MODERATOR.password);
+    await page.getByRole("button", { name: "Войти" }).click();
+    // the form navigates on its own; going somewhere else before it lands races with it
+    await expect(page).toHaveURL(/\/dashboard$/);
+
+    await page.goto("/moderation");
+    const queued = page.getByRole("listitem").filter({ hasText: editedName });
+    await expect(queued.getByText(/правка уже опубликованного товара/)).toBeVisible();
+    await queued.getByRole("button", { name: "Одобрить" }).click();
+    await expect(queued).toHaveCount(0);
+
+    await page.goto(`/catalog?q=${encodeURIComponent(editedName)}`);
+    await expect(page.getByRole("link", { name: new RegExp(editedName) })).toBeVisible();
   });
 });

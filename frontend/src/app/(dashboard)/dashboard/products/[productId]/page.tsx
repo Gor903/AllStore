@@ -70,8 +70,9 @@ export default async function EditProductPage({
       <section className="flex flex-col gap-4">
         <h2 className="font-medium">Карточка товара</h2>
         <p className="text-sm text-ink-muted">
-          Правка названия, описания или категории возвращает одобренный товар на повторную проверку.
-          Цена и остаток проверку не сбрасывают.
+          Правка названия, описания или категории уходит на проверку, а в каталоге пока остаётся
+          последняя одобренная версия — товар с полки не пропадает. Цена и остаток меняются сразу и
+          проверку не проходят.
         </p>
         <ProductForm categories={categories} product={product} />
       </section>

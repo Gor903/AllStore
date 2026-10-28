@@ -91,12 +91,22 @@ export async function getMyProduct(productId: string): Promise<Product | null> {
   return backendGet<Product>(`/products/${encodeURIComponent(productId)}`);
 }
 
-export async function getModerationProducts(): Promise<ModerationProductList | null> {
-  return backendGet<ModerationProductList>(`/moderation/products?limit=${SELLER_PAGE_SIZE}`);
+/**
+ * The queues are paged.
+ *
+ * They used to ask for a hundred and show whatever came back, which reads fine on an empty
+ * stand and hides the oldest half of a real backlog — and the backlog is exactly when a
+ * moderator needs the screen. `offset` defaults to the first page, because the counters in
+ * the navigation only want the total.
+ */
+export async function getModerationProducts(offset = 0): Promise<ModerationProductList | null> {
+  const params = new URLSearchParams({ limit: String(ADMIN_PAGE_SIZE), offset: String(offset) });
+  return backendGet<ModerationProductList>(`/moderation/products?${params}`);
 }
 
-export async function getModerationBusinesses(): Promise<BusinessList | null> {
-  return backendGet<BusinessList>(`/moderation/businesses?limit=${SELLER_PAGE_SIZE}`);
+export async function getModerationBusinesses(offset = 0): Promise<BusinessList | null> {
+  const params = new URLSearchParams({ limit: String(ADMIN_PAGE_SIZE), offset: String(offset) });
+  return backendGet<BusinessList>(`/moderation/businesses?${params}`);
 }
 
 /** The administrator's screens. Every one of them is behind requireRole("admin"). */
