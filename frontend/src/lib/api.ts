@@ -32,6 +32,7 @@ export type AuditLogList = components["schemas"]["AuditLogListResponse"];
 export type ModeratorRecord = components["schemas"]["ModeratorRecordRead"];
 export type SystemState = components["schemas"]["SystemStateRead"];
 export type Activity = components["schemas"]["ActivityRead"];
+export type IncidentList = components["schemas"]["IncidentListResponse"];
 export type Invitation = components["schemas"]["InvitationRead"];
 export type InvitationList = components["schemas"]["InvitationListResponse"];
 // the secret travels exactly once, in the answer to the request that created it

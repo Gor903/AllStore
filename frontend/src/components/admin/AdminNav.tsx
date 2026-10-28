@@ -3,7 +3,15 @@ import Link from "next/link";
 import { LogoutButton } from "@/components/auth/LogoutButton";
 
 type AdminNavProps = {
-  current: "system" | "users" | "moderators" | "categories" | "audit" | "security";
+  current:
+    | "system"
+    | "incidents"
+    | "users"
+    | "moderators"
+    | "categories"
+    | "audit"
+    | "promotions"
+    | "security";
 };
 
 const TABS = [
@@ -11,7 +19,9 @@ const TABS = [
   { key: "users", href: "/admin", label: "Пользователи" },
   { key: "moderators", href: "/admin/moderators", label: "Модераторы" },
   { key: "categories", href: "/admin/categories", label: "Категории" },
+  { key: "incidents", href: "/admin/incidents", label: "Инциденты" },
   { key: "audit", href: "/admin/audit", label: "Журнал" },
+  { key: "promotions", href: "/admin/promotions", label: "Акции" },
   { key: "security", href: "/admin/security", label: "Доступ" },
 ] as const;
 
