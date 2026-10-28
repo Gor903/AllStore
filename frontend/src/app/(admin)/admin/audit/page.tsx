@@ -16,6 +16,8 @@ export const metadata: Metadata = {
 const ACTION: Record<string, string> = {
   "user.role_changed": "сменил роль",
   "user.admin_transferred": "передал администрирование",
+  "user.password_changed": "сменил себе пароль",
+  "user.email_changed": "сменил себе логин",
   "user.blocked": "заблокировал",
   "user.unblocked": "разблокировал",
   "moderator.invited": "пригласил модератора",
