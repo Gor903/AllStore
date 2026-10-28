@@ -10,7 +10,7 @@ import pytest
 
 from app.models import User, UserRole
 from app.services import permissions
-from app.services.permissions import NotAllowedError
+from app.services.permissions import HiddenAccountError, NotAllowedError
 
 BUYER = UserRole.BUYER
 SELLER = UserRole.SELLER
@@ -82,8 +82,26 @@ def test_blocking_yourself_is_refused_in_its_own_words() -> None:
 
 
 def test_a_moderator_may_not_bar_another_moderator() -> None:
-    with pytest.raises(NotAllowedError):
+    """Refused as "no such account": a refusal that names a level is a refusal that tells."""
+    with pytest.raises(HiddenAccountError):
         permissions.ensure_may_block(account(MODERATOR), account(MODERATOR))
+
+
+def test_blocking_oneself_is_refused_in_its_own_words() -> None:
+    """Not hidden: the actor knows perfectly well that they exist."""
+    moderator = account(MODERATOR)
+    with pytest.raises(NotAllowedError):
+        permissions.ensure_may_block(moderator, moderator)
+
+
+def test_a_moderator_may_not_read_another_moderators_record() -> None:
+    with pytest.raises(HiddenAccountError):
+        permissions.ensure_may_read(account(MODERATOR), account(MODERATOR))
+
+
+def test_anybody_may_read_their_own_record() -> None:
+    moderator = account(MODERATOR)
+    permissions.ensure_may_read(moderator, moderator)
 
 
 def test_a_moderator_may_bar_a_seller() -> None:
@@ -102,7 +120,7 @@ def test_changing_your_own_role_is_refused_in_its_own_words() -> None:
 
 
 def test_a_moderator_may_not_change_a_role() -> None:
-    with pytest.raises(NotAllowedError):
+    with pytest.raises(HiddenAccountError):
         permissions.ensure_may_change_role(account(MODERATOR), account(BUYER))
 
 
