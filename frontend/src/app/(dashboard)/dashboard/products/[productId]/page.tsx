@@ -69,12 +69,22 @@ export default async function EditProductPage({
 
       <section className="flex flex-col gap-4">
         <h2 className="font-medium">Карточка товара</h2>
-        <p className="text-sm text-ink-muted">
-          Правка названия, описания или категории уходит на проверку, а в каталоге пока остаётся
-          последняя одобренная версия — товар с полки не пропадает. Цена и остаток меняются сразу и
-          проверку не проходят.
-        </p>
-        <ProductForm categories={categories} product={product} />
+        {/* the rest of the page still works: photos and the shelf do not need the reference */}
+        {categories === null ? (
+          <p className="text-danger">
+            Справочник категорий сейчас недоступен, и без него карточку не сохранить. Фотографии и
+            действия выше при этом работают.
+          </p>
+        ) : (
+          <>
+            <p className="text-sm text-ink-muted">
+              Правка названия, описания или категории уходит на проверку, а в каталоге пока остаётся
+              последняя одобренная версия — товар с полки не пропадает. Цена и остаток меняются
+              сразу и проверку не проходят.
+            </p>
+            <ProductForm categories={categories} product={product} />
+          </>
+        )}
       </section>
     </main>
   );

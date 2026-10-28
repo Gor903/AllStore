@@ -23,10 +23,20 @@ export default async function NewProductPage() {
         {" / новый товар"}
       </nav>
       <h1 className="text-2xl font-semibold">Новый товар</h1>
-      <p className="text-sm text-ink-muted">
-        После сохранения добавьте фотографии и отправьте товар на проверку.
-      </p>
-      <ProductForm categories={categories} />
+      {/* a form whose only category list is unreadable would fail on submit, not before it */}
+      {categories === null ? (
+        <p className="text-danger">
+          Справочник категорий сейчас недоступен, и без него товар не сохранить. Попробуйте обновить
+          страницу.
+        </p>
+      ) : (
+        <>
+          <p className="text-sm text-ink-muted">
+            После сохранения добавьте фотографии и отправьте товар на проверку.
+          </p>
+          <ProductForm categories={categories} />
+        </>
+      )}
     </main>
   );
 }

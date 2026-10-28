@@ -141,11 +141,17 @@ export async function fetchCatalogStores(
   }
 }
 
-/** An empty tree is survivable: the filter simply has nothing to offer. */
-export async function fetchCategories(): Promise<CategoryTree[]> {
+/**
+ * null means the reference could not be read at all; an empty tree is a valid answer.
+ *
+ * The two used to be the same value, and that hid a backend that was down behind a form
+ * with nothing to choose from — a seller filling in a product would only find out on submit,
+ * and whoever debugged it had no error to go on either.
+ */
+export async function fetchCategories(): Promise<CategoryTree[] | null> {
   try {
     return await apiGet<CategoryTree[]>(`${API_PREFIX}/catalog/categories`);
   } catch {
-    return [];
+    return null;
   }
 }
