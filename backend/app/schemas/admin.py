@@ -1,4 +1,5 @@
 import uuid
+from collections.abc import Sequence
 from dataclasses import asdict
 from datetime import date, datetime
 from typing import Annotated, Any
@@ -8,6 +9,7 @@ from pydantic import BaseModel, BeforeValidator, ConfigDict, StringConstraints
 from app.models import AuditLog, Category, CategoryStatus, UserRole
 from app.models.category import CATEGORY_SLUG_MAX_LENGTH, CATEGORY_SLUG_PATTERN
 from app.schemas.auth import UserRead
+from app.services.incidents import Incident, IncidentKind
 from app.services.moderator_record import ModeratorRecord
 from app.services.system_health import DayOfActivity, Occupancy, Resources
 
@@ -66,6 +68,33 @@ class ActivityRead(BaseModel):
     @classmethod
     def of(cls, series: "list[DayOfActivity]") -> "ActivityRead":
         return cls(days=[DayOfActivityRead(**asdict(day)) for day in series])
+
+
+class IncidentRead(BaseModel):
+    kind: IncidentKind
+    happened_at: datetime
+    initiator_email: str | None
+    counterpart_email: str | None
+    subject: str
+    reason: str | None
+
+
+class IncidentListResponse(BaseModel):
+    items: list[IncidentRead]
+    total: int
+    limit: int
+    offset: int
+
+    @classmethod
+    def of(
+        cls, items: "Sequence[Incident]", total: int, limit: int, offset: int
+    ) -> "IncidentListResponse":
+        return cls(
+            items=[IncidentRead(**asdict(item)) for item in items],
+            total=total,
+            limit=limit,
+            offset=offset,
+        )
 
 
 class ModeratorRecordRead(BaseModel):

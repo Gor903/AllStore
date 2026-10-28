@@ -13,6 +13,7 @@ import type {
   BusinessList,
   ContactList,
   CustomerBlockList,
+  IncidentList,
   InvitationList,
   ModerationProductList,
   ModeratorRecord,
@@ -183,6 +184,18 @@ export async function getSystemState(): Promise<SystemState | null> {
 
 export async function getActivity(days: number): Promise<Activity | null> {
   return backendGet<Activity>(`/admin/activity?days=${days}`);
+}
+
+/** What passed between people. The backend decides whose events the caller may see. */
+export async function getIncidents(
+  offset: number,
+  filters: { userId?: string } = {},
+): Promise<IncidentList | null> {
+  const params = new URLSearchParams({ limit: String(ADMIN_PAGE_SIZE), offset: String(offset) });
+  if (filters.userId !== undefined && filters.userId !== "") {
+    params.set("user_id", filters.userId);
+  }
+  return backendGet<IncidentList>(`/incidents?${params}`);
 }
 
 /** One moderator's account and what they have decided with it. */

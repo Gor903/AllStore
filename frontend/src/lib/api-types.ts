@@ -656,6 +656,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/incidents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Incidents
+         * @description Complaints and shop-level bans, newest first, narrowed to one person if asked.
+         *
+         *     A moderator's feed holds only what passed between buyers and sellers: an event with
+         *     another moderator or the administrator on either side does not exist for them.
+         */
+        get: operations["list_incidents_api_v1_incidents_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/moderation/businesses": {
         parameters: {
             query?: never;
@@ -1907,6 +1930,39 @@ export interface components {
              * @constant
              */
             status: "ok";
+        };
+        /**
+         * IncidentKind
+         * @enum {string}
+         */
+        IncidentKind: "report" | "customer_block";
+        /** IncidentListResponse */
+        IncidentListResponse: {
+            /** Items */
+            items: components["schemas"]["IncidentRead"][];
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /** Total */
+            total: number;
+        };
+        /** IncidentRead */
+        IncidentRead: {
+            /** Counterpart Email */
+            counterpart_email: string | null;
+            /**
+             * Happened At
+             * Format: date-time
+             */
+            happened_at: string;
+            /** Initiator Email */
+            initiator_email: string | null;
+            kind: components["schemas"]["IncidentKind"];
+            /** Reason */
+            reason: string | null;
+            /** Subject */
+            subject: string;
         };
         /** InvitationCreateRequest */
         InvitationCreateRequest: {
@@ -3736,6 +3792,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CatalogStoreListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_incidents_api_v1_incidents_get: {
+        parameters: {
+            query?: {
+                user_id?: string | null;
+                kind?: components["schemas"]["IncidentKind"] | null;
+                since?: string | null;
+                until?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IncidentListResponse"];
                 };
             };
             /** @description Validation Error */
