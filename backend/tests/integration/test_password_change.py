@@ -157,6 +157,34 @@ async def test_changing_the_login_needs_the_password_and_ends_the_sessions(
     assert live.scalars().all() == []
 
 
+async def test_the_address_it_already_is_gets_refused(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    """Accepting it would end every session and report a change that did not happen.
+
+    That is how somebody who came to change their password ends up logged out with nothing
+    altered — the form asked for a password, so it looked like the right one.
+    """
+    await register_buyer(api_client)
+    user = (await session.execute(select(User).where(User.email == EMAIL))).scalars().one()
+
+    response = await api_client.post(
+        "/api/v1/auth/email",
+        json={"email": EMAIL, "current_password": PASSWORD},
+        headers=csrf_headers(api_client),
+    )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "same_email"
+    live = await session.execute(
+        select(RefreshToken).where(
+            RefreshToken.user_id == user.id, RefreshToken.revoked_at.is_(None)
+        )
+    )
+    # the sessions are untouched: nothing happened, so nothing ends
+    assert live.scalars().all() != []
+
+
 async def test_a_taken_address_is_refused(api_client: AsyncClient, session: AsyncSession) -> None:
     await register_buyer(api_client)
     session.add(User(email="taken@example.com", password_hash="x", role=UserRole.BUYER))
