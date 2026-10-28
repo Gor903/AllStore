@@ -34,7 +34,7 @@ check: backend-check frontend-check
 
 e2e: ## поднять стек и прогнать сквозной сценарий (нужен браузер: npx playwright install chromium)
 	docker compose up --build -d --wait
-	docker compose exec -T backend python -m scripts.grant_role $(E2E_MODERATOR_EMAIL) $(E2E_MODERATOR_PASSWORD) moderator
+	docker compose exec -T backend python -m scripts.grant_role $(E2E_MODERATOR_EMAIL) $(E2E_MODERATOR_PASSWORD) moderator --reset-password
 	# адрес спрашивается у самого стека: HTTP_PORT переопределяется в .env
 	port=$$(docker compose port nginx 80 | cut -d: -f2); cd frontend && E2E_BASE_URL=http://localhost:$$port npx playwright test
 

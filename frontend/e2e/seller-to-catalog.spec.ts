@@ -27,8 +27,23 @@ const seller = {
 const productName = `Ваза e2e ${run}`;
 const editedName = `Ваза керамическая e2e ${run}`;
 
+/**
+ * The moderator's own password, chosen in the scenario.
+ *
+ * The account is made by scripts/grant_role before the run, so what it starts with is a
+ * password somebody typed on a command line — and the platform refuses to be used under one
+ * of those. Picking a new one is therefore part of the path, not a detour around it.
+ */
+const moderatorPassword = `e2e-chosen-${run}`;
+
 /** A queue page holds twenty rows and no more, so nine pages is past any stand we run on. */
 const MAX_QUEUE_PAGES = 20;
+
+async function signIn(page: Page, email: string, password: string): Promise<void> {
+  await page.getByLabel("Email", { exact: true }).fill(email);
+  await page.getByLabel("Пароль", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "Войти" }).click();
+}
 
 /**
  * Finds a row in a paged moderation queue, turning pages until it shows up.
@@ -107,14 +122,28 @@ test("продавец регистрируется, заводит магази
     await expect(page.getByRole("button", { name: "Уже на проверке" })).toBeVisible();
   });
 
-  await test.step("модератор входит", async () => {
+  await test.step("модератор входит и задаёт свой пароль", async () => {
     // one browser for both people: the seller is done, and the shop still has to be let in
     await page.goto("/dashboard");
     await page.getByRole("button", { name: "Выйти" }).click();
     await expect(page).toHaveURL(/\/login/);
-    await page.getByLabel("Email", { exact: true }).fill(MODERATOR.email);
-    await page.getByLabel("Пароль", { exact: true }).fill(MODERATOR.password);
-    await page.getByRole("button", { name: "Войти" }).click();
+    await signIn(page, MODERATOR.email, MODERATOR.password);
+
+    // the account was made by scripts/grant_role, so its password came off a command line
+    // and is owed a replacement; the rest of the site stays shut until it gets one
+    await expect(page).toHaveURL(/\/password$/);
+    await expect(page.getByRole("heading", { name: "Задайте свой пароль" })).toBeVisible();
+    await page.goto("/moderation");
+    await expect(page).toHaveURL(/\/password$/);
+
+    await page.getByLabel("Текущий пароль").fill(MODERATOR.password);
+    await page.getByLabel("Новый пароль", { exact: true }).fill(moderatorPassword);
+    await page.getByLabel("Новый пароль ещё раз").fill(moderatorPassword);
+    await page.getByRole("button", { name: "Задать пароль" }).click();
+
+    // the change ends every session, so the way back in is through the door
+    await expect(page).toHaveURL(/\/login/);
+    await signIn(page, MODERATOR.email, moderatorPassword);
 
     // every role lands in the same cabinet; the queue is one link away from it
     await expect(page).toHaveURL(/\/dashboard$/);
@@ -183,9 +212,8 @@ test("продавец регистрируется, заводит магази
     await page.goto("/dashboard");
     await page.getByRole("button", { name: "Выйти" }).click();
     await expect(page).toHaveURL(/\/login/);
-    await page.getByLabel("Email", { exact: true }).fill(MODERATOR.email);
-    await page.getByLabel("Пароль", { exact: true }).fill(MODERATOR.password);
-    await page.getByRole("button", { name: "Войти" }).click();
+    // the one they chose earlier: the handed-over password stopped working when they did
+    await signIn(page, MODERATOR.email, moderatorPassword);
     // the form navigates on its own; going somewhere else before it lands races with it
     await expect(page).toHaveURL(/\/dashboard$/);
 
