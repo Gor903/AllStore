@@ -206,7 +206,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Users */
+        /**
+         * List Users
+         * @description Everybody, narrowed however the administrator asks. `q` matches the address or the phone.
+         *
+         *     An absent filter asks nothing; `has_bans=false` asks for the accounts that have never been
+         *     barred, which is a different question from not asking.
+         */
         get: operations["list_users_api_v1_admin_users_get"];
         put?: never;
         post?: never;
@@ -1265,6 +1271,11 @@ export interface components {
             /** Revoked By Email */
             revoked_by_email: string | null;
         };
+        /**
+         * AccountSort
+         * @enum {string}
+         */
+        AccountSort: "registered" | "last_login" | "email";
         /**
          * AdminCategoryRead
          * @description Unlike the public tree this one carries the status: an administrator manages what a
@@ -2856,6 +2867,15 @@ export interface operations {
         parameters: {
             query?: {
                 q?: string | null;
+                role?: components["schemas"]["UserRole"][] | null;
+                status?: components["schemas"]["UserStatus"][] | null;
+                registered_from?: string | null;
+                registered_to?: string | null;
+                last_login_from?: string | null;
+                last_login_to?: string | null;
+                has_bans?: boolean | null;
+                has_reports?: boolean | null;
+                sort?: components["schemas"]["AccountSort"];
                 limit?: number;
                 offset?: number;
             };

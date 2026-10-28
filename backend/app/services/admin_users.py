@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.errors import ConflictError, NotFoundError
 from app.models import User, UserRole
 from app.repositories import users as users_repo
+from app.repositories.users import AccountFilter, AccountSort
 from app.services import audit, permissions
 
 ENTITY = "user"
@@ -42,11 +43,15 @@ class AdminAccountError(ConflictError):
 
 
 async def list_users(
-    session: AsyncSession, query: str | None, limit: int, offset: int
+    session: AsyncSession,
+    where: AccountFilter,
+    limit: int,
+    offset: int,
+    sort: AccountSort = AccountSort.REGISTERED,
 ) -> tuple[Sequence[User], int]:
     return (
-        await users_repo.search(session, query, limit, offset),
-        await users_repo.count_matching(session, query),
+        await users_repo.search(session, where, limit, offset, sort),
+        await users_repo.count_matching(session, where),
     )
 
 
