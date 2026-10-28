@@ -33,6 +33,17 @@ class InvalidResetTokenError(AuthenticationError):
     code = "invalid_reset_token"
 
 
+class SameEmailError(ConflictError):
+    """Asked to change the login to the one it already is.
+
+    Refused rather than quietly accepted, because "accepted" here means ending every session
+    and reporting a change that did not happen — which is exactly how somebody who came to
+    change their password ends up logged out, confused, and with nothing altered.
+    """
+
+    code = "same_email"
+
+
 class AccountNotActiveError(PermissionDeniedError):
     code = "account_not_active"
 
@@ -209,8 +220,11 @@ async def change_email(
     if not verify_password(current_password, user.password_hash):
         raise InvalidCredentialsError("Текущий пароль неверен")
     normalized = new_email.strip().lower()
-    if normalized != user.email:
-        await ensure_identifiers_free(session, normalized, None)
+    if normalized == user.email:
+        # answering "changed, sign in again" to a request that changed nothing is worse than
+        # a refusal: it ends every session, says something happened, and nothing did
+        raise SameEmailError("Это и есть текущий логин — менять нечего")
+    await ensure_identifiers_free(session, normalized, None)
     was = user.email
     user.email = normalized
     # an address that was verified is no longer the address that was verified

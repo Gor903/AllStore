@@ -7,7 +7,7 @@ import { Field } from "@/components/auth/Field";
 import { apiPost } from "@/lib/browser-api";
 import type { FormError } from "@/lib/errors";
 
-export function EmailChangeForm({ current }: { current: string }) {
+export function EmailChangeForm() {
   const router = useRouter();
   const [error, setError] = useState<FormError | null>(null);
   const [pending, setPending] = useState(false);
@@ -33,12 +33,14 @@ export function EmailChangeForm({ current }: { current: string }) {
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
+      {/* deliberately empty: prefilled with the current address, this field invites a
+        submission that changes nothing, ends every session and says it succeeded. The
+        address as it stands is shown above the form instead. */}
       <Field
         label="Новый email"
         name="email"
         type="email"
         autoComplete="email"
-        defaultValue={current}
         error={error?.fieldErrors["email"]}
       />
       <Field
