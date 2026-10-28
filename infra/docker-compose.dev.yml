@@ -50,6 +50,9 @@ services:
       CORS_ORIGINS: http://localhost:${HTTP_PORT:-8080},http://localhost:3000
       RESERVED_SUBDOMAINS: ${RESERVED_SUBDOMAINS:-}
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-allstore}:${POSTGRES_PASSWORD:-allstore}@postgres:5432/${POSTGRES_DB:-allstore}
+      # the first administrator: unset leaves the platform without one until bootstrap is run
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       S3_ENDPOINT_URL: http://minio:9000
       S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
       S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
