@@ -77,9 +77,12 @@ async def unblock(
 
 
 async def history(
-    session: AsyncSession, user_id: uuid.UUID, limit: int, offset: int
+    session: AsyncSession, actor: User, user_id: uuid.UUID, limit: int, offset: int
 ) -> tuple[Sequence[AccountBlock], int]:
-    await admin_users.find(session, user_id)
+    target = await admin_users.find(session, user_id)
+    # reading the record is reaching for the account: without this a moderator could read
+    # another moderator's history by asking for it, having been refused the listing
+    permissions.ensure_may_read(actor, target)
     return await blocks_repo.history(session, user_id, limit, offset)
 
 

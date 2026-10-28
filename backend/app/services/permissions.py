@@ -12,7 +12,7 @@ exceptions.
 
 import enum
 
-from app.core.errors import PermissionDeniedError
+from app.core.errors import NotFoundError, PermissionDeniedError
 from app.models import User, UserRole
 
 # buyer and seller share a rank: neither has any authority over accounts, and a seller's extra
@@ -27,6 +27,20 @@ RANK: dict[UserRole, int] = {
 
 class NotAllowedError(PermissionDeniedError):
     code = "not_allowed"
+
+
+class HiddenAccountError(NotFoundError):
+    """An account the actor may not reach reads as one that is not there.
+
+    "Forbidden" is an answer: it says the account exists and names its level. A moderator
+    walking identifiers would learn who the other moderators are and which account is the
+    administrator's. Deliberately identical to a genuinely missing account — same code, same
+    words — because a refusal that can be told apart is the leak itself.
+
+    Self-blocking is not hidden this way: the actor knows perfectly well that they exist.
+    """
+
+    code = "user_not_found"
 
 
 def outranks(actor: UserRole, target: UserRole) -> bool:
@@ -90,17 +104,24 @@ def ensure_may_block(actor: User, target: User) -> None:
         # yourself out by accident is a different mistake from overreaching
         raise NotAllowedError("Себя заблокировать нельзя")
     if not may_block(actor.role, target.role):
-        raise NotAllowedError(_refusal(actor.role, target.role))
+        raise HiddenAccountError("Пользователь не найден")
 
 
 def ensure_may_change_role(actor: User, target: User) -> None:
     if actor.id == target.id:
         raise NotAllowedError("Свою роль менять нельзя")
     if not may_change_role(actor.role, target.role):
-        raise NotAllowedError(_refusal(actor.role, target.role))
+        raise HiddenAccountError("Пользователь не найден")
 
 
-def _refusal(actor: UserRole, target: UserRole) -> str:
-    if RANK[actor] == RANK[target]:
-        return "Это аккаунт того же уровня — такие решения принимает роль выше"
-    return "Недостаточно прав: этот аккаунт выше вас"
+def ensure_may_read(actor: User, target: User) -> None:
+    """Reading what happened to an account is reaching for it too.
+
+    A ban history names who was barred, by whom and for what. Without this check a moderator
+    could read the record of another moderator — or of the administrator — by asking for it
+    directly, which is exactly the thing the listings stopped showing them.
+    """
+    if actor.id == target.id:
+        return
+    if not outranks(actor.role, target.role):
+        raise HiddenAccountError("Пользователь не найден")

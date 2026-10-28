@@ -83,14 +83,18 @@ async def unblock_account(
 @router.get("/{user_id}/blocks", response_model=AccountBlockListResponse)
 async def read_block_history(
     user_id: uuid.UUID,
-    _: StaffUser,
+    actor: StaffUser,
     session: SessionDep,
     limit: Limit = DEFAULT_PAGE_SIZE,
     offset: Offset = 0,
 ) -> AccountBlockListResponse:
     """Every ban this account has ever had, lifted or not. A ban that is taken back still
-    happened, and the next moderator deciding about this person needs to know it did."""
-    items, total = await account_blocks.history(session, user_id, limit, offset)
+    happened, and the next moderator deciding about this person needs to know it did.
+
+    Only for accounts the caller may reach: an account they may not touch reads as one that
+    is not there, here as everywhere else.
+    """
+    items, total = await account_blocks.history(session, actor, user_id, limit, offset)
     return AccountBlockListResponse(
         items=[AccountBlockRead.from_block(item) for item in items],
         total=total,

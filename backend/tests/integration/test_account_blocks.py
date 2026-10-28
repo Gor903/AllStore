@@ -94,8 +94,47 @@ async def test_a_moderator_bars_nobody_at_their_own_level_or_above(
 
     response = await block(api_client, str(target.id))
 
-    assert response.status_code == 403
-    assert response.json()["error"]["code"] == "not_allowed"
+    # indistinguishable from an account that is not there: a refusal naming a level would
+    # let a moderator walk identifiers and learn who the other staff are
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "user_not_found"
+
+
+async def test_a_moderator_does_not_read_another_moderators_history(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    """The listing stopped showing them; asking for the record directly must stop too.
+
+    A ban history names who was barred, by whom and for what — reading it is reaching for
+    the account, and this route used to let anybody on the staff do it to anybody.
+    """
+    target = await seed_staff(session, UserRole.MODERATOR)
+    moderator = await seed_staff(session, UserRole.MODERATOR)
+    await act_as(api_client, moderator)
+
+    response = await api_client.get(f"{ACCOUNTS}/{target.id}/blocks")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "user_not_found"
+
+
+async def test_an_administrator_reads_a_moderators_history(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    target = await seed_staff(session, UserRole.MODERATOR)
+    admin = await seed_staff(session, UserRole.ADMIN)
+    await act_as(api_client, admin)
+
+    assert (await api_client.get(f"{ACCOUNTS}/{target.id}/blocks")).status_code == 200
+
+
+async def test_anybody_reads_their_own_history(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    moderator = await seed_staff(session, UserRole.MODERATOR)
+    await act_as(api_client, moderator)
+
+    assert (await api_client.get(f"{ACCOUNTS}/{moderator.id}/blocks")).status_code == 200
 
 
 async def test_an_administrator_bars_a_moderator(
@@ -401,7 +440,7 @@ async def test_a_moderator_does_not_lift_a_ban_on_a_moderator(
     await act_as(api_client, moderator)
     response = await unblock(api_client, str(barred.id))
 
-    assert response.status_code == 403
+    assert response.status_code == 404
 
 
 async def test_the_history_of_an_unknown_account_answers_404(
