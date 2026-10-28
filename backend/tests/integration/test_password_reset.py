@@ -5,7 +5,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import PasswordResetToken, RefreshToken
+from app.models import PasswordResetToken, RefreshToken, User
 from app.services import auth as auth_service
 from tests.integration.conftest import login, register_buyer
 
@@ -61,6 +61,25 @@ async def test_reset_changes_the_password(
     assert confirm.status_code == 200
     api_client.cookies.clear()
     assert (await login(api_client, EMAIL, NEW_PASSWORD)).status_code == 200
+
+
+async def test_reset_clears_the_demand_to_choose_a_password(
+    api_client: AsyncClient, session: AsyncSession, sent_tokens: list[tuple[str, str]]
+) -> None:
+    """Whatever the old password was, this one the owner chose themselves."""
+    await register_buyer(api_client)
+    user = (await session.execute(select(User).where(User.email == EMAIL))).scalars().one()
+    user.must_change_password = True
+    await session.flush()
+    await request_reset(api_client, EMAIL)
+    _, token = sent_tokens[0]
+
+    await api_client.post(
+        "/api/v1/auth/password-reset/confirm", json={"token": token, "password": NEW_PASSWORD}
+    )
+
+    await session.refresh(user)
+    assert user.must_change_password is False
 
 
 async def test_old_password_stops_working_after_reset(

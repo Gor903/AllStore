@@ -188,6 +188,8 @@ async def reset_password(session: AsyncSession, raw_token: str, new_password: st
         raise InvalidResetTokenError("Ссылка недействительна или устарела")
 
     user.password_hash = hash_password(new_password)
+    # whatever the old password was, this one they chose themselves
+    user.must_change_password = False
     await auth_tokens.mark_password_reset_used(session, stored)
     # a password change ends every session: that is the point of a reset
     await auth_tokens.revoke_all_for_user(session, user.id)
