@@ -196,6 +196,28 @@ async def reset_password(session: AsyncSession, raw_token: str, new_password: st
     return user
 
 
+async def change_email(
+    session: AsyncSession, user: User, current_password: str, new_email: str
+) -> str:
+    """Changing the login is as grave as changing the password, so it is proved the same way.
+
+    Returns the address left behind: the journal records what it was, and after the write
+    nobody can tell any more.
+    """
+    if not verify_password(current_password, user.password_hash):
+        raise InvalidCredentialsError("Текущий пароль неверен")
+    normalized = new_email.strip().lower()
+    if normalized != user.email:
+        await ensure_identifiers_free(session, normalized, None)
+    was = user.email
+    user.email = normalized
+    # an address that was verified is no longer the address that was verified
+    user.email_verified_at = None
+    # half the credentials changed, so the sessions holding the other half end too
+    await auth_tokens.revoke_all_for_user(session, user.id)
+    return was
+
+
 async def change_password(
     session: AsyncSession, user: User, current_password: str, new_password: str
 ) -> None:

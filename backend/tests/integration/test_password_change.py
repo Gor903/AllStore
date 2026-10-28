@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import verify_password
-from app.models import RefreshToken, User
+from app.models import AuditLog, RefreshToken, User, UserRole
 from tests.integration.conftest import csrf_headers, login, register_buyer
 
 pytestmark = pytest.mark.integration
@@ -132,6 +132,70 @@ async def test_an_account_owing_nothing_is_not_asked_for_anything(
     response = await api_client.get("/api/v1/users/me/business")
 
     assert response.json()["error"]["code"] != "password_change_required"
+
+
+async def test_changing_the_login_needs_the_password_and_ends_the_sessions(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    await register_buyer(api_client)
+    user = (await session.execute(select(User).where(User.email == EMAIL))).scalars().one()
+
+    response = await api_client.post(
+        "/api/v1/auth/email",
+        json={"email": "moved@example.com", "current_password": PASSWORD},
+        headers=csrf_headers(api_client),
+    )
+
+    assert response.status_code == 200
+    await session.refresh(user)
+    assert user.email == "moved@example.com"
+    live = await session.execute(
+        select(RefreshToken).where(
+            RefreshToken.user_id == user.id, RefreshToken.revoked_at.is_(None)
+        )
+    )
+    assert live.scalars().all() == []
+
+
+async def test_a_taken_address_is_refused(api_client: AsyncClient, session: AsyncSession) -> None:
+    await register_buyer(api_client)
+    session.add(User(email="taken@example.com", password_hash="x", role=UserRole.BUYER))
+    await session.flush()
+
+    response = await api_client.post(
+        "/api/v1/auth/email",
+        json={"email": "taken@example.com", "current_password": PASSWORD},
+        headers=csrf_headers(api_client),
+    )
+
+    assert response.status_code == 409
+
+
+async def test_both_changes_reach_the_journal(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    """The administrator's window on the platform has to show credentials moving too."""
+    await register_buyer(api_client)
+
+    await api_client.post(
+        CHANGE_URL,
+        json={"current_password": PASSWORD, "password": CHOSEN},
+        headers=csrf_headers(api_client),
+    )
+    await api_client.post("/api/v1/auth/login", json={"email": EMAIL, "password": CHOSEN})
+    await api_client.post(
+        "/api/v1/auth/email",
+        json={"email": "moved@example.com", "current_password": CHOSEN},
+        headers=csrf_headers(api_client),
+    )
+
+    entries = (await session.execute(select(AuditLog))).scalars().all()
+    actions = {entry.action for entry in entries}
+    assert "user.password_changed" in actions
+    assert "user.email_changed" in actions
+    moved = next(entry for entry in entries if entry.action == "user.email_changed")
+    # what it was, because after the write nobody can tell any more
+    assert moved.details["from"] == EMAIL
 
 
 async def test_a_change_without_the_flag_is_an_ordinary_thing_to_do(

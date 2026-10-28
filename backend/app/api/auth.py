@@ -6,6 +6,7 @@ from app.deps.auth import CurrentUser, SessionDep, SettingsDep, require_csrf
 from app.deps.rate_limit import limit_invitation_attempts
 from app.schemas.auth import (
     BuyerRegisterRequest,
+    EmailChangeRequest,
     LoginRequest,
     MessageResponse,
     PasswordChangeRequest,
@@ -16,10 +17,13 @@ from app.schemas.auth import (
     UserRead,
 )
 from app.schemas.invitation import ModeratorRegisterRequest
+from app.services import audit, invitations
 from app.services import auth as auth_service
-from app.services import invitations
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+# what these entries are about: the account itself, not anything it owns
+ENTITY = "user"
 
 
 @router.post("/register/buyer", response_model=UserRead, status_code=status.HTTP_201_CREATED)
@@ -138,6 +142,24 @@ async def logout(
     clear_auth_cookies(response, settings)
 
 
+@router.post("/email", response_model=MessageResponse, dependencies=[Depends(require_csrf)])
+async def change_email(
+    payload: EmailChangeRequest,
+    user: CurrentUser,
+    response: Response,
+    settings: SettingsDep,
+    session: SessionDep,
+) -> MessageResponse:
+    was = await auth_service.change_email(
+        session, user, payload.current_password.get_secret_value(), payload.normalized_email
+    )
+    await audit.record(session, user, "user.email_changed", ENTITY, user.id, **{"from": was})
+    await session.commit()
+    # the address is half of the credentials, so the sessions holding the old one ended with it
+    clear_auth_cookies(response, settings)
+    return MessageResponse(message="Логин изменён, войдите заново")
+
+
 @router.post("/password", response_model=MessageResponse, dependencies=[Depends(require_csrf)])
 async def change_password(
     payload: PasswordChangeRequest,
@@ -152,6 +174,7 @@ async def change_password(
         payload.current_password.get_secret_value(),
         payload.password.get_secret_value(),
     )
+    await audit.record(session, user, "user.password_changed", ENTITY, user.id)
     await session.commit()
     # every session ended with the change, so the cookies in hand are stale
     clear_auth_cookies(response, settings)

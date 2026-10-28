@@ -47,6 +47,12 @@ class PasswordResetConfirmRequest(BaseModel):
     password: Password
 
 
+class EmailChangeRequest(EmailOwner):
+    """The login is proved with the password, the same way the password is."""
+
+    current_password: SecretStr
+
+
 class PasswordChangeRequest(BaseModel):
     """The current password is asked for even when the account owes a change: a session left
     open on somebody else's screen must not be enough to take the account over."""
