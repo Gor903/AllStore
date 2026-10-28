@@ -76,28 +76,27 @@ def upgrade() -> None:
     # queue is holding gets a pending one — otherwise it would vanish from the queue, which
     # now lists proposals rather than products; everything else gets a closed one carrying
     # the text the buyer is looking at.
+    #
+    # The reason travels in the same statement rather than in an UPDATE afterwards: the
+    # check constraint is enforced per row at insert time, so a refused revision arriving
+    # without one is rejected before any later statement can fill it in. It is taken from
+    # the verdict that already carries it.
     op.execute(
         sa.text(
-            "INSERT INTO product_revisions "
-            "(id, product_id, name, description, category_id, status, created_at, decided_at) "
-            "SELECT gen_random_uuid(), id, name, description, category_id, "
-            "  CASE WHEN moderation_status = 'pending' THEN 'pending'::revision_status "
-            "       WHEN moderation_status = 'approved' THEN 'approved'::revision_status "
+            "INSERT INTO product_revisions (id, product_id, name, description, category_id, "
+            "  status, reason, created_at, decided_at) "
+            "SELECT gen_random_uuid(), p.id, p.name, p.description, p.category_id, "
+            "  CASE WHEN p.moderation_status = 'pending' THEN 'pending'::revision_status "
+            "       WHEN p.moderation_status = 'approved' THEN 'approved'::revision_status "
             "       ELSE 'rejected'::revision_status END, "
-            "  created_at, "
-            "  CASE WHEN moderation_status = 'pending' THEN NULL ELSE updated_at END "
-            "FROM products"
-        )
-    )
-    # a refused product needs a reason on its revision, and the one it has is in its verdict
-    op.execute(
-        sa.text(
-            "UPDATE product_revisions SET reason = COALESCE(("
-            "  SELECT r.reason FROM moderation_reviews r "
-            "  WHERE r.product_id = product_revisions.product_id AND r.decision = 'rejected' "
-            "  ORDER BY r.created_at DESC LIMIT 1"
-            "), 'Причина не сохранилась: решение принято до появления ревизий') "
-            "WHERE status = 'rejected'"
+            "  CASE WHEN p.moderation_status = 'rejected' THEN COALESCE(( "
+            "    SELECT r.reason FROM moderation_reviews r "
+            "    WHERE r.product_id = p.id AND r.decision = 'rejected' AND r.reason IS NOT NULL "
+            "    ORDER BY r.created_at DESC LIMIT 1 "
+            "  ), 'Причина не сохранилась: решение принято до появления ревизий') END, "
+            "  p.created_at, "
+            "  CASE WHEN p.moderation_status = 'pending' THEN NULL ELSE p.updated_at END "
+            "FROM products p"
         )
     )
 

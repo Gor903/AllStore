@@ -52,3 +52,17 @@ def test_short_secret_key_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
 
     with pytest.raises(ValidationError):
         Settings(_env_file=None)
+
+
+@pytest.mark.parametrize("name", ["SEARCH_SERVICE_URL", "ASSISTANT_BASE_URL", "S3_PUBLIC_URL"])
+def test_an_empty_variable_means_the_feature_is_off(
+    monkeypatch: pytest.MonkeyPatch, name: str
+) -> None:
+    """`SEARCH_SERVICE_URL=` in an env file and an absent one mean the same thing to whoever
+    wrote the file, so they have to mean the same thing here. They did not: an empty string
+    is truthy, and the catalogue went on calling an address with no scheme in it."""
+    monkeypatch.setenv(name, "   ")
+
+    settings = Settings(_env_file=None)
+
+    assert getattr(settings, name.lower()) is None

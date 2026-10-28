@@ -126,6 +126,17 @@ class Settings(BaseSettings):
     # how much of the conversation travels back: enough to follow up, not to pay for a novel
     assistant_history_turns: int = 6
 
+    @field_validator("search_service_url", "assistant_base_url", "s3_public_url", mode="before")
+    @classmethod
+    def _blank_means_unset(cls, value: object) -> object:
+        """An empty variable is how an env file says "off".
+
+        `SEARCH_SERVICE_URL=` in a file and an absent SEARCH_SERVICE_URL mean the same thing
+        to whoever wrote it, and both have to mean the same thing here — otherwise the
+        catalogue tries to call an empty address on every search.
+        """
+        return None if isinstance(value, str) and not value.strip() else value
+
     @field_validator("secret_key")
     @classmethod
     def _secret_key_is_long_enough(cls, value: SecretStr) -> SecretStr:

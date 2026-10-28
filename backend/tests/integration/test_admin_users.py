@@ -349,3 +349,15 @@ async def test_the_journal_names_who_acted_and_reads_newest_first(
     assert [item["action"] for item in body["items"]] == ["user.role_changed", "user.role_changed"]
     assert body["items"][0]["actor_email"] == admin.email
     assert body["items"][0]["details"] == {"from": "moderator", "to": "buyer"}
+
+
+async def test_an_administrator_does_not_hand_the_platform_to_themselves(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    admin = await seed_staff(session, UserRole.ADMIN)
+    await act_as(api_client, admin)
+
+    response = await transfer_admin(api_client, str(admin.id))
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "admin_account"
