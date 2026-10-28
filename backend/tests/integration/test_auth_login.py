@@ -13,6 +13,35 @@ EMAIL = "buyer@example.com"
 PASSWORD = str(BUYER_PAYLOAD["password"])
 
 
+async def test_a_login_is_remembered(api_client: AsyncClient, session: AsyncSession) -> None:
+    """The administrator sorts accounts by this, so it has to mean what it says."""
+    await register_buyer(api_client)
+    user = (await session.execute(select(User).where(User.email == EMAIL))).scalars().one()
+    user.last_login_at = None
+    await session.flush()
+
+    await login(api_client, EMAIL, PASSWORD)
+
+    await session.refresh(user)
+    assert user.last_login_at is not None
+
+
+async def test_a_refused_login_is_not_a_login(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    """A blocked account with the right password has still not come in."""
+    await register_buyer(api_client)
+    user = (await session.execute(select(User).where(User.email == EMAIL))).scalars().one()
+    user.status = UserStatus.BLOCKED
+    user.last_login_at = None
+    await session.flush()
+
+    await login(api_client, EMAIL, PASSWORD)
+
+    await session.refresh(user)
+    assert user.last_login_at is None
+
+
 async def test_login_succeeds_with_correct_password(api_client: AsyncClient) -> None:
     await register_buyer(api_client)
     api_client.cookies.clear()

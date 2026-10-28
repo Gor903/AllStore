@@ -2424,6 +2424,8 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Last Login At */
+            last_login_at: string | null;
             /** Must Change Password */
             must_change_password: boolean;
             /** Phone */

@@ -37,6 +37,8 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             unique=True,
             postgresql_where=text("role = 'admin'"),
         ),
+        # nulls last, so accounts that never came back do not crowd out the ones that did
+        Index("ix_users_last_login_at", text("last_login_at DESC NULLS LAST")),
     )
 
     email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False)
@@ -54,6 +56,9 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
     )
     email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # When the person last proved who they were. Written on a password login only: refresh
+    # rotation happens on its own schedule and would turn this into "the token is alive".
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # A password somebody else chose is not a password. Set when an account is created from
     # the environment rather than by its owner, and cleared the moment they pick their own.
     must_change_password: Mapped[bool] = mapped_column(

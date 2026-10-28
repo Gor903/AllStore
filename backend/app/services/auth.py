@@ -100,8 +100,10 @@ async def authenticate(session: AsyncSession, email: str, password: str) -> User
         raise InvalidCredentialsError("Неверный email или пароль")
     if password_needs_rehash(user.password_hash):
         user.password_hash = hash_password(password)
-        await session.flush()
     _ensure_active(user)
+    # after the status check: a refused attempt is not a login, however correct the password
+    user.last_login_at = datetime.now(UTC)
+    await session.flush()
     return user
 
 
