@@ -11,6 +11,7 @@ from app.repositories import users as users_repo
 from app.repositories.audit import JournalFilter
 from app.repositories.users import AccountFilter, AccountSort
 from app.schemas.admin import (
+    ActivityRead,
     AdminCategoryRead,
     AuditLogListResponse,
     AuditLogRead,
@@ -18,6 +19,7 @@ from app.schemas.admin import (
     CategoryUpdateRequest,
     ModeratorRecordRead,
     RoleChangeRequest,
+    SystemStateRead,
     UserListResponse,
 )
 from app.schemas.auth import UserRead
@@ -35,6 +37,7 @@ from app.services import (
     invitations,
     moderator_record,
     permissions,
+    system_health,
 )
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -237,6 +240,27 @@ async def list_audit_logs(
         limit=limit,
         offset=offset,
     )
+
+
+@router.get("/system", response_model=SystemStateRead)
+async def read_system_state(_: AdminUser, session: SessionDep) -> SystemStateRead:
+    """Read at the moment it is asked for: nothing here is stored, so nothing can go stale.
+
+    Administrator only. The journal is not a moderator's and neither is this: knowing how
+    loaded the machine is says nothing about moderating, and says a good deal about the
+    platform to anybody who should not have it.
+    """
+    return SystemStateRead.of(system_health.resources(), await system_health.occupancy(session))
+
+
+@router.get("/activity", response_model=ActivityRead)
+async def read_activity(
+    _: AdminUser,
+    session: SessionDep,
+    days: Annotated[int, Query(ge=1, le=90)] = 14,
+) -> ActivityRead:
+    """Registrations, logins, new products and complaints by day, aggregated on the spot."""
+    return ActivityRead.of(await system_health.activity(session, days))
 
 
 @router.get("/categories", response_model=list[AdminCategoryRead])

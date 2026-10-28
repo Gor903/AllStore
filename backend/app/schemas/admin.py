@@ -1,5 +1,6 @@
 import uuid
-from datetime import datetime
+from dataclasses import asdict
+from datetime import date, datetime
 from typing import Annotated, Any
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, StringConstraints
@@ -8,6 +9,7 @@ from app.models import AuditLog, Category, CategoryStatus, UserRole
 from app.models.category import CATEGORY_SLUG_MAX_LENGTH, CATEGORY_SLUG_PATTERN
 from app.schemas.auth import UserRead
 from app.services.moderator_record import ModeratorRecord
+from app.services.system_health import DayOfActivity, Occupancy, Resources
 
 
 class UserListResponse(BaseModel):
@@ -21,6 +23,49 @@ class RoleChangeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     role: UserRole
+
+
+class SystemStateRead(BaseModel):
+    """The machine and the platform, as they are at this moment. Nothing is stored."""
+
+    cpu_percent: float
+    memory_percent: float
+    memory_total_mb: int
+    memory_used_mb: int
+    disk_percent: float
+    disk_total_gb: int
+    disk_free_gb: int
+    uptime_seconds: int
+
+    users: int
+    sellers: int
+    products: int
+    businesses_pending: int
+    reports_open: int
+    live_sessions: int
+    database_size_mb: int
+
+    @classmethod
+    def of(cls, resources: "Resources", occupancy: "Occupancy") -> "SystemStateRead":
+        return cls(**asdict(resources), **asdict(occupancy))
+
+
+class DayOfActivityRead(BaseModel):
+    day: date
+    registrations: int
+    logins: int
+    products: int
+    reports: int
+
+
+class ActivityRead(BaseModel):
+    """Oldest first, quiet days present and zeroed: a hole would read as a day not collected."""
+
+    days: list[DayOfActivityRead]
+
+    @classmethod
+    def of(cls, series: "list[DayOfActivity]") -> "ActivityRead":
+        return cls(days=[DayOfActivityRead(**asdict(day)) for day in series])
 
 
 class ModeratorRecordRead(BaseModel):

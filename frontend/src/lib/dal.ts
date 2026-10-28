@@ -6,6 +6,7 @@ import { cache } from "react";
 
 import type {
   AccountBlockList,
+  Activity,
   AdminCategory,
   AuditLogList,
   Business,
@@ -19,6 +20,7 @@ import type {
   ProductList,
   ReportQueue,
   Store,
+  SystemState,
   User,
   UserList,
 } from "@/lib/api";
@@ -172,6 +174,15 @@ export async function getAuditLogs(
     params.set("action", filters.action);
   }
   return backendGet<AuditLogList>(`/admin/audit-logs?${params}`);
+}
+
+/** The machine and the platform right now. Nothing is stored, so nothing can be stale. */
+export async function getSystemState(): Promise<SystemState | null> {
+  return backendGet<SystemState>("/admin/system");
+}
+
+export async function getActivity(days: number): Promise<Activity | null> {
+  return backendGet<Activity>(`/admin/activity?days=${days}`);
 }
 
 /** One moderator's account and what they have decided with it. */
