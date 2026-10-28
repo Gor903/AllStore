@@ -94,8 +94,8 @@ async def register_seller(
 
 
 async def ensure_identifiers_free(session: AsyncSession, email: str, phone: str | None) -> None:
-    """Public: moderator registration goes through invitations rather than through this
-    module, and the two must refuse a taken address in the same words."""
+    """Public: appointing a moderator goes through its own service rather than this module,
+    and the two must refuse a taken address in the same words."""
     if await users.email_exists(session, email):
         raise ConflictError("Пользователь с таким email уже зарегистрирован")
     if phone is not None and await users.phone_exists(session, phone):

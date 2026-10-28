@@ -64,7 +64,7 @@ def test_the_administrator_role_is_never_handed_out_by_a_role_change(role: UserR
 
 @pytest.mark.parametrize("role", ROLES)
 def test_only_an_administrator_invites_moderators(role: UserRole) -> None:
-    assert permissions.may_invite_moderator(role) is (role is ADMIN)
+    assert permissions.may_appoint_moderator(role) is (role is ADMIN)
 
 
 @pytest.mark.parametrize("role", ROLES)

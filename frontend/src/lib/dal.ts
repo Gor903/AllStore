@@ -14,7 +14,6 @@ import type {
   ContactList,
   CustomerBlockList,
   IncidentList,
-  InvitationList,
   ModerationProductList,
   ModeratorRecord,
   Product,
@@ -151,11 +150,6 @@ export async function getModerators(query: string, offset: number): Promise<User
 
 export async function getAdminCategories(): Promise<AdminCategory[] | null> {
   return backendGet<AdminCategory[]>("/admin/categories");
-}
-
-export async function getModeratorInvitations(offset: number): Promise<InvitationList | null> {
-  const params = new URLSearchParams({ limit: String(ADMIN_PAGE_SIZE), offset: String(offset) });
-  return backendGet<InvitationList>(`/admin/moderator-invitations?${params}`);
 }
 
 /** Every ban this account has ever had. Moderators read it too — it is their decision to make. */

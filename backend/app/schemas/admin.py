@@ -8,7 +8,7 @@ from pydantic import BaseModel, BeforeValidator, ConfigDict, StringConstraints
 
 from app.models import AuditLog, Category, CategoryStatus, UserRole
 from app.models.category import CATEGORY_SLUG_MAX_LENGTH, CATEGORY_SLUG_PATTERN
-from app.schemas.auth import UserRead
+from app.schemas.auth import EmailOwner, Password, UserRead
 from app.services.incidents import Incident, IncidentKind
 from app.services.moderator_record import ModeratorRecord
 from app.services.system_health import DayOfActivity, Occupancy, Resources
@@ -25,6 +25,25 @@ class RoleChangeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     role: UserRole
+
+
+class ModeratorCreateRequest(EmailOwner):
+    """The address and the password the administrator hands over.
+
+    The password is typed by the administrator rather than generated, because it has to be
+    passed on by hand anyway — and a value the administrator chose is one they can read back
+    off their own screen if the message never arrived.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    password: Password
+
+
+class ModeratorPasswordRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    password: Password
 
 
 class SystemStateRead(BaseModel):

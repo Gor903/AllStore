@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, status
 
 from app.core.errors import NotFoundError
-from app.deps.auth import SessionDep, SettingsDep, require_csrf, require_role
+from app.deps.auth import SessionDep, require_csrf, require_role
 from app.models import User, UserRole, UserStatus
 from app.repositories import users as users_repo
 from app.repositories.audit import JournalFilter
@@ -17,25 +17,21 @@ from app.schemas.admin import (
     AuditLogRead,
     CategoryCreateRequest,
     CategoryUpdateRequest,
+    ModeratorCreateRequest,
+    ModeratorPasswordRequest,
     ModeratorRecordRead,
     RoleChangeRequest,
     SystemStateRead,
     UserListResponse,
 )
 from app.schemas.auth import UserRead
-from app.schemas.invitation import (
-    InvitationCreated,
-    InvitationCreateRequest,
-    InvitationListResponse,
-    InvitationRead,
-)
 from app.services import (
     account_blocks,
     admin_categories,
     admin_users,
     audit,
-    invitations,
     moderator_record,
+    moderators,
     permissions,
     system_health,
 )
@@ -136,7 +132,7 @@ async def list_moderators(
     limit: Limit = DEFAULT_PAGE_SIZE,
     offset: Offset = 0,
 ) -> UserListResponse:
-    """The moderator accounts themselves, as against the invitations that created them.
+    """Everybody who moderates, and nobody else.
 
     They are not in `/accounts`: that list is about the people the platform serves. Barring a
     moderator is the same action under the same rank rule, taken here because here is where
@@ -153,6 +149,46 @@ async def list_moderators(
     )
 
 
+@router.post(
+    "/moderators",
+    response_model=UserRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_csrf)],
+)
+async def create_moderator(
+    payload: ModeratorCreateRequest, admin: AdminUser, session: SessionDep
+) -> UserRead:
+    """Makes the account and hands over a password the administrator chose.
+
+    That password is known to the administrator, so it is not yet the moderator's: it gets
+    them in once and the platform stays shut to them until they replace it.
+    """
+    moderator = await moderators.create(
+        session, admin, payload.normalized_email, payload.password.get_secret_value()
+    )
+    await session.commit()
+    return UserRead.model_validate(moderator)
+
+
+@router.post(
+    "/moderators/{user_id}/password",
+    response_model=UserRead,
+    dependencies=[Depends(require_csrf)],
+)
+async def reset_moderator_password(
+    user_id: uuid.UUID,
+    payload: ModeratorPasswordRequest,
+    admin: AdminUser,
+    session: SessionDep,
+) -> UserRead:
+    """The way back in for a moderator who lost theirs. The replacement expires the same way."""
+    moderator = await moderators.reset_password(
+        session, admin, user_id, payload.password.get_secret_value()
+    )
+    await session.commit()
+    return UserRead.model_validate(moderator)
+
+
 @router.get("/moderators/{user_id}", response_model=ModeratorRecordRead)
 async def read_moderator(
     user_id: uuid.UUID, _: AdminUser, session: SessionDep
@@ -163,57 +199,6 @@ async def read_moderator(
     wrong one here would be read as evidence.
     """
     return ModeratorRecordRead.of(await moderator_record.record_of(session, user_id))
-
-
-@router.post(
-    "/moderator-invitations",
-    response_model=InvitationCreated,
-    status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_csrf)],
-)
-async def invite_moderator(
-    payload: InvitationCreateRequest,
-    admin: AdminUser,
-    settings: SettingsDep,
-    session: SessionDep,
-) -> InvitationCreated:
-    """Issues the invitation and hands back its secret — the only time it is readable.
-
-    It is stored as a sha256, so there is no second chance to look it up: an administrator
-    who loses this answer revokes the invitation and issues another.
-    """
-    invitation, token = await invitations.create(session, admin, settings, payload.email)
-    await session.commit()
-    return InvitationCreated(invitation=InvitationRead.from_invitation(invitation), token=token)
-
-
-@router.get("/moderator-invitations", response_model=InvitationListResponse)
-async def list_moderator_invitations(
-    _: AdminUser,
-    session: SessionDep,
-    limit: Limit = DEFAULT_PAGE_SIZE,
-    offset: Offset = 0,
-) -> InvitationListResponse:
-    items, total = await invitations.list_all(session, limit, offset)
-    return InvitationListResponse(
-        items=[InvitationRead.from_invitation(item) for item in items],
-        total=total,
-        limit=limit,
-        offset=offset,
-    )
-
-
-@router.post(
-    "/moderator-invitations/{invitation_id}/revoke",
-    response_model=InvitationRead,
-    dependencies=[Depends(require_csrf)],
-)
-async def revoke_moderator_invitation(
-    invitation_id: uuid.UUID, admin: AdminUser, session: SessionDep
-) -> InvitationRead:
-    invitation = await invitations.revoke(session, admin, invitation_id)
-    await session.commit()
-    return InvitationRead.from_invitation(invitation)
 
 
 @router.get("/audit-logs", response_model=AuditLogListResponse)
