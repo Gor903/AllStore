@@ -7,6 +7,7 @@ from pydantic import BaseModel, BeforeValidator, ConfigDict, StringConstraints
 from app.models import AuditLog, Category, CategoryStatus, UserRole
 from app.models.category import CATEGORY_SLUG_MAX_LENGTH, CATEGORY_SLUG_PATTERN
 from app.schemas.auth import UserRead
+from app.services.moderator_record import ModeratorRecord
 
 
 class UserListResponse(BaseModel):
@@ -20,6 +21,28 @@ class RoleChangeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     role: UserRole
+
+
+class ModeratorRecordRead(BaseModel):
+    """One moderator's account and what they have decided with it."""
+
+    moderator: UserRead
+    products_approved: int
+    products_rejected: int
+    businesses_approved: int
+    businesses_refused: int
+    accounts_blocked: int
+
+    @classmethod
+    def of(cls, record: "ModeratorRecord") -> "ModeratorRecordRead":
+        return cls(
+            moderator=UserRead.model_validate(record.moderator),
+            products_approved=record.products_approved,
+            products_rejected=record.products_rejected,
+            businesses_approved=record.businesses_approved,
+            businesses_refused=record.businesses_refused,
+            accounts_blocked=record.accounts_blocked,
+        )
 
 
 class AuditLogRead(BaseModel):
