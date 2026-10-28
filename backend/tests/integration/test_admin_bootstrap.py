@@ -11,16 +11,19 @@ import asyncio
 import uuid
 
 import pytest
+from pydantic import SecretStr
 from sqlalchemy import delete, func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
+from app.core.config import get_settings
 from app.core.security import hash_password, verify_password
 from app.models import AccountBlock, User, UserRole, UserStatus
 from app.services.admin_bootstrap import (
     BootstrapNotConfiguredError,
     Outcome,
     bootstrap,
+    bootstrap_on_startup,
 )
 
 pytestmark = pytest.mark.integration
@@ -93,6 +96,38 @@ async def test_a_second_run_under_another_address_changes_nothing(
 
     assert result.outcome is Outcome.UNCHANGED
     assert [user.email for user in await admins(session)] == [first]
+
+
+async def test_startup_without_configuration_does_nothing_and_says_nothing(
+    session: AsyncSession,
+) -> None:
+    """A stand with no ADMIN_EMAIL wants no administrator; that is not a misconfiguration."""
+    settings = get_settings().model_copy(update={"admin_email": None, "admin_password": None})
+
+    assert await bootstrap_on_startup(session, settings) is None
+    assert await admins(session) == []
+
+
+async def test_startup_creates_the_administrator_the_environment_names(
+    db_engine: AsyncEngine,
+) -> None:
+    """Committed on purpose — the application does commit — so this one cleans up after itself."""
+    email = an_email()
+    settings = get_settings().model_copy(
+        update={"admin_email": email, "admin_password": SecretStr(PASSWORD)}
+    )
+    async with AsyncSession(db_engine) as session:
+        try:
+            first = await bootstrap_on_startup(session, settings)
+            # the second start of the same deploy must be a no-op, not a second administrator
+            second = await bootstrap_on_startup(session, settings)
+
+            assert "создан" in str(first)
+            assert "ничего не менялось" in str(second)
+            assert len(await admins(session)) == 1
+        finally:
+            await session.execute(delete(User).where(User.email == email))
+            await session.commit()
 
 
 async def test_the_created_administrator_has_to_choose_their_own_password(

@@ -23,6 +23,7 @@ from datetime import UTC, datetime
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import Settings
 from app.core.security import hash_password
 from app.models import User, UserRole, UserStatus
 from app.repositories import account_blocks as blocks_repo
@@ -124,3 +125,20 @@ async def _reactivate(session: AsyncSession, user: User) -> None:
 async def _queue_behind_other_bootstraps(session: AsyncSession) -> None:
     """Held until the transaction ends, so the next runner reads what this one wrote."""
     await session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": BOOTSTRAP_LOCK_KEY})
+
+
+async def bootstrap_on_startup(session: AsyncSession, settings: Settings) -> str | None:
+    """The same thing the deploy script does, done by the application coming up.
+
+    Returns what happened, for the log, or None when there is nothing configured to do. An
+    unset ADMIN_EMAIL is not a misconfiguration — a stand or a test run has no administrator
+    and wants none — so the absence is quiet and the application still starts. A database
+    that refuses the write is a different matter and is left to propagate.
+    """
+    if not settings.admin_email or settings.admin_password is None:
+        return None
+    result = await bootstrap(
+        session, settings.admin_email, settings.admin_password.get_secret_value()
+    )
+    await session.commit()
+    return result.message
