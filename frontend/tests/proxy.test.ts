@@ -92,11 +92,42 @@ describe("proxy on a storefront subdomain", () => {
     expect(response.status).toBe(200);
   });
 
-  it("leaves the cabinet reachable on a storefront host", () => {
+  it("sends the cabinet back to the main domain from a storefront host", () => {
+    // The session cookie is host-only (ADR 18), so there is none to find here. Serving the
+    // page anyway produced a loop: bounce to /login, post to the apex, cookie lands on the
+    // apex, come back to the subdomain, find nothing again.
     const response = proxy(request("/dashboard", "allstore_session=t", "cups.allstore.am"));
 
-    expect(rewriteTarget(response)).toBeNull();
+    const location = new URL(response.headers.get("location") ?? "");
+    expect(location.hostname).toBe("allstore.am");
+    expect(location.pathname).toBe("/dashboard");
+  });
+
+  it("sends the admin and moderation screens back too", () => {
+    for (const path of ["/admin", "/moderation/products"]) {
+      const response = proxy(request(path, undefined, "cups.allstore.am"));
+
+      const location = new URL(response.headers.get("location") ?? "");
+      expect(location.hostname).toBe("allstore.am");
+      expect(location.pathname).toBe(path);
+    }
+  });
+
+  it("carries the query string across", () => {
+    const response = proxy(request("/moderation/products?page=3", undefined, "cups.allstore.am"));
+
+    const location = new URL(response.headers.get("location") ?? "");
+    expect(location.pathname).toBe("/moderation/products");
+    expect(location.search).toBe("?page=3");
+  });
+
+  it("leaves everything else on the storefront host alone", () => {
+    // a product page, a complaint, the login form: all of these work there, because the
+    // browser sends the apex cookie to the apex API whatever page it is reading
+    const response = proxy(request("/p/some-product", undefined, "cups.allstore.am"));
+
     expect(response.headers.get("location")).toBeNull();
+    expect(rewriteTarget(response)).toBeNull();
   });
 });
 
