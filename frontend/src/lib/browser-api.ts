@@ -10,7 +10,11 @@ export function readCookie(name: string): string | null {
 
 export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: FormError };
 
-const OFFLINE: FormError = { message: "Сервер недоступен, попробуйте позже", fieldErrors: {} };
+const OFFLINE: FormError = {
+  message: "Сервер недоступен, попробуйте позже",
+  fieldErrors: {},
+  code: "offline",
+};
 
 /**
  * Session cookies are httpOnly, so the browser never holds the token itself —

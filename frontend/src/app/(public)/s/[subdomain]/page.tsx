@@ -7,6 +7,7 @@ import { ReportButton } from "@/components/ReportButton";
 import { StoreContacts } from "@/components/StoreContacts";
 import { StoreHeader } from "@/components/StoreHeader";
 import { StoreTheme } from "@/components/StoreTheme";
+import { StorefrontGuard } from "@/components/StorefrontGuard";
 import { Pagination } from "@/components/catalog/Pagination";
 import { ProductCard } from "@/components/catalog/ProductCard";
 import { PAGE_SIZE, STORE_BLOCKED, fetchCatalogProducts, fetchStorefront } from "@/lib/api";
@@ -81,59 +82,63 @@ export default async function StorefrontPage({
   const page = await fetchCatalogProducts({ q: null, category: null, store: subdomain, offset });
 
   return (
-    <StoreTheme primary={store.primary_color} secondary={store.secondary_color}>
-      <StoreHeader displayName={store.display_name} homeHref="/" logoUrl={store.logo_url} />
-      {store.banner_url === null ? null : (
-        <div className="relative aspect-[4/1] w-full bg-surface-muted">
-          <Image
-            src={store.banner_url}
-            alt=""
-            fill
-            sizes="100vw"
-            unoptimized
-            className="object-cover"
-            priority
-          />
-        </div>
-      )}
-      <main className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-8">
-        <div className="h-2 w-24 rounded-full bg-brand" />
-        <header className="flex flex-col gap-3">
-          <h1 className="text-4xl font-semibold tracking-tight">{store.display_name}</h1>
-          {store.description === null ? null : (
-            <p className="text-ink-muted">{store.description}</p>
-          )}
-          <StoreContacts contacts={store.contacts} heading="Связаться с продавцом" />
-        </header>
-
-        {page === null ? (
-          <p className="text-danger">Товары сейчас недоступны, попробуйте обновить страницу.</p>
-        ) : page.items.length === 0 ? (
-          <p className="text-ink-muted">В этом магазине пока нет товаров.</p>
-        ) : (
-          <>
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-              {page.items.map((product) => (
-                <ProductCard
-                  key={product.id}
-                  product={product}
-                  href={productHref(product.store.subdomain, product.id, host)}
-                />
-              ))}
-            </div>
-            <Pagination
-              path="/"
-              params={new URLSearchParams()}
-              offset={offset}
-              pageSize={PAGE_SIZE}
-              total={page.total}
+    // The server rendering a subdomain cannot see who is reading — the session cookie is
+    // host-only and belongs to the marketplace. The browser asks on its behalf.
+    <StorefrontGuard subdomain={subdomain}>
+      <StoreTheme primary={store.primary_color} secondary={store.secondary_color}>
+        <StoreHeader displayName={store.display_name} homeHref="/" logoUrl={store.logo_url} />
+        {store.banner_url === null ? null : (
+          <div className="relative aspect-[4/1] w-full bg-surface-muted">
+            <Image
+              src={store.banner_url}
+              alt=""
+              fill
+              sizes="100vw"
+              unoptimized
+              className="object-cover"
+              priority
             />
-          </>
+          </div>
         )}
-        <footer className="mt-4 border-t border-ink-muted/15 pt-4">
-          <ReportButton subdomain={store.subdomain} label="Пожаловаться на магазин" />
-        </footer>
-      </main>
-    </StoreTheme>
+        <main className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-8">
+          <div className="h-2 w-24 rounded-full bg-brand" />
+          <header className="flex flex-col gap-3">
+            <h1 className="text-4xl font-semibold tracking-tight">{store.display_name}</h1>
+            {store.description === null ? null : (
+              <p className="text-ink-muted">{store.description}</p>
+            )}
+            <StoreContacts contacts={store.contacts} heading="Связаться с продавцом" />
+          </header>
+
+          {page === null ? (
+            <p className="text-danger">Товары сейчас недоступны, попробуйте обновить страницу.</p>
+          ) : page.items.length === 0 ? (
+            <p className="text-ink-muted">В этом магазине пока нет товаров.</p>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+                {page.items.map((product) => (
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    href={productHref(product.store.subdomain, product.id, host)}
+                  />
+                ))}
+              </div>
+              <Pagination
+                path="/"
+                params={new URLSearchParams()}
+                offset={offset}
+                pageSize={PAGE_SIZE}
+                total={page.total}
+              />
+            </>
+          )}
+          <footer className="mt-4 border-t border-ink-muted/15 pt-4">
+            <ReportButton subdomain={store.subdomain} label="Пожаловаться на магазин" />
+          </footer>
+        </main>
+      </StoreTheme>
+    </StorefrontGuard>
   );
 }
