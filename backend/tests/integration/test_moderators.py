@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import verify_password
 from app.models import AuditLog, User, UserRole
+from app.services.auth import password_of
 from tests.integration.conftest import act_as, csrf_headers, login, register_buyer, seed_staff
 
 pytestmark = pytest.mark.integration
@@ -148,7 +149,7 @@ async def test_a_lost_password_is_replaced_by_the_administrator(
     assert response.status_code == 200
     user = (await session.execute(select(User).where(User.email == email))).scalars().one()
     await session.refresh(user)
-    assert verify_password("second-handover-1", user.password_hash)
+    assert verify_password("second-handover-1", password_of(user))
     # handed over again, so it expires again
     assert user.must_change_password is True
 

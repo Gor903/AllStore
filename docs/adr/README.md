@@ -27,3 +27,4 @@
 | 17 | [Модератора заводит администратор, приглашений нет](0017-moderators-appointed-directly.md) | 19 | accepted |
 | 18 | [Серверные сессии и привязка к устройству](0018-server-side-sessions.md) | рефактор auth | accepted |
 | 19 | [Транзакционная почта: временно личный Gmail](0019-transactional-mail.md) | рефактор auth | accepted |
+| 20 | [Вход через Google: идентичность по sub](0020-google-sign-in.md) | рефактор auth | accepted |

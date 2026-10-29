@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import verify_password
 from app.models import AuditLog, Session, User, UserRole
+from app.services.auth import password_of
 from tests.integration.conftest import csrf_headers, login, register_buyer
 
 pytestmark = pytest.mark.integration
@@ -112,7 +113,7 @@ async def test_choosing_a_password_opens_the_site(
     assert change.status_code == 200
     await session.refresh(user)
     assert user.must_change_password is False
-    assert verify_password(CHOSEN, user.password_hash)
+    assert verify_password(CHOSEN, password_of(user))
 
 
 async def test_the_old_password_has_to_be_known(

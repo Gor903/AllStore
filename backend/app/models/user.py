@@ -47,7 +47,10 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     # number into the registration form and they can no longer use their own. Indexed, because
     # the administrator's search reads it — see migration 0028.
     phone: Mapped[str | None] = mapped_column(String(32), index=True)
-    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Null for an account that only ever signs in with a provider. A column insisting on a
+    # value would have to be filled with something, and whatever that something was would be
+    # a value somebody could try to guess against — see migration 0029.
+    password_hash: Mapped[str | None] = mapped_column(String(255))
     role: Mapped[UserRole] = mapped_column(
         SAEnum(UserRole, name="user_role", values_callable=lambda e: [m.value for m in e]),
         default=UserRole.BUYER,

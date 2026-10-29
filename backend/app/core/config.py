@@ -132,6 +132,14 @@ class Settings(BaseSettings):
     # where a link in a letter points; the backend has no other way to know its own address
     site_url: str | None = None
 
+    # Signing in with Google. Unset client credentials mean the platform does not offer it
+    # at all — the routes refuse rather than half-work. See services/google_oidc.py and
+    # docs/adr/0020-google-sign-in.md.
+    google_client_id: str | None = None
+    google_client_secret: SecretStr | None = None
+    google_discovery_url: str = "https://accounts.google.com/.well-known/openid-configuration"
+    google_timeout_seconds: float = 10.0
+
     # the first administrator, read once by scripts/bootstrap_admin.py and never again: after
     # that the database is the authority on who administers the platform, not the environment
     admin_email: str | None = None
@@ -184,6 +192,7 @@ class Settings(BaseSettings):
         "smtp_host",
         "breached_password_url",
         "redis_url",
+        "google_client_id",
         mode="before",
     )
     @classmethod

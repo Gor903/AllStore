@@ -9,6 +9,7 @@ from app.models import UserRole, UserStatus
 from app.schemas.auth import BuyerRegisterRequest, SellerRegisterRequest
 from app.services import auth as auth_service
 from app.services import sessions as session_service
+from app.services.auth import password_of
 
 pytestmark = pytest.mark.integration
 
@@ -25,7 +26,7 @@ async def test_registration_stores_only_a_hash(session: AsyncSession) -> None:
     user = await auth_service.register_buyer(session, buyer_request())
 
     assert user.password_hash != PASSWORD
-    assert verify_password(PASSWORD, user.password_hash)
+    assert verify_password(PASSWORD, password_of(user))
 
 
 async def test_registration_reports_a_taken_address_inwards_only(
@@ -98,7 +99,7 @@ async def test_login_upgrades_a_hash_made_with_weaker_parameters(session: AsyncS
     await auth_service.authenticate(session, "svc-buyer@example.com", PASSWORD)
 
     assert user.password_hash != weak_hash
-    assert verify_password(PASSWORD, user.password_hash)
+    assert verify_password(PASSWORD, password_of(user))
 
 
 async def test_a_session_and_its_csrf_token_are_not_the_same_value(

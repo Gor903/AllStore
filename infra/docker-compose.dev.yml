@@ -81,6 +81,9 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       MAIL_FROM: ${MAIL_FROM:-noreply@allstore.am}
       SITE_URL: ${SITE_URL:-http://localhost:${HTTP_PORT:-8080}}
+      # empty means the platform does not offer signing in with Google at all
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       # unset this and the catalogue searches exactly as it did before semantic search
       SEARCH_SERVICE_URL: ${SEARCH_SERVICE_URL-http://search:8000}
       # empty disables the assistant and the site simply does not offer it
