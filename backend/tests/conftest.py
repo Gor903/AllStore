@@ -24,6 +24,17 @@ _DEFAULTS = {
 for key, value in _DEFAULTS.items():
     os.environ.setdefault(key, value)
 
+# Background work happens inline here, whatever the environment says.
+#
+# Not left to the fallback in app/worker.py, which turns eager mode on only when no broker is
+# configured: CI sets REDIS_URL for the rate-limiter tests, and without this line the suite
+# would quietly start putting letters on a real queue that nothing reads — green either way,
+# and testing nothing. A test that wants to know whether something was queued says so.
+from app.worker import celery_app  # noqa: E402 — the settings above have to be in place first
+
+celery_app.conf.task_always_eager = True
+celery_app.conf.task_eager_propagates = True
+
 
 @pytest.fixture
 async def client() -> AsyncIterator[AsyncClient]:

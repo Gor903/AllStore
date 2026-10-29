@@ -64,20 +64,31 @@ def _deliver(settings: Settings, message: EmailMessage) -> None:
         server.send_message(message)
 
 
-async def send(settings: Settings, letter: Letter) -> None:
-    """Sends it, or writes down that it could not.
+def deliver_now(settings: Settings, letter: Letter) -> None:
+    """Sends it, here and now, and **raises** if it could not.
 
-    Never raises. This is called from a background task after the answer has already gone out,
-    so there is nobody left to tell — and a letter that failed to send must not be able to take
-    anything else down with it. What it can do is leave a line in the log saying so.
+    For the worker. A failure has to reach the caller there, because the caller is Celery and
+    what it does with a failure is try again later — which is the whole reason a letter goes
+    through a queue rather than through the request that caused it.
+
+    Blocking on purpose: the worker is a pool of processes, not an event loop, and wrapping
+    this in one would buy nothing.
     """
     if not settings.smtp_host:
         logger.info("no mail transport configured, letter to %s not sent", letter.to)
         return
+    _deliver(settings, compose(settings, letter))
+
+
+async def send(settings: Settings, letter: Letter) -> None:
+    """Sends it, or writes down that it could not.
+
+    Never raises. This is the path taken when there is no queue to put the letter on, and by
+    then nobody is left to tell — a letter that failed to send must not be able to take
+    anything else down with it. What it can do is leave a line in the log saying so.
+    """
     try:
-        await anyio.to_thread.run_sync(
-            _deliver, settings, compose(settings, letter), limiter=_sending
-        )
+        await anyio.to_thread.run_sync(deliver_now, settings, letter, limiter=_sending)
     except (smtplib.SMTPException, ssl.SSLError, OSError):
         # the address is logged, the body is not: a letter can carry a reset link
         logger.exception("could not send the letter to %s", letter.to)

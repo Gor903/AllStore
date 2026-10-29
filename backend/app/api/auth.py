@@ -2,7 +2,7 @@ import asyncio
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Request, Response, status
+from fastapi import APIRouter, Depends, Request, Response, status
 
 from app.core.client_ip import client_ip
 from app.core.config import Settings
@@ -60,7 +60,6 @@ REGISTERED = "Если адрес свободен, на него отправл
 
 async def _register(
     session: SessionDep,
-    background: BackgroundTasks,
     settings: Settings,
     payload: BuyerRegisterRequest,
     create: Callable[[SessionDep, Any], Awaitable[User]],
@@ -77,15 +76,14 @@ async def _register(
         user = await create(session, payload)
     except auth_service.AddressAlreadyTaken:
         await session.commit()
-        background.add_task(
-            notifications.deliver,
+        notifications.deliver(
             settings,
             notifications.registration_attempt_letter(settings, payload.normalized_email),
         )
         return
     letters = await email_verification.request(session, settings, user, user.email)
     await session.commit()
-    background.add_task(notifications.deliver, settings, letters.confirm)
+    notifications.deliver(settings, letters.confirm)
 
 
 def _context(request: Request, settings: Settings) -> dict[str, str | None]:
@@ -104,7 +102,6 @@ def _context(request: Request, settings: Settings) -> dict[str, str | None]:
 )
 async def register_buyer(
     payload: BuyerRegisterRequest,
-    background: BackgroundTasks,
     settings: SettingsDep,
     session: SessionDep,
 ) -> MessageResponse:
@@ -118,7 +115,7 @@ async def register_buyer(
     No session either, for the same reason. Signing one person in and not the other is a
     difference a caller can see without reading a word.
     """
-    await _register(session, background, settings, payload, auth_service.register_buyer)
+    await _register(session, settings, payload, auth_service.register_buyer)
     return MessageResponse(message=REGISTERED)
 
 
@@ -130,7 +127,6 @@ async def register_buyer(
 )
 async def register_seller(
     payload: SellerRegisterRequest,
-    background: BackgroundTasks,
     settings: SettingsDep,
     session: SessionDep,
 ) -> MessageResponse:
@@ -141,7 +137,7 @@ async def register_seller(
         user, _business = await auth_service.register_seller(db, data)
         return user
 
-    await _register(session, background, settings, payload, _create)
+    await _register(session, settings, payload, _create)
     return MessageResponse(message=REGISTERED)
 
 
@@ -150,7 +146,6 @@ async def login(
     payload: LoginRequest,
     response: Response,
     request: Request,
-    background: BackgroundTasks,
     settings: SettingsDep,
     session: SessionDep,
 ) -> UserRead:
@@ -190,8 +185,7 @@ async def login(
     if opened_elsewhere:
         # only when the account was already open somewhere: a letter for every one of
         # somebody's own daily logins is a letter they stop reading
-        background.add_task(
-            notifications.deliver,
+        notifications.deliver(
             settings,
             notifications.new_device_letter(
                 settings, user.email, context["user_agent"], context["ip"]
@@ -282,7 +276,6 @@ async def logout(
 async def change_email(
     payload: EmailChangeRequest,
     user: CurrentUser,
-    background: BackgroundTasks,
     settings: SettingsDep,
     session: SessionDep,
 ) -> MessageResponse:
@@ -301,9 +294,9 @@ async def change_email(
         session, user, "user.email_change_requested", ENTITY, user.id, to=payload.normalized_email
     )
     await session.commit()
-    background.add_task(notifications.deliver, settings, letters.confirm)
+    notifications.deliver(settings, letters.confirm)
     if letters.notice is not None:
-        background.add_task(notifications.deliver, settings, letters.notice)
+        notifications.deliver(settings, letters.notice)
     return MessageResponse(message="Ссылка отправлена на новый адрес, подтвердите его")
 
 
@@ -315,14 +308,13 @@ async def change_email(
 )
 async def request_email_verification(
     user: SignedInUser,
-    background: BackgroundTasks,
     settings: SettingsDep,
     session: SessionDep,
 ) -> MessageResponse:
     """Sends the confirmation letter again, for the address the account already has."""
     letters = await email_verification.request(session, settings, user, user.email)
     await session.commit()
-    background.add_task(notifications.deliver, settings, letters.confirm)
+    notifications.deliver(settings, letters.confirm)
     return MessageResponse(message="Письмо отправлено, проверьте почту")
 
 
@@ -356,7 +348,6 @@ async def change_password(
     payload: PasswordChangeRequest,
     # the one route an account owing a change must reach, and the reason SignedInUser exists
     user: SignedInUser,
-    background: BackgroundTasks,
     response: Response,
     settings: SettingsDep,
     session: SessionDep,
@@ -372,9 +363,7 @@ async def change_password(
     )
     await audit.record(session, user, "user.password_changed", ENTITY, user.id)
     await session.commit()
-    background.add_task(
-        notifications.deliver, settings, notifications.password_changed_letter(settings, user.email)
-    )
+    notifications.deliver(settings, notifications.password_changed_letter(settings, user.email))
     # every session ended with the change, so the cookies in hand are stale
     clear_session_cookies(response, settings)
     return MessageResponse(message="Пароль изменён, войдите заново")
@@ -388,7 +377,6 @@ async def change_password(
 )
 async def request_password_reset(
     payload: PasswordResetRequest,
-    background: BackgroundTasks,
     settings: SettingsDep,
     session: SessionDep,
 ) -> MessageResponse:
@@ -399,7 +387,7 @@ async def request_password_reset(
     if letter is not None:
         # after the answer, so the time it takes to reach somebody else's mail server is not
         # part of what this endpoint tells the caller
-        background.add_task(notifications.deliver, settings, letter)
+        notifications.deliver(settings, letter)
     # the same answer for known and unknown addresses — otherwise this endpoint lists accounts
     return MessageResponse(message="Если аккаунт существует, на почту отправлена инструкция")
 

@@ -10,9 +10,12 @@ must take the same time for an address that exists and one that does not, and wa
 somebody else's mail server inside the request would answer that question out loud.
 """
 
+import asyncio
+
 from app.core.config import Settings
 from app.core.logging import get_logger
 from app.core.mail import Letter, send
+from app.tasks.mail import queue
 
 logger = get_logger(__name__)
 
@@ -169,18 +172,53 @@ def google_link_letter(settings: Settings, email: str, *, attached: bool) -> Let
     )
 
 
-async def deliver(settings: Settings, letter: Letter) -> None:
-    """Called from a background task, after the answer has gone out.
+def deliver(settings: Settings, letter: Letter) -> None:
+    """Puts the letter on the queue. Returns as soon as it is there, which is at once.
 
-    A separate name rather than exporting `send` directly: everything that writes to people
-    goes through this module, so there is one place to look when somebody asks what the
-    platform sends and one place to add a log, a queue or a suppression list later.
+    Synchronous and safe to call from anywhere — an endpoint, a dependency, a startup hook.
+    That is the point of the queue: the previous arrangement could only send from an endpoint,
+    because only an endpoint has `BackgroundTasks`, and so the one place that most needed to
+    write to somebody — the dependency that notices a stolen session token — could not.
+
+    Call it **after** the commit. A letter about something that was rolled back is a lie, and
+    the worker is quite capable of sending it before the transaction ends.
     """
     if settings.is_local:
         # The stand's log is its inbox. The confirmation and reset links are read from there —
         # by a person walking the path and by the end-to-end run alike — and that stays true
         # once a real transport is configured: pointing the stand at somebody's mailbox must
-        # not take away its only way of reading its own letters. The environment check is what
-        # keeps a link that is a credential out of a production log.
+        # not take away its only way of reading its own letters. Logged here rather than in
+        # the worker so that the stand's letters stay in one log. The environment check is
+        # what keeps a link that is a credential out of a production log.
         logger.info("letter to %s: %s", letter.to, letter.body)
-    await send(settings, letter)
+    if queue(letter):
+        return
+    # The broker is down and the request it belongs to has already succeeded. Sending it here
+    # loses the retries but keeps the letter, which is the better half of a bad choice.
+    _send_without_a_queue(settings, letter)
+
+
+def _send_without_a_queue(settings: Settings, letter: Letter) -> None:
+    """The fallback, when there is no queue to put the letter on.
+
+    Inside a request there is a running loop, and the send is started on it and let go: it
+    takes a TLS handshake and a round trip, and blocking the loop for that would punish every
+    other request for one letter. The reference is kept because an unreferenced task may be
+    collected before it runs.
+
+    Outside a loop — a script, the worker itself — there is nobody to punish, so it simply
+    runs. `send` never raises, so in both cases the failure ends in the log and nowhere else.
+    """
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        asyncio.run(send(settings, letter))
+        return
+    task = asyncio.ensure_future(send(settings, letter))
+    _unqueued.add(task)
+    task.add_done_callback(_unqueued.discard)
+
+
+# Started and let go, but not forgotten: asyncio keeps only a weak reference to a running
+# task, so one nobody holds can be collected mid-flight.
+_unqueued: set[asyncio.Task[None]] = set()

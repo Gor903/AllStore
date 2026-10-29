@@ -25,7 +25,7 @@ def sent_tokens(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, str]]:
     """
     captured: list[tuple[str, str]] = []
 
-    async def fake_deliver(settings: object, letter: Letter) -> None:
+    def fake_deliver(settings: object, letter: Letter) -> None:
         # registering also sends a letter now, and it carries a link of its own; only the
         # reset one is this fixture's business
         if "/password/reset?token=" not in letter.body:

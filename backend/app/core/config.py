@@ -69,6 +69,20 @@ class Settings(BaseSettings):
     # app/core/rate_limit.py.
     redis_url: str | None = None
 
+    # Where background work is queued — see app/worker.py. Falls back to `redis_url`, which is
+    # safe (the queue and the tally use different key prefixes) but not tidy: the stack points
+    # this at another database index so that emptying one does not empty the other. Unset and
+    # with no Redis at all, tasks run inline, which is what the test suite wants.
+    celery_broker_url: str | None = None
+    # How long a letter may sit in the queue before it is not worth sending. A confirmation
+    # link that turns up a day late is worse than one that never came, and a "new device"
+    # letter about yesterday is noise. Covers the worker being down, not the mail server —
+    # that is what the retries are for.
+    mail_task_expires_seconds: int = 3600
+    # Eight tries on a backoff that starts at ten seconds and doubles: the better part of an
+    # hour of asking, which covers a mail server that is restarting rather than gone.
+    mail_task_max_retries: int = 8
+
     database_url: PostgresDsn
     db_echo: bool = False
     db_pool_size: int = 5
@@ -192,6 +206,7 @@ class Settings(BaseSettings):
         "smtp_host",
         "breached_password_url",
         "redis_url",
+        "celery_broker_url",
         "google_client_id",
         mode="before",
     )
@@ -270,6 +285,17 @@ class Settings(BaseSettings):
     def public_url(self) -> str:
         """What a link in a letter has to say. Falls back to the domain we already know."""
         return self.site_url or f"https://{self.base_domain}"
+
+    @property
+    def queue_url(self) -> str | None:
+        """Where background work goes, or nothing — in which case it happens inline.
+
+        Falling back to the rate-limit Redis is deliberate: one Redis is one thing to run, and
+        the two keyspaces do not collide (`rl:` against Celery's own). The stack still points
+        this at a separate database index, because `FLUSHDB` on the tally should not also
+        throw away the letters waiting to be sent.
+        """
+        return self.celery_broker_url or self.redis_url
 
     @property
     def trusted_origins(self) -> tuple[str, ...]:

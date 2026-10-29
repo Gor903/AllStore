@@ -1,3 +1,50 @@
+# The backend and the worker are one codebase and one configuration — they differ only in what
+# they run. Written once here rather than twice below, because thirty environment variables
+# copied into two places diverge the first time one of them is edited.
+x-backend-environment: &backend-environment
+  APP_ENV: local
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  SECRET_KEY: ${SECRET_KEY:-dev-secret-change-me-not-for-production}
+  BASE_DOMAIN: ${BASE_DOMAIN:-allstore.localhost}
+  CORS_ORIGINS: http://localhost:${HTTP_PORT:-8080},http://localhost:3000
+  RESERVED_SUBDOMAINS: ${RESERVED_SUBDOMAINS:-}
+  # the compose network, which is the only thing that can reach this service: nothing
+  # publishes the backend port, so nginx is the only possible caller. Without this every
+  # visitor arrives from nginx's address and shares one allowance — see core/client_ip.py
+  TRUSTED_PROXIES: ${TRUSTED_PROXIES:-172.16.0.0/12}
+  DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-allstore}:${POSTGRES_PASSWORD:-allstore}@postgres:5432/${POSTGRES_DB:-allstore}
+  REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+  # A separate database index from the rate-limit tally. They would not collide — the key
+  # prefixes differ — but emptying the tally should not also throw away the letters waiting
+  # to be sent, and `FLUSHDB` does not read comments.
+  CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/1}
+  # the first administrator: unset leaves the platform without one until bootstrap is run
+  ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+  ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+  S3_ENDPOINT_URL: http://minio:9000
+  S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+  S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+  S3_BUCKET: ${S3_BUCKET:-allstore-dev}
+  S3_PUBLIC_URL: http://localhost:${MINIO_PORT:-9000}/${S3_BUCKET:-allstore-dev}
+  # Empty host keeps the stand without a mail server: letters go to the log, which is
+  # where the reset link is read from locally. Fill these in .env to send for real.
+  SMTP_HOST: ${SMTP_HOST:-}
+  SMTP_PORT: ${SMTP_PORT:-587}
+  SMTP_USER: ${SMTP_USER:-}
+  SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+  SMTP_STARTTLS: ${SMTP_STARTTLS:-true}
+  MAIL_FROM: ${MAIL_FROM:-noreply@allstore.am}
+  MAIL_FROM_NAME: ${MAIL_FROM_NAME:-AllStore.am}
+  SITE_URL: ${SITE_URL:-http://localhost:${HTTP_PORT:-8080}}
+  # empty means the platform does not offer signing in with Google at all
+  GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+  GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+  # unset this and the catalogue searches exactly as it did before semantic search
+  SEARCH_SERVICE_URL: ${SEARCH_SERVICE_URL-http://search:8000}
+  # empty disables the assistant and the site simply does not offer it
+  ASSISTANT_BASE_URL: ${ASSISTANT_BASE_URL-http://ollama:11434/v1}
+  ASSISTANT_MODEL: ${ASSISTANT_MODEL:-qwen2.5:3b}
+
 services:
   postgres:
     # the same PostgreSQL 17 with pgvector built in: embeddings live beside the products they
@@ -53,45 +100,7 @@ services:
     command: >-
       sh -c "alembic upgrade head &&
       uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
-    environment:
-      APP_ENV: local
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      SECRET_KEY: ${SECRET_KEY:-dev-secret-change-me-not-for-production}
-      BASE_DOMAIN: ${BASE_DOMAIN:-allstore.localhost}
-      CORS_ORIGINS: http://localhost:${HTTP_PORT:-8080},http://localhost:3000
-      RESERVED_SUBDOMAINS: ${RESERVED_SUBDOMAINS:-}
-      # the compose network, which is the only thing that can reach this service: nothing
-      # publishes the backend port, so nginx is the only possible caller. Without this every
-      # visitor arrives from nginx's address and shares one allowance — see core/client_ip.py
-      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-172.16.0.0/12}
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-allstore}:${POSTGRES_PASSWORD:-allstore}@postgres:5432/${POSTGRES_DB:-allstore}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-      # the first administrator: unset leaves the platform without one until bootstrap is run
-      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
-      S3_ENDPOINT_URL: http://minio:9000
-      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
-      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
-      S3_BUCKET: ${S3_BUCKET:-allstore-dev}
-      S3_PUBLIC_URL: http://localhost:${MINIO_PORT:-9000}/${S3_BUCKET:-allstore-dev}
-      # Empty host keeps the stand without a mail server: letters go to the log, which is
-      # where the reset link is read from locally. Fill these in .env to send for real.
-      SMTP_HOST: ${SMTP_HOST:-}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_USER: ${SMTP_USER:-}
-      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      SMTP_STARTTLS: ${SMTP_STARTTLS:-true}
-      MAIL_FROM: ${MAIL_FROM:-noreply@allstore.am}
-      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-AllStore.am}
-      SITE_URL: ${SITE_URL:-http://localhost:${HTTP_PORT:-8080}}
-      # empty means the platform does not offer signing in with Google at all
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
-      # unset this and the catalogue searches exactly as it did before semantic search
-      SEARCH_SERVICE_URL: ${SEARCH_SERVICE_URL-http://search:8000}
-      # empty disables the assistant and the site simply does not offer it
-      ASSISTANT_BASE_URL: ${ASSISTANT_BASE_URL-http://ollama:11434/v1}
-      ASSISTANT_MODEL: ${ASSISTANT_MODEL:-qwen2.5:3b}
+    environment: *backend-environment
     volumes:
       - ../backend:/srv/app
     depends_on:
@@ -107,6 +116,35 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+      start_period: 20s
+
+  # The same image and the same configuration as the backend, running the other half: what a
+  # request must not wait for. Deliberately not given the migration command — one process
+  # applies migrations, and that one is the backend.
+  worker:
+    build:
+      context: ../backend
+      target: dev
+    # watchfiles for the same reason uvicorn gets --reload: the source is mounted, and a
+    # worker that keeps running yesterday's code is a confusing way to spend an afternoon
+    command: >-
+      watchfiles --filter python
+      "celery -A app.worker worker --loglevel=INFO --concurrency=2"
+    environment: *backend-environment
+    volumes:
+      - ../backend:/srv/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      # asks the worker itself, through the broker: a process that is up but cannot reach the
+      # queue is not a working worker
+      test: ["CMD", "celery", "-A", "app.worker", "inspect", "ping", "--timeout", "5"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
       start_period: 20s
 
   # not published through nginx: the search answers backend, never a browser

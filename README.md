@@ -20,7 +20,8 @@ Frontend — Next.js (App Router) / TypeScript strict / Tailwind.
 docker compose up --build
 ```
 
-Поднимутся `postgres`, `minio`, `backend` (миграции применяются при старте), `frontend`, `nginx`.
+Поднимутся `postgres`, `redis`, `minio`, `backend` (миграции применяются при старте),
+`worker` (фоновые задачи — письма, ADR 22), `frontend`, `nginx`.
 Эквивалент через Makefile — `make up` (то же самое, но в фоне).
 
 | Адрес                                          | Что это                               |
