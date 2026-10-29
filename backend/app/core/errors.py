@@ -22,6 +22,12 @@ class AppError(Exception):
         self.message = message
         self.details = details or []
 
+    @property
+    def headers(self) -> dict[str, str]:
+        """What this refusal needs to say outside the body. Empty for almost every failure —
+        the envelope carries the meaning; a header is for what the protocol defines."""
+        return {}
+
 
 class NotFoundError(AppError):
     code = "not_found"
@@ -62,6 +68,21 @@ class TooManyRequestsError(AppError):
     code = "too_many_requests"
     status_code = status.HTTP_429_TOO_MANY_REQUESTS
 
+    def __init__(
+        self,
+        message: str,
+        details: list[dict[str, Any]] | None = None,
+        retry_after: int | None = None,
+    ) -> None:
+        super().__init__(message, details)
+        self.retry_after = retry_after
+
+    @property
+    def headers(self) -> dict[str, str]:
+        """`Retry-After` is how a refusal says when to come back in a way a client can act on
+        without reading Russian. Omitted rather than guessed when nobody said."""
+        return {} if self.retry_after is None else {"Retry-After": str(self.retry_after)}
+
 
 class PayloadTooLargeError(AppError):
     code = "payload_too_large"
@@ -80,6 +101,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         return JSONResponse(
             status_code=exc.status_code,
             content=error_payload(exc.code, exc.message, exc.details),
+            headers=exc.headers or None,
         )
 
     @app.exception_handler(RequestValidationError)

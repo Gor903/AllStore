@@ -1,8 +1,20 @@
+import asyncio
+
 from fastapi import APIRouter, Depends, Request, Response, status
 
 from app.core.cookies import clear_auth_cookies, set_auth_cookies
 from app.core.errors import AuthenticationError
 from app.deps.auth import CurrentUser, SessionDep, SettingsDep, SignedInUser, require_csrf
+from app.deps.rate_limit import (
+    delay_for_account,
+    forget_account_delay,
+    limit_credential_change,
+    limit_login,
+    limit_refresh,
+    limit_registration,
+    limit_reset_confirm,
+    limit_reset_request,
+)
 from app.schemas.auth import (
     BuyerRegisterRequest,
     EmailChangeRequest,
@@ -24,7 +36,12 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 ENTITY = "user"
 
 
-@router.post("/register/buyer", response_model=UserRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/register/buyer",
+    response_model=UserRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(limit_registration)],
+)
 async def register_buyer(
     payload: BuyerRegisterRequest,
     response: Response,
@@ -42,7 +59,10 @@ async def register_buyer(
 
 
 @router.post(
-    "/register/seller", response_model=SellerRegisterResponse, status_code=status.HTTP_201_CREATED
+    "/register/seller",
+    response_model=SellerRegisterResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(limit_registration)],
 )
 async def register_seller(
     payload: SellerRegisterRequest,
@@ -60,7 +80,7 @@ async def register_seller(
     return SellerRegisterResponse.model_validate({"user": user, "business": business})
 
 
-@router.post("/login", response_model=UserRead)
+@router.post("/login", response_model=UserRead, dependencies=[Depends(limit_login)])
 async def login(
     payload: LoginRequest,
     response: Response,
@@ -68,9 +88,18 @@ async def login(
     settings: SettingsDep,
     session: SessionDep,
 ) -> UserRead:
+    # Paid before anything is looked up, and keyed on the address as typed: an account that
+    # does not exist waits exactly as long as one that does, so the wait says nothing about
+    # which. The limiter above counts the address the request came from; this one counts the
+    # account being guessed at, and slows rather than refuses — see GraduatedDelay.
+    waiting = delay_for_account(request, payload.normalized_email)
+    if waiting > 0:
+        await asyncio.sleep(waiting)
     user = await auth_service.authenticate(
         session, payload.normalized_email, payload.password.get_secret_value()
     )
+    # they proved the account is theirs, so the guesses that came before them stop counting
+    forget_account_delay(request, payload.normalized_email)
     tokens = await auth_service.issue_tokens(
         session, settings, user, request.headers.get("user-agent")
     )
@@ -79,7 +108,11 @@ async def login(
     return UserRead.model_validate(user)
 
 
-@router.post("/refresh", response_model=UserRead, dependencies=[Depends(require_csrf)])
+@router.post(
+    "/refresh",
+    response_model=UserRead,
+    dependencies=[Depends(require_csrf), Depends(limit_refresh)],
+)
 async def refresh(
     request: Request, response: Response, settings: SettingsDep, session: SessionDep
 ) -> UserRead:
@@ -112,7 +145,11 @@ async def logout(
     clear_auth_cookies(response, settings)
 
 
-@router.post("/email", response_model=MessageResponse, dependencies=[Depends(require_csrf)])
+@router.post(
+    "/email",
+    response_model=MessageResponse,
+    dependencies=[Depends(require_csrf), Depends(limit_credential_change)],
+)
 async def change_email(
     payload: EmailChangeRequest,
     user: CurrentUser,
@@ -130,7 +167,11 @@ async def change_email(
     return MessageResponse(message="Логин изменён, войдите заново")
 
 
-@router.post("/password", response_model=MessageResponse, dependencies=[Depends(require_csrf)])
+@router.post(
+    "/password",
+    response_model=MessageResponse,
+    dependencies=[Depends(require_csrf), Depends(limit_credential_change)],
+)
 async def change_password(
     payload: PasswordChangeRequest,
     # the one route an account owing a change must reach, and the reason SignedInUser exists
@@ -156,6 +197,7 @@ async def change_password(
     "/password-reset/request",
     response_model=MessageResponse,
     status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(limit_reset_request)],
 )
 async def request_password_reset(
     payload: PasswordResetRequest, settings: SettingsDep, session: SessionDep
@@ -166,7 +208,11 @@ async def request_password_reset(
     return MessageResponse(message="Если аккаунт существует, на почту отправлена инструкция")
 
 
-@router.post("/password-reset/confirm", response_model=MessageResponse)
+@router.post(
+    "/password-reset/confirm",
+    response_model=MessageResponse,
+    dependencies=[Depends(limit_reset_confirm)],
+)
 async def confirm_password_reset(
     payload: PasswordResetConfirmRequest,
     response: Response,

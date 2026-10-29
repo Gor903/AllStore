@@ -1,5 +1,10 @@
+import threading
+
+import pytest
 from argon2 import PasswordHasher
 
+from app.core import security
+from app.core.config import get_settings
 from app.core.security import (
     generate_token,
     hash_password,
@@ -63,3 +68,38 @@ def test_token_hash_is_deterministic_and_hides_the_token() -> None:
     assert len(digest) == 64
     assert token not in digest
     assert digest != hash_token(generate_token())
+
+
+async def test_hashing_happens_off_the_event_loop(monkeypatch: pytest.MonkeyPatch) -> None:
+    """argon2 costs 19 MiB and two passes, and on the loop that cost is paid by every request
+    in flight rather than by the one login that asked for it."""
+    ran_on: list[int] = []
+
+    def _record(raw_password: str) -> str:
+        ran_on.append(threading.get_ident())
+        return "not-a-real-hash"
+
+    monkeypatch.setattr(security, "hash_password", _record)
+
+    await security.hash_password_in_thread("whatever")
+
+    assert ran_on, "the hasher was never called"
+    assert ran_on[0] != threading.get_ident()
+
+
+async def test_verifying_happens_off_the_event_loop(monkeypatch: pytest.MonkeyPatch) -> None:
+    ran_on: list[int] = []
+
+    def _record(raw_password: str, password_hash: str) -> bool:
+        ran_on.append(threading.get_ident())
+        return True
+
+    monkeypatch.setattr(security, "verify_password", _record)
+
+    assert await security.verify_password_in_thread("whatever", "hash") is True
+    assert ran_on[0] != threading.get_ident()
+
+
+def test_hashing_is_capped_so_a_flood_cannot_ask_for_all_the_memory() -> None:
+    """Unbounded threads at 19 MiB each is a way to request the machine, politely."""
+    assert security._hashing_slots().total_tokens == get_settings().argon2_max_parallel

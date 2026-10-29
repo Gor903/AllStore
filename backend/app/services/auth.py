@@ -10,9 +10,10 @@ from app.core.errors import AuthenticationError, ConflictError, PermissionDenied
 from app.core.security import (
     generate_token,
     hash_password,
+    hash_password_in_thread,
     hash_token,
     password_needs_rehash,
-    verify_password,
+    verify_password_in_thread,
 )
 from app.core.tokens import create_access_token
 from app.models import Business, PasswordResetToken, RefreshToken, User, UserRole, UserStatus
@@ -87,7 +88,7 @@ async def register_buyer(session: AsyncSession, data: BuyerRegisterRequest) -> U
     user = User(
         email=data.normalized_email,
         phone=data.phone,
-        password_hash=hash_password(data.password.get_secret_value()),
+        password_hash=await hash_password_in_thread(data.password.get_secret_value()),
         role=UserRole.BUYER,
     )
     return await users.add(session, user)
@@ -102,7 +103,7 @@ async def register_seller(
         User(
             email=data.normalized_email,
             phone=data.phone,
-            password_hash=hash_password(data.password.get_secret_value()),
+            password_hash=await hash_password_in_thread(data.password.get_secret_value()),
             role=UserRole.SELLER,
         ),
     )
@@ -126,12 +127,12 @@ async def ensure_identifiers_free(session: AsyncSession, email: str, phone: str 
 async def authenticate(session: AsyncSession, email: str, password: str) -> User:
     user = await users.get_by_email(session, email.strip().lower())
     if user is None:
-        verify_password(password, _dummy_hash())
+        await verify_password_in_thread(password, _dummy_hash())
         raise InvalidCredentialsError("Неверный email или пароль")
-    if not verify_password(password, user.password_hash):
+    if not await verify_password_in_thread(password, user.password_hash):
         raise InvalidCredentialsError("Неверный email или пароль")
     if password_needs_rehash(user.password_hash):
-        user.password_hash = hash_password(password)
+        user.password_hash = await hash_password_in_thread(password)
     _ensure_active(user)
     # after the status check: a refused attempt is not a login, however correct the password
     user.last_login_at = datetime.now(UTC)
@@ -221,7 +222,7 @@ async def reset_password(session: AsyncSession, raw_token: str, new_password: st
     if user is None:
         raise InvalidResetTokenError("Ссылка недействительна или устарела")
 
-    user.password_hash = hash_password(new_password)
+    user.password_hash = await hash_password_in_thread(new_password)
     # whatever the old password was, this one they chose themselves
     user.must_change_password = False
     await auth_tokens.mark_password_reset_used(session, stored)
@@ -238,7 +239,7 @@ async def change_email(
     Returns the address left behind: the journal records what it was, and after the write
     nobody can tell any more.
     """
-    if not verify_password(current_password, user.password_hash):
+    if not await verify_password_in_thread(current_password, user.password_hash):
         raise InvalidCredentialsError("Текущий пароль неверен")
     normalized = new_email.strip().lower()
     if normalized == user.email:
@@ -264,9 +265,9 @@ async def change_password(
     came out of a deploy variable. Without it, an unattended session would be enough to take
     the account over permanently.
     """
-    if not verify_password(current_password, user.password_hash):
+    if not await verify_password_in_thread(current_password, user.password_hash):
         raise InvalidCredentialsError("Текущий пароль неверен")
-    user.password_hash = hash_password(new_password)
+    user.password_hash = await hash_password_in_thread(new_password)
     user.must_change_password = False
     # same rule as a reset: a password change ends every session, this one included
     await auth_tokens.revoke_all_for_user(session, user.id)
