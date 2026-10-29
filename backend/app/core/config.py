@@ -88,12 +88,19 @@ class Settings(BaseSettings):
     db_echo: bool = False
     db_pool_size: int = 5
 
-    # argon2id parameters follow the OWASP recommendation, see docs/adr/0002-password-storage.md
+    # argon2id, see docs/adr/0002-password-storage.md. 19456 KiB was the OWASP *minimum* and
+    # was taken as the number rather than as the floor it is. Raised to 64 MiB on a
+    # measurement rather than a guess: on the machine this runs on, a hash costs 23 ms at
+    # 19 MiB and 94 ms at 64 MiB — a tenth of a second nobody notices on a sign-in, and three
+    # and a half times the memory anybody guessing has to spend on every attempt. 128 MiB was
+    # measured too, at 202 ms, and rejected: the extra memory buys less than the latency and
+    # the throughput cost.
     argon2_time_cost: int = 2
-    argon2_memory_cost: int = 19456
+    argon2_memory_cost: int = 65536
     argon2_parallelism: int = 1
-    # how many passwords may be hashed at once, each costing argon2_memory_cost — see
-    # core/security.py. Four is ~76 MiB at the default memory cost
+    # How many passwords may be hashed at once, each costing argon2_memory_cost — see
+    # core/security.py. Four is 256 MiB at the memory cost above, which is the real ceiling
+    # this pair sets on what a flood of sign-ins can ask the machine for.
     argon2_max_parallel: int = 4
     # Whether a chosen password is already on a list attackers try first — see
     # services/breached_passwords.py. The password never leaves: only five characters of its
