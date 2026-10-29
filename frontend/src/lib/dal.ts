@@ -12,6 +12,7 @@ import type {
   Business,
   BusinessList,
   ContactList,
+  DeviceList,
   CustomerBlockList,
   IncidentList,
   ModerationProductList,
@@ -78,6 +79,11 @@ export async function requireRole(...roles: User["role"][]): Promise<User> {
 
 export async function getMyBusiness(): Promise<Business | null> {
   return backendGet<Business>("/users/me/business");
+}
+
+/** The devices this account is signed in on. Everyone has at least one: the one asking. */
+export async function getMyDevices(): Promise<DeviceList | null> {
+  return backendGet<DeviceList>("/auth/sessions");
 }
 
 /** Null when the seller has not opened a storefront yet — the backend answers 404. */

@@ -36,7 +36,7 @@ describe("proxy", () => {
   });
 
   it("lets a request with a session cookie through", () => {
-    const response = proxy(request("/dashboard", "allstore_access=some-token"));
+    const response = proxy(request("/dashboard", "allstore_session=some-token"));
 
     expect(response.headers.get("location")).toBeNull();
   });
@@ -93,7 +93,7 @@ describe("proxy on a storefront subdomain", () => {
   });
 
   it("leaves the cabinet reachable on a storefront host", () => {
-    const response = proxy(request("/dashboard", "allstore_access=t", "cups.allstore.am"));
+    const response = proxy(request("/dashboard", "allstore_session=t", "cups.allstore.am"));
 
     expect(rewriteTarget(response)).toBeNull();
     expect(response.headers.get("location")).toBeNull();
@@ -111,7 +111,7 @@ describe("security headers", () => {
   });
 
   it("refuses to be framed, which is what clickjacking needs", () => {
-    const policy = proxy(request("/dashboard", "allstore_access=t")).headers.get(
+    const policy = proxy(request("/dashboard", "allstore_session=t")).headers.get(
       "content-security-policy",
     );
 

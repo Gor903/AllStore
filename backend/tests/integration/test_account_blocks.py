@@ -237,8 +237,8 @@ async def test_the_session_ends_at_once(api_client: AsyncClient, session: AsyncS
 async def test_the_session_cannot_renew_itself(
     api_client: AsyncClient, session: AsyncSession
 ) -> None:
-    """The access token is short-lived, so a ban that left the refresh token alone would be
-    a ban the browser quietly renews its way out of."""
+    """A ban that left the session renewable would be a ban the browser quietly renews its
+    way out of."""
     buyer_id = await a_buyer(api_client)
     buyer_cookies = dict(api_client.cookies)
     moderator = await seed_staff(session, UserRole.MODERATOR)
@@ -246,7 +246,7 @@ async def test_the_session_cannot_renew_itself(
     await block(api_client, buyer_id)
 
     switch(api_client, buyer_cookies)
-    response = await api_client.post("/api/v1/auth/refresh", headers=csrf_headers(api_client))
+    response = await api_client.post("/api/v1/auth/renew", headers=csrf_headers(api_client))
 
     assert response.status_code in (401, 403)
 

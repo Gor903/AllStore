@@ -1,12 +1,11 @@
 import uuid
-from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
-from app.core.errors import AuthenticationError, ConflictError, PermissionDeniedError
+from app.core.errors import AccountNotActiveError, AuthenticationError, ConflictError
 from app.core.security import (
     generate_token,
     hash_password,
@@ -15,19 +14,16 @@ from app.core.security import (
     password_needs_rehash,
     verify_password_in_thread,
 )
-from app.core.tokens import create_access_token
-from app.models import Business, PasswordResetToken, RefreshToken, User, UserRole, UserStatus
+from app.models import Business, PasswordResetToken, User, UserRole, UserStatus
 from app.repositories import auth_tokens, users
+from app.repositories import sessions as sessions_repo
 from app.schemas.auth import BuyerRegisterRequest, SellerRegisterRequest
 from app.services.notifications import send_password_reset_email
+from app.services.sessions import CREDENTIALS_CHANGED
 
 
 class InvalidCredentialsError(AuthenticationError):
     code = "invalid_credentials"
-
-
-class InvalidRefreshTokenError(AuthenticationError):
-    code = "invalid_refresh_token"
 
 
 class InvalidResetTokenError(AuthenticationError):
@@ -43,38 +39,6 @@ class SameEmailError(ConflictError):
     """
 
     code = "same_email"
-
-
-class AccountNotActiveError(PermissionDeniedError):
-    code = "account_not_active"
-
-
-@dataclass(frozen=True)
-class IssuedTokens:
-    access_token: str
-    refresh_token: str
-    csrf_token: str
-
-
-@dataclass(frozen=True)
-class Rotated:
-    """The session continued: the caller holds a new token and the old one is retired."""
-
-    user: User
-    tokens: IssuedTokens
-
-
-@dataclass(frozen=True)
-class ReuseDetected:
-    """An already rotated token came back, so every session of that account was revoked.
-
-    Returned rather than raised, and that is the whole reason this function answers with a
-    value instead of simply throwing. Revoking the family is a write, the commit belongs to
-    the endpoint, and an exception unwinds the session before the endpoint can reach it —
-    which left the platform refusing the replay and keeping the stolen family alive. The
-    refusal is still the endpoint's to raise, in the same words as every other one: a replay
-    must not be able to tell itself apart from a token that never existed.
-    """
 
 
 @lru_cache
@@ -145,58 +109,6 @@ def _ensure_active(user: User) -> None:
         raise AccountNotActiveError("Доступ к аккаунту ограничен, обратитесь в поддержку")
 
 
-async def issue_tokens(
-    session: AsyncSession, settings: Settings, user: User, user_agent: str | None = None
-) -> IssuedTokens:
-    raw_refresh = generate_token()
-    await auth_tokens.add_refresh_token(
-        session,
-        RefreshToken(
-            user_id=user.id,
-            token_hash=hash_token(raw_refresh),
-            expires_at=datetime.now(UTC) + timedelta(days=settings.refresh_token_ttl_days),
-            user_agent=user_agent[:255] if user_agent else None,
-        ),
-    )
-    return IssuedTokens(
-        access_token=create_access_token(settings, user.id, user.role.value),
-        refresh_token=raw_refresh,
-        csrf_token=generate_token(),
-    )
-
-
-async def rotate_refresh_token(
-    session: AsyncSession, settings: Settings, raw_refresh: str, user_agent: str | None = None
-) -> Rotated | ReuseDetected:
-    stored = await auth_tokens.get_refresh_token(session, hash_token(raw_refresh))
-    if stored is None:
-        raise InvalidRefreshTokenError("Сессия недействительна, войдите заново")
-    if stored.revoked_at is not None:
-        # the token was already rotated: someone is replaying a stolen copy
-        await auth_tokens.revoke_all_for_user(session, stored.user_id)
-        return ReuseDetected()
-    if stored.expires_at <= datetime.now(UTC):
-        raise InvalidRefreshTokenError("Сессия истекла, войдите заново")
-
-    user = await users.get_by_id(session, stored.user_id)
-    if user is None:
-        raise InvalidRefreshTokenError("Сессия недействительна, войдите заново")
-    _ensure_active(user)
-
-    issued = await issue_tokens(session, settings, user, user_agent)
-    replacement = await auth_tokens.get_refresh_token(session, hash_token(issued.refresh_token))
-    await auth_tokens.revoke_refresh_token(
-        session, stored, replaced_by_id=replacement.id if replacement else None
-    )
-    return Rotated(user=user, tokens=issued)
-
-
-async def revoke_refresh_token(session: AsyncSession, raw_refresh: str) -> None:
-    stored = await auth_tokens.get_refresh_token(session, hash_token(raw_refresh))
-    if stored is not None and stored.revoked_at is None:
-        await auth_tokens.revoke_refresh_token(session, stored)
-
-
 async def request_password_reset(session: AsyncSession, settings: Settings, email: str) -> None:
     """Always succeeds from the caller's side — the response must not reveal known addresses."""
     user = await users.get_by_email(session, email.strip().lower())
@@ -227,7 +139,7 @@ async def reset_password(session: AsyncSession, raw_token: str, new_password: st
     user.must_change_password = False
     await auth_tokens.mark_password_reset_used(session, stored)
     # a password change ends every session: that is the point of a reset
-    await auth_tokens.revoke_all_for_user(session, user.id)
+    await sessions_repo.revoke_all_for_user(session, user.id, CREDENTIALS_CHANGED)
     return user
 
 
@@ -252,7 +164,7 @@ async def change_email(
     # an address that was verified is no longer the address that was verified
     user.email_verified_at = None
     # half the credentials changed, so the sessions holding the other half end too
-    await auth_tokens.revoke_all_for_user(session, user.id)
+    await sessions_repo.revoke_all_for_user(session, user.id, CREDENTIALS_CHANGED)
     return was
 
 
@@ -270,7 +182,17 @@ async def change_password(
     user.password_hash = await hash_password_in_thread(new_password)
     user.must_change_password = False
     # same rule as a reset: a password change ends every session, this one included
-    await auth_tokens.revoke_all_for_user(session, user.id)
+    await sessions_repo.revoke_all_for_user(session, user.id, CREDENTIALS_CHANGED)
+
+
+async def verify_password_of(user: User, password: str) -> None:
+    """Shared by every place that asks somebody to prove the password they already gave.
+
+    One function so the refusal is worded identically wherever it comes from — a message that
+    differs by route is a message that says which route you reached.
+    """
+    if not await verify_password_in_thread(password, user.password_hash):
+        raise InvalidCredentialsError("Текущий пароль неверен")
 
 
 async def get_active_user(session: AsyncSession, user_id: uuid.UUID) -> User:

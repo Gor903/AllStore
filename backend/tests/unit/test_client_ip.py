@@ -70,11 +70,22 @@ def test_several_of_our_own_hops_are_walked_through() -> None:
     assert client_ip(request, _settings(PROXIES)) == "203.0.113.9"
 
 
-def test_a_chain_that_is_all_ours_falls_back_to_the_peer() -> None:
-    """A health check from inside: there is no outside client to name."""
+def test_a_chain_that_is_all_ours_names_its_far_end() -> None:
+    """Two ways this happens, same right answer.
+
+    On the stand the visitor reaches nginx from the container network, so the single address
+    nginx wrote is itself private. In a chain of our own proxies the last hop is the one
+    nearest the caller. Naming the proxy that just handed us the request instead would name
+    the one address we know for certain is not theirs — and put every visitor in one bucket.
+    """
     request = _request(PROXY, forwarded="10.0.0.8, 10.0.0.9")
 
-    assert client_ip(request, _settings(PROXIES)) == PROXY
+    assert client_ip(request, _settings(PROXIES)) == "10.0.0.9"
+
+
+def test_no_header_at_all_falls_back_to_the_peer() -> None:
+    """Something inside the network calling us directly — a health check, usually."""
+    assert client_ip(_request(PROXY), _settings(PROXIES)) == PROXY
 
 
 def test_nonsense_in_the_header_is_not_treated_as_an_address() -> None:

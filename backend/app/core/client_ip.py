@@ -62,8 +62,15 @@ def client_ip(request: Request, settings: Settings) -> str:
     if not networks or not _vouched_for(peer, networks):
         return peer
     chain = [part.strip() for part in request.headers.get("x-forwarded-for", "").split(",")]
-    for candidate in reversed([part for part in chain if part]):
+    hops = [part for part in chain if part]
+    if not hops:
+        return peer
+    for candidate in reversed(hops):
         if not _vouched_for(candidate, networks):
             return candidate
-    # every hop in the chain is ours, so the client is one of our own proxies
-    return peer
+    # Every hop is inside the trusted range, which happens in two different ways and the
+    # answer is the same for both. On the stand the visitor reaches nginx from the container
+    # network, so the one address nginx wrote is itself a private one. In a chain of our own
+    # proxies the last hop is the one nearest the caller. Either way it beats naming the
+    # proxy that just handed us the request, which is the one address we know is not theirs.
+    return hops[-1]

@@ -1,6 +1,6 @@
 # 0001. Авторизация: JWT access + refresh с ротацией, оба в httpOnly cookie
 
-Статус: accepted
+Статус: superseded by [ADR 18](0018-server-side-sessions.md)
 Дата: 2026-09-19
 
 ## Контекст

@@ -3,11 +3,12 @@ from argon2 import PasswordHasher
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.errors import ConflictError
+from app.core.errors import AccountNotActiveError, ConflictError
 from app.core.security import verify_password
 from app.models import UserRole, UserStatus
 from app.schemas.auth import BuyerRegisterRequest, SellerRegisterRequest
 from app.services import auth as auth_service
+from app.services import sessions as session_service
 
 pytestmark = pytest.mark.integration
 
@@ -75,7 +76,7 @@ async def test_authenticate_refuses_a_suspended_account(session: AsyncSession) -
     user.status = UserStatus.SUSPENDED
     await session.flush()
 
-    with pytest.raises(auth_service.AccountNotActiveError):
+    with pytest.raises(AccountNotActiveError):
         await auth_service.authenticate(session, "svc-buyer@example.com", PASSWORD)
 
 
@@ -92,9 +93,12 @@ async def test_login_upgrades_a_hash_made_with_weaker_parameters(session: AsyncS
     assert verify_password(PASSWORD, user.password_hash)
 
 
-async def test_issued_tokens_are_all_distinct(session: AsyncSession) -> None:
+async def test_a_session_and_its_csrf_token_are_not_the_same_value(
+    session: AsyncSession,
+) -> None:
+    """One is a credential the browser never reads, the other is one it has to echo back."""
     user = await auth_service.register_buyer(session, buyer_request())
 
-    tokens = await auth_service.issue_tokens(session, get_settings(), user)
+    issued = await session_service.open_session(session, get_settings(), user)
 
-    assert len({tokens.access_token, tokens.refresh_token, tokens.csrf_token}) == 3
+    assert issued.token != issued.csrf_token

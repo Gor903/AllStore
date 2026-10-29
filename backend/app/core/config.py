@@ -76,12 +76,25 @@ class Settings(BaseSettings):
     # core/security.py. Four is ~76 MiB at the default memory cost
     argon2_max_parallel: int = 4
 
-    # token lifetimes and cookie names, see docs/adr/0001-authentication.md
-    access_token_ttl_minutes: int = 15
-    refresh_token_ttl_days: int = 30
+    # Session lifetimes and cookie names, see docs/adr/0018-server-side-sessions.md, which
+    # revises ADR 1. Two clocks: the sliding one asks whether the person is still around, the
+    # absolute one ends a session however busy it is.
+    session_idle_ttl_days: int = 30
+    session_absolute_ttl_days: int = 90
+    # A session that can prove it is still the same device — see services/device_keys.py —
+    # is worth trusting for longer than one that can only produce a cookie.
+    session_bound_absolute_ttl_days: int = 180
+    # how old a token may get before it is swapped for a fresh one in the same family. This
+    # is what makes a stolen copy detectable, not what keeps anybody signed in.
+    session_renew_after_minutes: int = 60
+    # a token retired this recently is still served: two tabs can race, and they share a jar
+    session_grace_seconds: int = 30
+    # the sliding clock is not pushed more often than this, so a page of images is one write
+    session_touch_interval_seconds: int = 60
+    # how long proving the password again buys, for the actions that ask for it twice
+    step_up_ttl_minutes: int = 10
     password_reset_ttl_hours: int = 2
-    access_cookie_name: str = "allstore_access"
-    refresh_cookie_name: str = "allstore_refresh"
+    session_cookie_name: str = "allstore_session"
     csrf_cookie_name: str = "allstore_csrf"
     csrf_header_name: str = "X-CSRF-Token"
     # Where a request is allowed to have come from for a mutating call to be served. Empty
@@ -181,7 +194,7 @@ class Settings(BaseSettings):
         return self.app_env == "local"
 
     @property
-    def access_cookie(self) -> str:
+    def session_cookie(self) -> str:
         """The name the browser actually sees.
 
         `__Host-` is not decoration. A browser refuses to store a cookie under that prefix
@@ -189,21 +202,14 @@ class Settings(BaseSettings):
         being a promise we make and becomes a rule the client enforces. It also means no
         subdomain can overwrite it, which is the whole of the cookie-tossing problem.
 
+        Every cookie here can wear it now that there is one session token instead of a pair:
+        the old refresh token had to settle for `__Secure-`, because it was scoped to the auth
+        routes and `__Host-` demands `Path=/`.
+
         The prefix needs `Secure`, which the plain-http local stand cannot offer, so there the
-        bare name is used. Both names must match the frontend's NEXT_PUBLIC_ACCESS_COOKIE.
+        bare name is used. Both names must match the frontend's NEXT_PUBLIC_SESSION_COOKIE.
         """
-        return self.access_cookie_name if self.is_local else f"__Host-{self.access_cookie_name}"
-
-    @property
-    def refresh_cookie(self) -> str:
-        """`__Secure-`, not `__Host-`, and the difference is deliberate.
-
-        This cookie is scoped to the auth routes so it does not ride along on every request,
-        and `__Host-` demands `Path=/`. The narrow path is worth more than the prefix's extra
-        promise. The pair of tokens collapses into one server-side session in a later phase,
-        and the question disappears with it.
-        """
-        return self.refresh_cookie_name if self.is_local else f"__Secure-{self.refresh_cookie_name}"
+        return self.session_cookie_name if self.is_local else f"__Host-{self.session_cookie_name}"
 
     @property
     def csrf_cookie(self) -> str:

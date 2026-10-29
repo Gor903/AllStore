@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 
 import psutil
-from sqlalchemy import Select, func, select, text
+from sqlalchemy import Select, distinct, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
@@ -23,9 +23,9 @@ from app.models import (
     Business,
     BusinessStatus,
     Product,
-    RefreshToken,
     Report,
     ReportStatus,
+    Session,
     User,
     UserRole,
 )
@@ -98,11 +98,14 @@ async def occupancy(session: AsyncSession) -> Occupancy:
         ),
         live_sessions=await _count(
             session,
-            select(func.count())
-            .select_from(RefreshToken)
+            # one row per family, because a family is a device: counting rows would count
+            # every renewal as another person signed in
+            select(func.count(distinct(Session.family_id)))
+            .select_from(Session)
             .where(
-                RefreshToken.revoked_at.is_(None),
-                RefreshToken.expires_at > datetime.now(UTC),
+                Session.revoked_at.is_(None),
+                Session.idle_expires_at > datetime.now(UTC),
+                Session.absolute_expires_at > datetime.now(UTC),
             ),
         ),
         database_size_mb=await _database_size_mb(session),

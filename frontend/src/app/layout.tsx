@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "@/styles/globals.css";
 
+import { SessionKeeper } from "@/components/auth/SessionKeeper";
 import { env } from "@/lib/env";
 
 const DESCRIPTION =
@@ -27,7 +28,11 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="ru">
-      <body className="min-h-screen bg-surface text-ink antialiased">{children}</body>
+      <body className="min-h-screen bg-surface text-ink antialiased">
+        {children}
+        {/* renders nothing; binds this browser's key to the session and keeps it renewed */}
+        <SessionKeeper />
+      </body>
     </html>
   );
 }

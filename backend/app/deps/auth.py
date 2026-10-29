@@ -3,37 +3,64 @@ import uuid
 from collections.abc import Awaitable, Callable
 from typing import Annotated
 
-from fastapi import Depends, Request
+from fastapi import Depends, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.client_ip import client_ip
 from app.core.config import Settings
+from app.core.cookies import set_session_cookies
 from app.core.errors import (
     AppError,
     AuthenticationError,
     PasswordChangeRequiredError,
     PermissionDeniedError,
+    VerificationRequiredError,
 )
-from app.core.tokens import InvalidAccessToken, decode_access_token
+from app.core.security import csrf_token_for
 from app.db.session import get_session
 from app.deps.settings import settings_dep
-from app.models import User, UserRole
+from app.models import Session, User, UserRole
 from app.services import auth as auth_service
+from app.services import sessions as session_service
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 SettingsDep = Annotated[Settings, Depends(settings_dep)]
 
 
-async def get_signed_in_user(request: Request, settings: SettingsDep, session: SessionDep) -> User:
-    """Who is signed in, without asking whether the password is theirs."""
-    token = request.cookies.get(settings.access_cookie)
+async def get_session_row(
+    request: Request, response: Response, settings: SettingsDep, db: SessionDep
+) -> Session:
+    """The session this request belongs to, renewed along the way if it was due.
+
+    The renewal rewrites the cookie on whatever response this request produces, which is why
+    the dependency asks for one. It is the only place that can: there is no moment later on
+    where the handler knows a token changed underneath it.
+    """
+    token = request.cookies.get(settings.session_cookie)
     if not token:
         raise AuthenticationError("Требуется вход")
-    try:
-        payload = decode_access_token(settings, token)
-    except InvalidAccessToken as exc:
-        raise AuthenticationError("Сессия недействительна, войдите заново") from exc
-    # the status is re-read on every request: blocking an account must take effect at once
-    return await auth_service.get_active_user(session, payload.user_id)
+    outcome = await session_service.touch(db, settings, token, ip=client_ip(request, settings))
+    if isinstance(outcome, session_service.Replayed):
+        # `touch` has revoked the family; committing it is this line's job and nobody else's.
+        # The route never runs, so the commit it would have done never happens — which is
+        # exactly how the old refresh rotation threw its own answer to a theft away.
+        await db.commit()
+        raise session_service.InvalidSessionError("Сессия недействительна, войдите заново")
+    if outcome.renewed is not None:
+        set_session_cookies(response, settings, outcome.renewed)
+    return outcome.session
+
+
+CurrentSession = Annotated[Session, Depends(get_session_row)]
+
+
+async def get_signed_in_user(row: CurrentSession, db: SessionDep) -> User:
+    """Who is signed in, without asking whether the password is theirs.
+
+    The account is re-read even though the session names it: blocking somebody has to take
+    effect on their next request, not whenever their session happens to end.
+    """
+    return await auth_service.get_active_user(db, row.user_id)
 
 
 async def get_current_user(user: Annotated[User, Depends(get_signed_in_user)]) -> User:
@@ -58,25 +85,26 @@ CurrentUser = Annotated[User, Depends(get_current_user)]
 SignedInUser = Annotated[User, Depends(get_signed_in_user)]
 
 
-async def get_optional_user(
-    request: Request, settings: SettingsDep, session: SessionDep
-) -> User | None:
+async def get_optional_user(request: Request, settings: SettingsDep, db: SessionDep) -> User | None:
     """Whoever is signed in, or nobody.
 
     Public routes need this for two unrelated reasons. A guest may file a complaint —
     somebody who has just been cheated is not going to register first. And a signed-in buyer
     may have been barred from one particular shop, which the catalogue filter has to know
     about. Neither case may fail: a barred or missing account browses as a guest does.
+
+    Nothing here renews a token or revokes a family. A catalogue page is the wrong place to
+    discover a theft and a worse place to act on one: the reader would be signed out mid-scroll
+    by a request they did not make, and the write would ride on a route that never commits.
     """
-    token = request.cookies.get(settings.access_cookie)
+    token = request.cookies.get(settings.session_cookie)
     if not token:
         return None
-    try:
-        payload = decode_access_token(settings, token)
-    except InvalidAccessToken:
+    row = await session_service.peek(db, settings, token)
+    if row is None:
         return None
     try:
-        return await auth_service.get_active_user(session, payload.user_id)
+        return await auth_service.get_active_user(db, row.user_id)
     except AppError:
         return None
 
@@ -87,6 +115,27 @@ OptionalUser = Annotated[User | None, Depends(get_optional_user)]
 def viewer_id_of(user: User | None) -> uuid.UUID | None:
     """What the public catalogue filter asks for: an identifier, or nobody."""
     return None if user is None else user.id
+
+
+def require_fresh_verification(row: CurrentSession, settings: SettingsDep) -> None:
+    """For the handful of actions an unattended screen must not be enough to take.
+
+    Signing in is a claim that fades. Most of what the platform does is reversible and does
+    not need the claim renewed; appointing a moderator, handing over the administrator role
+    and handing out somebody's password are not, and a laptop left open in a cafe is exactly
+    the circumstance they are worth protecting from.
+
+    Changing your own password or login does not come through here: they ask for the current
+    password in the request itself, which is the same proof taken at the same moment and does
+    not depend on a clock at all.
+
+    A route dependency rather than a parameter type, because it answers "is this moment
+    recent enough" and nothing else. Who may do the thing is a separate question with a
+    separate answer, and folding the two together would produce a type that quietly let
+    anybody through as long as they had typed their password lately.
+    """
+    if not session_service.is_freshly_verified(row, settings):
+        raise VerificationRequiredError("Подтвердите пароль, чтобы продолжить")
 
 
 def require_role(*roles: UserRole) -> Callable[[User], Awaitable[User]]:
@@ -112,14 +161,35 @@ def require_csrf(request: Request, settings: SettingsDep) -> None:
     came from, which a page cannot write. `Origin` is checked against the addresses we expect
     to be called from, for the browsers that do not send the first.
 
-    None of the three is sufficient alone — the token says nothing if an attacker can plant a
-    cookie, the fetch metadata is absent in older browsers, and `Origin` is absent on some
-    same-origin requests. Together they fail closed.
+    None of the three is sufficient alone — the fetch metadata is absent in older browsers,
+    and `Origin` is absent on some same-origin requests. Together they fail closed.
+
+    What the token no longer has to do alone is survive somebody planting a cookie: the value
+    is derived from the session's family rather than drawn at random, so a planted pair
+    satisfies the double submit and still fails to be what this device should be carrying.
+    That check is in `require_bound_csrf`, which the authorized routes use.
     """
     if request.headers.get("sec-fetch-site") == HOSTILE_FETCH_SITE:
         raise PermissionDeniedError("Запрос пришёл со стороннего сайта")
     _ensure_origin_is_ours(request, settings)
+    _ensure_double_submit(request, settings)
 
+
+def require_bound_csrf(request: Request, settings: SettingsDep, row: CurrentSession) -> None:
+    """The same three questions, and then the one only a server can ask.
+
+    Used wherever a session is required anyway. The value in the cookie has to be the value
+    this family is supposed to carry — which somebody who can write cookies but cannot sign
+    with our key is unable to produce.
+    """
+    require_csrf(request, settings)
+    expected = csrf_token_for(settings, row.family_id)
+    presented = request.headers.get(settings.csrf_header_name) or ""
+    if not secrets.compare_digest(presented, expected):
+        raise PermissionDeniedError("CSRF-токен не совпадает")
+
+
+def _ensure_double_submit(request: Request, settings: Settings) -> None:
     cookie_token = request.cookies.get(settings.csrf_cookie)
     header_token = request.headers.get(settings.csrf_header_name)
     if not cookie_token or not header_token:
