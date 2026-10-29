@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import hash_password, verify_password
 from app.models import User, UserRole
+from app.services.auth import password_of
 
 pytestmark = pytest.mark.integration
 
@@ -56,7 +57,7 @@ async def test_promoting_an_existing_account_leaves_its_password_alone(
     user = await found(session, email)
     assert user.role is UserRole.MODERATOR
     assert user.must_change_password is False
-    assert verify_password(OWN_PASSWORD, user.password_hash)
+    assert verify_password(OWN_PASSWORD, password_of(user))
 
 
 async def test_a_reset_hands_over_a_password_and_it_expires(session: AsyncSession) -> None:
@@ -73,7 +74,7 @@ async def test_a_reset_hands_over_a_password_and_it_expires(session: AsyncSessio
 
     assert "временный" in outcome
     user = await found(session, email)
-    assert verify_password(PASSWORD, user.password_hash)
+    assert verify_password(PASSWORD, password_of(user))
     assert user.must_change_password is True
 
 
@@ -85,4 +86,4 @@ async def test_a_second_run_changes_nothing(session: AsyncSession) -> None:
     outcome = await apply(session, email, "something-else-1", UserRole.MODERATOR)
 
     assert "ничего не менялось" in outcome
-    assert verify_password(PASSWORD, (await found(session, email)).password_hash)
+    assert verify_password(PASSWORD, password_of(await found(session, email)))

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { GoogleButton } from "@/components/auth/GoogleButton";
 import { LoginForm } from "@/components/auth/LoginForm";
 import { getCurrentUser } from "@/lib/dal";
 import { homeFor } from "@/lib/home";
@@ -25,6 +26,12 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-6 px-6">
       <h1 className="text-2xl font-semibold">Вход</h1>
       <LoginForm next={target} />
+      <div className="flex items-center gap-3 text-xs text-ink-muted">
+        <span className="h-px flex-1 bg-ink-muted/20" />
+        или
+        <span className="h-px flex-1 bg-ink-muted/20" />
+      </div>
+      <GoogleButton role="buyer" />
       <p className="text-sm text-ink-muted">
         <Link href="/password/forgot" className="text-brand">
           Забыли пароль?
