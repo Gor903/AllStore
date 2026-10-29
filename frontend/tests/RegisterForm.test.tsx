@@ -91,3 +91,18 @@ describe("RegisterForm", () => {
     expect(JSON.parse(String(init.body))).not.toHaveProperty("phone");
   });
 });
+
+describe("после отправки", () => {
+  it("обещает письмо и ничего больше, потому что сервер отвечает одинаково", async () => {
+    const user = userEvent.setup();
+    render(<RegisterForm />);
+
+    await user.type(screen.getByLabelText("Email"), "buyer@example.com");
+    await user.type(screen.getByLabelText("Пароль"), "a-password-of-my-own-1");
+    await user.click(screen.getByRole("button", { name: "Зарегистрироваться" }));
+
+    // no cabinet and no session: a free address and a taken one get the same screen
+    expect(await screen.findByRole("status")).toHaveTextContent("Если адрес свободен");
+    expect(push).not.toHaveBeenCalled();
+  });
+});

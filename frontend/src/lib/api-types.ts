@@ -557,7 +557,18 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Register Buyer */
+        /**
+         * Register Buyer
+         * @description Answers the same way whether the address was free or not.
+         *
+         *     It used to refuse a taken address out loud, which made this form a way of asking whether
+         *     a particular person has an account here — it needs no password and anybody can walk a
+         *     list of addresses through it. Now both outcomes get this sentence, and the difference
+         *     lives where it belongs: in who receives a letter and what it says.
+         *
+         *     No session either, for the same reason. Signing one person in and not the other is a
+         *     difference a caller can see without reading a word.
+         */
         post: operations["register_buyer_api_v1_auth_register_buyer_post"];
         delete?: never;
         options?: never;
@@ -574,7 +585,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Register Seller */
+        /**
+         * Register Seller
+         * @description The same answer as the buyer path, for the same reason. The shop is created with the
+         *     account and waits for a moderator either way.
+         */
         post: operations["register_seller_api_v1_auth_register_seller_post"];
         delete?: never;
         options?: never;
@@ -2564,11 +2579,6 @@ export interface components {
             /** Phone */
             phone?: string | null;
         };
-        /** SellerRegisterResponse */
-        SellerRegisterResponse: {
-            business: components["schemas"]["BusinessRead"];
-            user: components["schemas"]["UserRead"];
-        };
         /** SessionListResponse */
         SessionListResponse: {
             /** Items */
@@ -3733,12 +3743,12 @@ export interface operations {
         };
         responses: {
             /** @description Successful Response */
-            201: {
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["UserRead"];
+                    "application/json": components["schemas"]["MessageResponse"];
                 };
             };
             /** @description Validation Error */
@@ -3766,12 +3776,12 @@ export interface operations {
         };
         responses: {
             /** @description Successful Response */
-            201: {
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SellerRegisterResponse"];
+                    "application/json": components["schemas"]["MessageResponse"];
                 };
             };
             /** @description Validation Error */

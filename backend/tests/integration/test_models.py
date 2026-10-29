@@ -111,14 +111,16 @@ async def test_duplicate_email_is_rejected_by_the_database(session: AsyncSession
         await session.flush()
 
 
-async def test_duplicate_phone_is_rejected(session: AsyncSession) -> None:
-    session.add(make_user(phone="+37400000001"))
+async def test_a_phone_may_be_shared_because_nobody_checked_it(session: AsyncSession) -> None:
+    """It used to be unique, which was a way to take something from a stranger: type their
+    number into the registration form and they could no longer use their own. Verification
+    would earn that constraint back — see migration 0028."""
+    session.add(make_user(email="one@example.com", phone="+37411111111"))
     await session.flush()
 
-    session.add(make_user(phone="+37400000001"))
+    session.add(make_user(email="two@example.com", phone="+37411111111"))
 
-    with pytest.raises(IntegrityError):
-        await session.flush()
+    await session.flush()
 
 
 async def test_phone_is_optional_for_many_users(session: AsyncSession) -> None:

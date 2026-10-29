@@ -42,8 +42,11 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
 
     email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False)
-    # phone is optional but can only be taken once — Postgres allows many NULLs under UNIQUE
-    phone: Mapped[str | None] = mapped_column(String(32), unique=True)
+    # Not unique, and deliberately. Nobody checks that a number belongs to whoever typed it,
+    # so a unique constraint on it was a way to take something from a stranger: type their
+    # number into the registration form and they can no longer use their own. Indexed, because
+    # the administrator's search reads it — see migration 0028.
+    phone: Mapped[str | None] = mapped_column(String(32), index=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[UserRole] = mapped_column(
         SAEnum(UserRole, name="user_role", values_callable=lambda e: [m.value for m in e]),

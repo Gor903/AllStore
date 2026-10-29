@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
 import { Field } from "@/components/auth/Field";
@@ -9,8 +8,16 @@ import type { FormError } from "@/lib/errors";
 
 type Account = "buyer" | "seller";
 
+/**
+ * Answers the same way whether the address was free or taken, because the server does.
+ *
+ * It used to send people straight into the cabinet, which only worked because a free address
+ * got a session and a taken one got a refusal — the difference anybody could read off the
+ * form. Now registration promises a letter and nothing else, and signing in happens after
+ * the address has answered.
+ */
 export function RegisterForm() {
-  const router = useRouter();
+  const [sent, setSent] = useState(false);
   const [account, setAccount] = useState<Account>("buyer");
   const [error, setError] = useState<FormError | null>(null);
   const [pending, setPending] = useState(false);
@@ -35,8 +42,16 @@ export function RegisterForm() {
       setError(result.error);
       return;
     }
-    router.push("/dashboard");
-    router.refresh();
+    setSent(true);
+  }
+
+  if (sent) {
+    return (
+      <p className="text-sm text-ink-muted" role="status">
+        Если адрес свободен, мы отправили на него письмо со ссылкой для подтверждения. Откройте её,
+        и можно будет войти.
+      </p>
+    );
   }
 
   return (

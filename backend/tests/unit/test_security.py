@@ -7,6 +7,7 @@ from app.core import security
 from app.core.config import get_settings
 from app.core.security import (
     generate_token,
+    get_password_hasher,
     hash_password,
     hash_token,
     password_needs_rehash,
@@ -103,3 +104,43 @@ async def test_verifying_happens_off_the_event_loop(monkeypatch: pytest.MonkeyPa
 def test_hashing_is_capped_so_a_flood_cannot_ask_for_all_the_memory() -> None:
     """Unbounded threads at 19 MiB each is a way to request the machine, politely."""
     assert security._hashing_slots().total_tokens == get_settings().argon2_max_parallel
+
+
+def test_the_same_password_from_two_keyboards_is_one_password() -> None:
+    """An accented character can be one code point or two, and which one a device produces is
+    not something anybody chooses or notices."""
+    composed = "paéssword-1"
+    decomposed = "paéssword-1"
+    assert composed != decomposed
+
+    stored = hash_password(composed)
+
+    assert verify_password(decomposed, stored) is True
+
+
+def test_a_password_chosen_before_normalisation_still_opens_its_account() -> None:
+    """Its hash was made from whatever the keyboard produced, and nobody may be locked out by
+    a change in how we fold characters."""
+    decomposed = "paéssword-1"
+    legacy = get_password_hasher().hash(decomposed)
+
+    assert verify_password(decomposed, legacy) is True
+
+
+def test_a_wrong_password_still_costs_exactly_one_hash(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The second attempt is for folded characters only. Paying it on every failure would
+    double what a flood of wrong passwords costs the machine."""
+    attempts = 0
+    original = security._matches
+
+    def counting(candidate: str, password_hash: str) -> bool:
+        nonlocal attempts
+        attempts += 1
+        return original(candidate, password_hash)
+
+    monkeypatch.setattr(security, "_matches", counting)
+
+    assert (
+        security.verify_password("plain-ascii-wrong", hash_password("plain-ascii-right")) is False
+    )
+    assert attempts == 1

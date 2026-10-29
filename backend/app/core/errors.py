@@ -97,6 +97,17 @@ class ValidationFailedError(AppError):
     status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
 
 
+class BreachedPasswordError(ValidationFailedError):
+    """The password is already on a list attackers try first.
+
+    A validation failure rather than a refusal of authority: the person has done nothing
+    wrong, they have chosen something that is no longer a secret, and the thing to do about
+    it is choose again.
+    """
+
+    code = "password_breached"
+
+
 class TooManyRequestsError(AppError):
     code = "too_many_requests"
     status_code = status.HTTP_429_TOO_MANY_REQUESTS

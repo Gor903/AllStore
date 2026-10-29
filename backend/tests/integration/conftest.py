@@ -31,25 +31,53 @@ def csrf_headers(client: AsyncClient) -> dict[str, str]:
     return {settings.csrf_header_name: client.cookies[settings.csrf_cookie]}
 
 
-async def register_buyer(client: AsyncClient, **overrides: Any) -> Response:
-    return await client.post("/api/v1/auth/register/buyer", json={**BUYER_PAYLOAD, **overrides})
+@dataclass(frozen=True)
+class Registered:
+    """What registration used to answer with, rebuilt after signing in.
+
+    It no longer answers with the account: the same sentence comes back whether the address
+    was free or taken, and no session is handed out, because either difference would let a
+    caller tell the two apart. The suite still needs the identifiers, so the helper fetches
+    them the way any client would — by asking who it is once it is in.
+    """
+
+    status_code: int
+    body: dict[str, Any]
+
+    def json(self) -> dict[str, Any]:
+        return self.body
+
+
+async def register_buyer(client: AsyncClient, **overrides: Any) -> Registered:
+    """Registers and signs in, which is what every caller here wanted from the old 201."""
+    payload = {**BUYER_PAYLOAD, **overrides}
+    response = await client.post("/api/v1/auth/register/buyer", json=payload)
+    if response.status_code != 202:
+        return Registered(response.status_code, {})
+    await login(client, str(payload["email"]), str(payload["password"]))
+    me = await client.get("/api/v1/users/me")
+    return Registered(response.status_code, dict(me.json()))
 
 
 async def register_seller(
     client: AsyncClient, session: AsyncSession | None = None, **overrides: Any
-) -> Response:
-    """Registers a seller, and — when given a session — confirms their address.
+) -> Registered:
+    """The same, and — when given a session — with the address confirmed.
 
     Opening a shop needs a confirmed address, so a test that goes on to create one has to do
     what a real seller does first. The session is optional because plenty of tests register a
     seller only to check that something refuses them, and those never get that far.
     """
-    response = await client.post(
-        "/api/v1/auth/register/seller", json={**SELLER_PAYLOAD, **overrides}
-    )
-    if session is not None and response.status_code == 201:
-        await confirm_email(session, str(response.json()["user"]["id"]))
-    return response
+    payload = {**SELLER_PAYLOAD, **overrides}
+    response = await client.post("/api/v1/auth/register/seller", json=payload)
+    if response.status_code != 202:
+        return Registered(response.status_code, {})
+    await login(client, str(payload["email"]), str(payload["password"]))
+    me = (await client.get("/api/v1/users/me")).json()
+    if session is not None:
+        await confirm_email(session, str(me["id"]))
+    business = (await client.get("/api/v1/users/me/business")).json()
+    return Registered(response.status_code, {"user": me, "business": business})
 
 
 async def login(client: AsyncClient, email: str, password: str) -> Response:

@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import secrets
+import unicodedata
 import uuid
 from functools import lru_cache
 
@@ -25,13 +26,37 @@ def get_password_hasher() -> PasswordHasher:
     )
 
 
+def normalise(raw_password: str) -> str:
+    """The same password typed on two keyboards has to be the same password.
+
+    An accented character can be one code point or two, and which one a device produces is not
+    something anybody chooses or notices. NFKC settles on one form, so `é` typed on a Mac and
+    `é` typed on Linux stop being different secrets.
+    """
+    return unicodedata.normalize("NFKC", raw_password)
+
+
 def hash_password(raw_password: str) -> str:
-    return get_password_hasher().hash(raw_password)
+    return get_password_hasher().hash(normalise(raw_password))
 
 
 def verify_password(raw_password: str, password_hash: str) -> bool:
+    """Tries the normalised form, and the raw one only if they differ.
+
+    The second attempt is for passwords chosen before normalisation existed: their hash was
+    made from whatever the keyboard produced. It costs a second argon2 run, which is why it
+    is skipped whenever the two forms are identical — which is every password made of plain
+    ASCII, meaning almost all of them. A wrong password still costs exactly one.
+    """
+    normalised = normalise(raw_password)
+    if _matches(normalised, password_hash):
+        return True
+    return normalised != raw_password and _matches(raw_password, password_hash)
+
+
+def _matches(candidate: str, password_hash: str) -> bool:
     try:
-        return get_password_hasher().verify(password_hash, raw_password)
+        return get_password_hasher().verify(password_hash, candidate)
     except (VerificationError, InvalidHashError):
         return False
 
