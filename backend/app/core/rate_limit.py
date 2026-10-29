@@ -25,10 +25,16 @@ dependencies and a choice that leaked into every caller.
 import math
 import time
 from collections import deque
+from contextlib import suppress
 from dataclasses import dataclass
 from typing import Protocol
 
 from redis.asyncio import Redis
+from redis.exceptions import RedisError
+
+from app.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -234,3 +240,52 @@ class SharedDelay:
 
     async def forget(self, key: str) -> None:
         await self._counted.drop(key)
+
+
+class WithALocalFallback:
+    """A shared allowance with a per-worker one standing behind it.
+
+    Redis going away must not take the site with it. Before this, an unreachable tally came
+    out of the dependency as a connection error and every route carrying a limit answered 500
+    — which is to say the rate limiter, whose job is to keep the platform available under
+    pressure, became the thing that made it unavailable.
+
+    Falling back to the in-process tally rather than to nothing: an allowance that is merely
+    per-worker is what this platform had before Redis existed and is far better than none,
+    because "none" means an outage of the cache is also an open door. The fallback keeps its
+    own counts, so it starts from zero — on purpose. Inheriting a number it cannot see would
+    be inventing one.
+    """
+
+    def __init__(self, shared: Allowance, local: Allowance) -> None:
+        self._shared = shared
+        self._local = local
+
+    async def check(self, key: str) -> Decision:
+        try:
+            return await self._shared.check(key)
+        except RedisError:
+            logger.warning("the shared rate-limit tally is unreachable; counting in process")
+            return await self._local.check(key)
+
+
+class DelayWithALocalFallback:
+    """The same arrangement for the shape that slows down instead of refusing."""
+
+    def __init__(self, shared: Delay, local: Delay) -> None:
+        self._shared = shared
+        self._local = local
+
+    async def delay_for(self, key: str) -> float:
+        try:
+            return await self._shared.delay_for(key)
+        except RedisError:
+            logger.warning("the shared rate-limit tally is unreachable; counting in process")
+            return await self._local.delay_for(key)
+
+    async def forget(self, key: str) -> None:
+        with suppress(RedisError):
+            await self._shared.forget(key)
+        # Always, and not only on failure: an attempt may have been counted locally while
+        # Redis was away, and the person has just proved the account is theirs.
+        await self._local.forget(key)

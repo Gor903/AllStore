@@ -76,19 +76,19 @@ def test_both_directions_of_a_google_link_are_reported(attached: bool) -> None:
     assert "/password/forgot" in letter.body
 
 
-async def test_a_stand_with_no_mail_server_logs_the_letter(
+def test_a_stand_with_no_mail_server_logs_the_letter(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Without this the reset path cannot be walked locally at all."""
     letter = Letter(to="buyer@x.com", subject="x", body=f"link with {TOKEN}")
 
     with caplog.at_level(logging.INFO):
-        await deliver(_settings(smtp_host=None, app_env="local"), letter)
+        deliver(_settings(smtp_host=None, app_env="local"), letter)
 
     assert TOKEN in caplog.text
 
 
-async def test_outside_local_nothing_is_written_down(
+def test_outside_local_nothing_is_written_down(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """A secret in a production log is a leak, and a missing transport is a thing to report
@@ -96,7 +96,7 @@ async def test_outside_local_nothing_is_written_down(
     letter = Letter(to="buyer@x.com", subject="x", body=f"link with {TOKEN}")
 
     with caplog.at_level(logging.INFO):
-        await deliver(_settings(smtp_host=None, app_env="production"), letter)
+        deliver(_settings(smtp_host=None, app_env="production"), letter)
 
     assert TOKEN not in caplog.text
     assert "no mail transport configured" in caplog.text

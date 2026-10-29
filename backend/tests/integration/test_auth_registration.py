@@ -29,7 +29,7 @@ EMAIL = "buyer@example.com"
 def letters(monkeypatch: pytest.MonkeyPatch) -> list[Letter]:
     caught: list[Letter] = []
 
-    async def fake_deliver(settings: object, letter: Letter) -> None:
+    def fake_deliver(settings: object, letter: Letter) -> None:
         caught.append(letter)
 
     monkeypatch.setattr(notifications, "deliver", fake_deliver)

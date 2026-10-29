@@ -19,7 +19,7 @@ import uuid
 from hashlib import sha256
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request, Response, status
+from fastapi import APIRouter, Depends, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
 
 from app.core.client_ip import client_ip
@@ -145,7 +145,6 @@ async def start_linking(user: CurrentUser, settings: SettingsDep) -> RedirectRes
 async def callback(
     request: Request,
     viewer: OptionalUser,
-    background: BackgroundTasks,
     settings: SettingsDep,
     session: SessionDep,
     code: Annotated[str, Query()],
@@ -173,8 +172,7 @@ async def callback(
             session, viewer, "user.google_linked", ENTITY, viewer.id, email=assertion.email
         )
         await session.commit()
-        background.add_task(
-            notifications.deliver,
+        notifications.deliver(
             settings,
             notifications.google_link_letter(settings, viewer.email, attached=True),
         )
@@ -228,7 +226,6 @@ async def unlink(
     identity_id: uuid.UUID,
     user: CurrentUser,
     current: CurrentSession,
-    background: BackgroundTasks,
     settings: SettingsDep,
     session: SessionDep,
 ) -> None:
@@ -248,8 +245,7 @@ async def unlink(
     await identities.remove(session, doomed)
     await audit.record(session, user, "user.google_unlinked", ENTITY, user.id)
     await session.commit()
-    background.add_task(
-        notifications.deliver,
+    notifications.deliver(
         settings,
         notifications.google_link_letter(settings, user.email, attached=False),
     )

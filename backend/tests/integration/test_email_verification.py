@@ -36,7 +36,7 @@ def letters(monkeypatch: pytest.MonkeyPatch) -> list[Letter]:
     """Catches every letter on its way to the wire, in order."""
     caught: list[Letter] = []
 
-    async def fake_deliver(settings: object, letter: Letter) -> None:
+    def fake_deliver(settings: object, letter: Letter) -> None:
         caught.append(letter)
 
     monkeypatch.setattr(notifications, "deliver", fake_deliver)

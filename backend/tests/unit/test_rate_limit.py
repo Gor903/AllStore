@@ -7,7 +7,15 @@ would be a way to lock that person out using nothing but their address.
 
 import asyncio
 
-from app.core.rate_limit import GraduatedDelay, SlidingWindow
+from redis.exceptions import ConnectionError as RedisConnectionError
+
+from app.core.rate_limit import (
+    Decision,
+    DelayWithALocalFallback,
+    GraduatedDelay,
+    SlidingWindow,
+    WithALocalFallback,
+)
 
 
 async def test_the_allowance_is_spent_and_then_refused() -> None:
@@ -91,3 +99,53 @@ async def test_one_account_being_guessed_at_does_not_slow_another() -> None:
         await delay.delay_for("a")
 
     assert await delay.delay_for("b") == 0.0
+
+
+class Unreachable:
+    """A shared tally with nothing behind it: Redis is down, or the network is."""
+
+    async def check(self, key: str) -> Decision:
+        raise RedisConnectionError("no route to redis")
+
+    async def delay_for(self, key: str) -> float:
+        raise RedisConnectionError("no route to redis")
+
+    async def forget(self, key: str) -> None:
+        raise RedisConnectionError("no route to redis")
+
+
+async def test_redis_going_away_does_not_take_the_limiter_with_it() -> None:
+    """The limiter exists to keep the platform usable under pressure. Without the fallback an
+    unreachable tally came out of the dependency as a connection error, and every route behind
+    a limit answered 500 — the defence became the outage."""
+    limiter = WithALocalFallback(Unreachable(), SlidingWindow(limit=2, window_seconds=60.0))
+
+    assert (await limiter.check("somebody")).allowed
+    assert (await limiter.check("somebody")).allowed
+    # still a tally, merely not a shared one — which is what this platform had before Redis
+    assert not (await limiter.check("somebody")).allowed
+
+
+async def test_the_delay_keeps_counting_in_process_too() -> None:
+    delay = DelayWithALocalFallback(
+        Unreachable(),
+        GraduatedDelay(free_attempts=1, window_seconds=60.0, step_seconds=0.5, cap_seconds=8.0),
+    )
+
+    assert await delay.delay_for("somebody") == 0
+    assert await delay.delay_for("somebody") > 0
+
+
+async def test_proving_the_account_is_yours_clears_the_local_count_as_well() -> None:
+    """`forget` runs on a successful sign-in. The half that cannot be reached must not stop
+    the half that can from letting the owner back in at full speed."""
+    delay = DelayWithALocalFallback(
+        Unreachable(),
+        GraduatedDelay(free_attempts=1, window_seconds=60.0, step_seconds=0.5, cap_seconds=8.0),
+    )
+    await delay.delay_for("somebody")
+    await delay.delay_for("somebody")
+
+    await delay.forget("somebody")
+
+    assert await delay.delay_for("somebody") == 0

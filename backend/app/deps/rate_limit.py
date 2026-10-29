@@ -21,10 +21,12 @@ from app.core.errors import TooManyRequestsError
 from app.core.rate_limit import (
     Allowance,
     Delay,
+    DelayWithALocalFallback,
     GraduatedDelay,
     SharedDelay,
     SharedWindow,
     SlidingWindow,
+    WithALocalFallback,
 )
 from app.deps.auth import CurrentUser, SettingsDep, SignedInUser
 
@@ -112,26 +114,41 @@ def build_limiters(settings: Settings) -> Limiters:
             staff=SlidingWindow(STAFF_ATTEMPTS, STAFF_WINDOW),
         )
     shared = Redis.from_url(settings.redis_url, decode_responses=True)
+
+    def window(name: str, limit: int, seconds: float) -> Allowance:
+        """One tally on Redis, with this worker's own standing behind it.
+
+        Redis going away used to come out of these dependencies as a connection error, so
+        every route carrying a limit answered 500 — the limiter, whose purpose is to keep the
+        platform usable under pressure, became what made it unusable.
+        """
+        return WithALocalFallback(
+            SharedWindow(shared, name, limit, seconds), SlidingWindow(limit, seconds)
+        )
+
     return Limiters(
-        login_by_address=SharedWindow(shared, "login", LOGIN_ATTEMPTS, LOGIN_WINDOW),
-        login_by_account=SharedDelay(
-            shared,
-            "login-account",
-            LOGIN_FREE_ATTEMPTS,
-            LOGIN_DELAY_WINDOW,
-            LOGIN_DELAY_STEP,
-            LOGIN_DELAY_CAP,
+        login_by_address=window("login", LOGIN_ATTEMPTS, LOGIN_WINDOW),
+        login_by_account=DelayWithALocalFallback(
+            SharedDelay(
+                shared,
+                "login-account",
+                LOGIN_FREE_ATTEMPTS,
+                LOGIN_DELAY_WINDOW,
+                LOGIN_DELAY_STEP,
+                LOGIN_DELAY_CAP,
+            ),
+            GraduatedDelay(
+                LOGIN_FREE_ATTEMPTS, LOGIN_DELAY_WINDOW, LOGIN_DELAY_STEP, LOGIN_DELAY_CAP
+            ),
         ),
-        registration=SharedWindow(shared, "register", REGISTRATION_ATTEMPTS, REGISTRATION_WINDOW),
-        reset_request=SharedWindow(shared, "reset", RESET_REQUEST_ATTEMPTS, RESET_REQUEST_WINDOW),
-        reset_confirm=SharedWindow(
-            shared, "reset-confirm", RESET_CONFIRM_ATTEMPTS, RESET_CONFIRM_WINDOW
+        registration=window("register", REGISTRATION_ATTEMPTS, REGISTRATION_WINDOW),
+        reset_request=window("reset", RESET_REQUEST_ATTEMPTS, RESET_REQUEST_WINDOW),
+        reset_confirm=window("reset-confirm", RESET_CONFIRM_ATTEMPTS, RESET_CONFIRM_WINDOW),
+        refresh=window("renew", REFRESH_ATTEMPTS, REFRESH_WINDOW),
+        credential_change=window(
+            "credentials", CREDENTIAL_CHANGE_ATTEMPTS, CREDENTIAL_CHANGE_WINDOW
         ),
-        refresh=SharedWindow(shared, "renew", REFRESH_ATTEMPTS, REFRESH_WINDOW),
-        credential_change=SharedWindow(
-            shared, "credentials", CREDENTIAL_CHANGE_ATTEMPTS, CREDENTIAL_CHANGE_WINDOW
-        ),
-        staff=SharedWindow(shared, "staff", STAFF_ATTEMPTS, STAFF_WINDOW),
+        staff=window("staff", STAFF_ATTEMPTS, STAFF_WINDOW),
     )
 
 

@@ -354,7 +354,7 @@ async def test_attaching_and_detaching_a_way_in_is_reported_to_the_owner(
 
     caught: list[Any] = []
 
-    async def fake_deliver(settings: object, letter: Any) -> None:
+    def fake_deliver(settings: object, letter: Any) -> None:
         caught.append(letter)
 
     monkeypatch.setattr(notifications, "deliver", fake_deliver)
