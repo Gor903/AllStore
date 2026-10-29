@@ -582,6 +582,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/login/totp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Finish Sign In
+         * @description The second half of signing in: the code, and then the session.
+         *
+         *     No CSRF check, for the same reason `/auth/login` has none: there is no session and so no
+         *     token to double-submit. What stands in its place is the pending cookie itself — it is
+         *     `SameSite=Lax`, and a cross-site POST does not carry those, so a forged request arrives
+         *     with nobody waiting and is refused before the code is even read.
+         */
+        post: operations["finish_sign_in_api_v1_auth_login_totp_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/logout": {
         parameters: {
             query?: never;
@@ -790,6 +815,92 @@ export interface paths {
          *     with a longer way of saying it, so the cookies go too.
          */
         delete: operations["revoke_session_api_v1_auth_sessions__family_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/totp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Status
+         * @description Reachable while the second factor is still owed — this is how the client finds out.
+         */
+        get: operations["read_status_api_v1_auth_totp_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/totp/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm Setup
+         * @description A code proves the secret reached a telephone. Until it does, nothing is in force.
+         */
+        post: operations["confirm_setup_api_v1_auth_totp_confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/totp/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Disable
+         * @description A step-up and a current code. Taking the second factor off is the one change that makes
+         *     every future sign-in easier for whoever happens to be sitting at the screen.
+         */
+        post: operations["disable_api_v1_auth_totp_disable_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/totp/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Begin Setup
+         * @description The secret, once.
+         *
+         *     No step-up here, deliberately. An account that is *required* to enrol cannot be asked to
+         *     prove anything beyond the password it just typed — it has no other way to reach this
+         *     screen, and a step-up would be a door locked from the inside. Turning one off is the
+         *     dangerous direction, and that one asks for a code.
+         */
+        post: operations["begin_setup_api_v1_auth_totp_setup_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -2914,6 +3025,49 @@ export interface components {
             users: number;
         };
         /**
+         * TotpCodeRequest
+         * @description Six digits from an application, or one of the recovery codes.
+         *
+         *     Loosely bounded on purpose: the two shapes differ, and refusing one of them here would
+         *     mean the form could not accept it at all. What a code is worth is decided by
+         *     `services/totp.py`, which knows which of the two it is looking at.
+         */
+        TotpCodeRequest: {
+            /** Code */
+            code: string;
+        };
+        /**
+         * TotpEnrolmentResponse
+         * @description Shown once. The secret is here as text as well as in the image, because a telephone
+         *     that cannot photograph a screen is still a telephone somebody has to use.
+         */
+        TotpEnrolmentResponse: {
+            /** Qr */
+            qr: string;
+            /** Secret */
+            secret: string;
+            /** Uri */
+            uri: string;
+        };
+        /**
+         * TotpRecoveryResponse
+         * @description Also shown once, and said so on the screen: these are hashed on our side, so there is
+         *     no later moment at which they can be read out again.
+         */
+        TotpRecoveryResponse: {
+            /** Recovery Codes */
+            recovery_codes: string[];
+        };
+        /** TotpStatus */
+        TotpStatus: {
+            /** Enabled */
+            enabled: boolean;
+            /** Recovery Codes Left */
+            recovery_codes_left: number;
+            /** Required */
+            required: boolean;
+        };
+        /**
          * UnblockRequest
          * @description Lifting a restriction needs no justification — the reason is offered, not demanded.
          */
@@ -3901,6 +4055,39 @@ export interface operations {
             };
         };
     };
+    finish_sign_in_api_v1_auth_login_totp_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TotpCodeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     logout_api_v1_auth_logout_post: {
         parameters: {
             query?: never;
@@ -4198,6 +4385,110 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_status_api_v1_auth_totp_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TotpStatus"];
+                };
+            };
+        };
+    };
+    confirm_setup_api_v1_auth_totp_confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TotpCodeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TotpRecoveryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    disable_api_v1_auth_totp_disable_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TotpCodeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    begin_setup_api_v1_auth_totp_setup_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TotpEnrolmentResponse"];
                 };
             };
         };

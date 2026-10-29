@@ -1,5 +1,7 @@
 import { execSync } from "node:child_process";
 
+import { createHmac } from "node:crypto";
+
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 /**
@@ -58,6 +60,8 @@ const editedName = `Ваза керамическая e2e ${run}`;
  * of those. Picking a new one is therefore part of the path, not a detour around it.
  */
 const moderatorPassword = `e2e-chosen-${run}`;
+// filled when the moderator attaches an authenticator, and needed by every sign-in after
+let moderatorSecret = "";
 
 /** A queue page holds twenty rows and no more, so nine pages is past any stand we run on. */
 const MAX_QUEUE_PAGES = 20;
@@ -66,6 +70,53 @@ async function signIn(page: Page, email: string, password: string): Promise<void
   await page.getByLabel("Email", { exact: true }).fill(email);
   await page.getByLabel("Пароль", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Войти" }).click();
+}
+
+/**
+ * The code an authenticator would be showing, computed here the way RFC 6238 says.
+ *
+ * Written out rather than imported: this file runs in Node against a browser, with no access
+ * to the backend's Python, and the alternative is a dependency for ten lines of HMAC.
+ */
+function totpCode(secret: string, step = Math.floor(Date.now() / 30_000)): string {
+  const key = Buffer.from(base32ToBytes(secret));
+  const counter = Buffer.alloc(8);
+  counter.writeBigUInt64BE(BigInt(step));
+  const digest = createHmac("sha1", key).update(counter).digest();
+  const offset = (digest[digest.length - 1] ?? 0) & 0x0f;
+  const value = digest.readUInt32BE(offset) & 0x7fff_ffff;
+  return String(value % 1_000_000).padStart(6, "0");
+}
+
+function base32ToBytes(secret: string): number[] {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  let bits = "";
+  for (const character of secret.replace(/=+$/, "").toUpperCase()) {
+    bits += alphabet.indexOf(character).toString(2).padStart(5, "0");
+  }
+  const bytes: number[] = [];
+  for (let at = 0; at + 8 <= bits.length; at += 8) {
+    bytes.push(parseInt(bits.slice(at, at + 8), 2));
+  }
+  return bytes;
+}
+
+/** Walks the setup screen the way a person does, and returns nothing but the done deed. */
+async function enrolSecondFactor(page: Page): Promise<string> {
+  await page.goto("/devices");
+  await page.getByRole("button", { name: "Привязать приложение" }).click();
+  const secret = (await page.getByRole("code").innerText()).trim();
+  await page.getByLabel("Код из приложения").fill(totpCode(secret));
+  await page.getByRole("button", { name: "Включить" }).click();
+  await expect(page.getByRole("heading", { name: "Резервные коды" })).toBeVisible();
+  return secret;
+}
+
+/** Answers the pause after the password. A fresh step when the current code was just spent. */
+async function answerSecondFactor(page: Page, secret: string, ahead = 0): Promise<void> {
+  const field = page.getByLabel("Код", { exact: true });
+  await field.fill(totpCode(secret, Math.floor(Date.now() / 30_000) + ahead));
+  await page.getByRole("button", { name: "Подтвердить" }).click();
 }
 
 /**
@@ -184,8 +235,14 @@ test("продавец регистрируется, заводит магази
     await expect(page).toHaveURL(/\/login/);
     await signIn(page, MODERATOR.email, moderatorPassword);
 
-    // straight into the queue: a moderator has nothing of their own in the cabinet, and the
-    // login form knows the role by the time it decides where to go
+    // the second gate: wherever a moderator without an authenticator was going, they are
+    // sent to the screen that attaches one. Waited for rather than navigated to — the sign-in
+    // is still navigating, and a `goto` on top of that cancels it.
+    await page.waitForURL(/\/devices$/);
+    await expect(page.getByRole("heading", { name: "Вход по коду" })).toBeVisible();
+    moderatorSecret = await enrolSecondFactor(page);
+
+    await page.goto("/moderation");
     await expect(page).toHaveURL(/\/moderation$/);
   });
 
@@ -252,6 +309,8 @@ test("продавец регистрируется, заводит магази
     await expect(page).toHaveURL(/\/login/);
     // the one they chose earlier: the handed-over password stopped working when they did
     await signIn(page, MODERATOR.email, moderatorPassword);
+    // enrolled by now, so the password only gets as far as the code box
+    await answerSecondFactor(page, moderatorSecret, 1);
     // the form navigates on its own; going somewhere else before it lands races with it
     await expect(page).toHaveURL(/\/moderation$/);
 

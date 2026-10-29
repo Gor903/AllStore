@@ -21,6 +21,7 @@ from app.api.reports import router as reports_router
 from app.api.sessions import router as sessions_router
 from app.api.storefront import router as storefront_router
 from app.api.stores import router as stores_router
+from app.api.totp import router as totp_router
 from app.api.users import router as users_router
 from app.core.config import Settings, get_settings
 from app.core.errors import register_exception_handlers
@@ -81,6 +82,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
     app.include_router(auth_router, prefix=settings.api_prefix)
     app.include_router(google_router, prefix=settings.api_prefix)
+    app.include_router(totp_router, prefix=settings.api_prefix)
     app.include_router(sessions_router, prefix=settings.api_prefix)
     app.include_router(users_router, prefix=settings.api_prefix)
     app.include_router(stores_router, prefix=settings.api_prefix)

@@ -46,6 +46,33 @@ def set_session_cookies(response: Response, settings: Settings, issued: IssuedSe
     )
 
 
+def cookie_header(
+    name: str, value: str, settings: Settings, *, max_age: int, path: str = "/"
+) -> str:
+    """One `Set-Cookie` line, for a refusal rather than a response.
+
+    A refusal is rendered by the exception handler, which builds its own response — so the
+    `Response` a route was given never reaches the browser, and anything set on it is lost.
+    That matters in exactly one place: the sign-in that stops to ask for a second factor has
+    to leave a cookie saying who got that far. `AppError.headers` is the way through, and
+    this builds the line to put in it.
+
+    Formatted by Starlette rather than by hand: the escaping, the date format and the flag
+    spelling are all things to get subtly wrong.
+    """
+    carrier = Response()
+    carrier.set_cookie(
+        name,
+        value,
+        max_age=max_age,
+        httponly=True,
+        secure=not settings.is_local,
+        samesite="lax",
+        path=path,
+    )
+    return carrier.headers["set-cookie"]
+
+
 def clear_session_cookies(response: Response, settings: Settings) -> None:
     """Deleted at the same name and path they were set at: a cookie removed at a different
     path is not removed at all, it is merely shadowed until the browser notices."""

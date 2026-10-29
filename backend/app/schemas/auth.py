@@ -81,6 +81,40 @@ class PasswordChangeRequest(BaseModel):
     password: Password
 
 
+class TotpCodeRequest(BaseModel):
+    """Six digits from an application, or one of the recovery codes.
+
+    Loosely bounded on purpose: the two shapes differ, and refusing one of them here would
+    mean the form could not accept it at all. What a code is worth is decided by
+    `services/totp.py`, which knows which of the two it is looking at.
+    """
+
+    code: Annotated[str, StringConstraints(min_length=6, max_length=32, strip_whitespace=True)]
+
+
+class TotpEnrolmentResponse(BaseModel):
+    """Shown once. The secret is here as text as well as in the image, because a telephone
+    that cannot photograph a screen is still a telephone somebody has to use."""
+
+    secret: str
+    uri: str
+    qr: str
+
+
+class TotpRecoveryResponse(BaseModel):
+    """Also shown once, and said so on the screen: these are hashed on our side, so there is
+    no later moment at which they can be read out again."""
+
+    recovery_codes: list[str]
+
+
+class TotpStatus(BaseModel):
+    enabled: bool
+    # whether this account may not sign in without one, which is a property of its role
+    required: bool
+    recovery_codes_left: int
+
+
 class EmailConfirmRequest(BaseModel):
     """The token from the link, and nothing else: whoever opens it may be on a device that
     was never signed in, which is the ordinary case for a letter."""

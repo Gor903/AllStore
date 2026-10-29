@@ -29,7 +29,7 @@ from app.models import User, UserRole, UserStatus
 from app.repositories import account_blocks as blocks_repo
 from app.repositories import sessions as sessions_repo
 from app.repositories import users as users_repo
-from app.services import audit
+from app.services import audit, totp
 from app.services.sessions import CREDENTIALS_CHANGED
 
 ENTITY = "user"
@@ -136,6 +136,13 @@ async def _keep_or_restore(
     # whoever is already signed in signed in would answer the wrong half of the problem: the
     # password would be new and the intruder would still be inside.
     await sessions_repo.revoke_all_for_user(session, admin.id, CREDENTIALS_CHANGED)
+    # The second factor goes too, and this is the only place it can. An administrator who has
+    # lost the telephone and the recovery codes would otherwise have locked the one
+    # administrator seat the platform allows, with no screen anywhere that undoes it. Whoever
+    # runs this already holds the server and can replace the password; refusing them the
+    # second factor would protect nothing and strand the platform.
+    if await totp.revoke(session, admin.id):
+        await _write_it_down(session, admin, "user.totp_revoked")
     await _write_it_down(session, admin, "user.admin_password_reset")
     return Result(Outcome.PASSWORD_RESET, admin.email)
 

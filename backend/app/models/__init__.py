@@ -27,6 +27,7 @@ from app.models.product_revision import ProductRevision, RevisionStatus
 from app.models.report import Report, ReportStatus
 from app.models.session import AuthMethod, Session
 from app.models.store import Store, StoreStatus
+from app.models.totp import TotpCredential, TotpRecoveryCode
 from app.models.user import User, UserRole, UserStatus
 
 __all__ = [
@@ -62,6 +63,8 @@ __all__ = [
     "SocialLink",
     "Store",
     "StoreStatus",
+    "TotpCredential",
+    "TotpRecoveryCode",
     "User",
     "UserIdentity",
     "UserRole",

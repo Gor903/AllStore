@@ -8,6 +8,7 @@ from app.core.client_ip import client_ip
 from app.core.config import Settings
 from app.core.cookies import clear_session_cookies, set_session_cookies
 from app.core.errors import AppError
+from app.core.half_sign_in import pause as pause_for_second_factor
 from app.core.logging import get_logger
 from app.deps.auth import (
     CurrentSession,
@@ -45,6 +46,7 @@ from app.schemas.auth import (
 from app.services import audit, device_keys, email_verification, notifications
 from app.services import auth as auth_service
 from app.services import sessions as session_service
+from app.services import totp as totp_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -177,6 +179,11 @@ async def login(
         raise
     # they proved the account is theirs, so the guesses that came before them stop counting
     await forget_account_delay(request, payload.normalized_email)
+    if await totp_service.in_force(session, user):
+        # The password was right and the sign-in is not finished. No session is opened; what
+        # the browser gets is a short-lived note saying who got this far, and the code it has
+        # to answer with goes to /auth/login/totp.
+        raise pause_for_second_factor(settings, user)
     # asked before the new session exists, so it means "was it already open somewhere"
     opened_elsewhere = await sessions_repo.has_live_family(session, user.id)
     context = _context(request, settings)

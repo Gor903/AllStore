@@ -1,3 +1,4 @@
+import time
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -9,7 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.security import hash_password
-from app.models import Category, User, UserRole
+from app.core.totp import code_for, generate_secret, step_at
+from app.core.vault import lock
+from app.models import Category, TotpCredential, User, UserRole
 
 PRODUCTS_URL = "/api/v1/products"
 CONTACTS_URL = "/api/v1/stores/me/contacts"
@@ -87,12 +90,18 @@ async def login(client: AsyncClient, email: str, password: str) -> Response:
 STAFF_PASSWORD = "staff-password-1"
 
 
-async def seed_staff(session: AsyncSession, role: UserRole) -> User:
+async def seed_staff(session: AsyncSession, role: UserRole, *, second_factor: bool = True) -> User:
     """Moderators and administrators have no self-registration, so they are seeded.
 
     An administrator seeded here is the only one the platform may have: the unique partial
     index on the role sees to that, and a test that wants two is describing a platform this
     one is not.
+
+    Enrolled in a second factor by default, because that is what a staff account that can do
+    anything looks like — without one it is stopped at the setup screen on every request, and
+    a suite full of accounts in that state would be testing the gate over and over instead of
+    the thing each test is about. Pass `second_factor=False` to get an account that still owes
+    one, which is what the tests about the gate itself want.
     """
     user = User(
         email=f"{role}-{uuid.uuid4().hex}@example.com",
@@ -101,12 +110,63 @@ async def seed_staff(session: AsyncSession, role: UserRole) -> User:
     )
     session.add(user)
     await session.flush()
+    if second_factor:
+        await enrol_second_factor(session, user)
     return user
 
 
+# What was enrolled for whom, so that `act_as` can answer the challenge without a second
+# connection — the account it needs to read lives in a transaction that is never committed.
+SECRETS: dict[uuid.UUID, str] = {}
+
+
+async def enrol_second_factor(session: AsyncSession, user: User) -> str:
+    """Gives the account a confirmed authenticator and returns its secret."""
+    secret = generate_secret()
+    session.add(
+        TotpCredential(
+            user_id=user.id,
+            secret_encrypted=lock(get_settings(), secret),
+            confirmed_at=datetime.now(UTC),
+        )
+    )
+    await session.flush()
+    SECRETS[user.id] = secret
+    return secret
+
+
 async def act_as(client: AsyncClient, user: User, password: str = STAFF_PASSWORD) -> None:
+    """Signs in, answering the second factor when the account has one.
+
+    Staff accounts do, so signing one in is two requests rather than one — the password stops
+    at a code and the code opens the session. Hidden here because nearly every test wants
+    "this moderator is signed in" rather than the two steps it takes.
+    """
     client.cookies.clear()
-    await login(client, user.email, password)
+    answer = await login(client, user.email, password)
+    if answer.status_code == 401 and answer.json()["error"]["code"] == "totp_required":
+        await answer_second_factor(client, user)
+
+
+async def answer_second_factor(client: AsyncClient, user: User) -> Response:
+    """Finishes a sign-in that paused, with the code the account's authenticator would show.
+
+    Falls forward a step when the current code has already been spent. A code is good once,
+    and a test that signs the same account in twice inside thirty seconds would otherwise be
+    told so — correctly. A person waits for the next code; this does the same thing without
+    making the suite wait half a minute, using the step ahead, which is inside the drift the
+    server accepts.
+    """
+    answer = await client.post("/api/v1/auth/login/totp", json={"code": code_now(user)})
+    if answer.status_code == 403:
+        answer = await client.post(
+            "/api/v1/auth/login/totp", json={"code": code_now(user, ahead=1)}
+        )
+    return answer
+
+
+def code_now(user: User, ahead: int = 0) -> str:
+    return code_for(SECRETS[user.id], step_at(time.time()) + ahead)
 
 
 async def become_moderator(client: AsyncClient, session: AsyncSession) -> User:
