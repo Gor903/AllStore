@@ -166,6 +166,30 @@ def replayed_token_letter(settings: Settings, email: str) -> Letter:
     )
 
 
+def session_moved_letter(
+    settings: Settings, email: str, country: str | None, asn: str | None
+) -> Letter:
+    """A session that was in one place is suddenly in another.
+
+    Travel looks exactly like this, which is why nothing is ended over it — the platform asks
+    for the password again where that matters and writes this letter. The reader is the only
+    one who knows whether they got on a plane.
+    """
+    where = ", ".join(part for part in (country, asn) if part) or "другое место"
+    return Letter(
+        to=email,
+        subject="Вход из другого места — AllStore.am",
+        body=(
+            f"Ваша сессия на AllStore.am продолжилась из другого места: {where}.\n\n"
+            "Если вы в поездке — ничего делать не нужно, мы только попросим пароль ещё раз "
+            "там, где это важно.\n\n"
+            "Если нет — завершите чужие сессии и смените пароль:\n"
+            f"{settings.public_url}/devices\n"
+            f"{settings.public_url}/password/forgot\n"
+        ),
+    )
+
+
 def second_factor_letter(settings: Settings, email: str, *, on: bool) -> Letter:
     """The second factor was switched on, or off.
 

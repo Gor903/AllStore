@@ -31,3 +31,4 @@
 | 21 | [Журнал безопасности и уведомления](0021-security-journal-and-notices.md) | рефактор auth | accepted |
 | 22 | [Фоновая работа: Celery, почта через очередь](0022-background-work-on-celery.md) | рефактор auth | accepted |
 | 23 | [Второй фактор для staff: TOTP](0023-staff-second-factor.md) | рефактор auth | accepted |
+| 24 | [Сигналы риска: заложены и выключены](0024-risk-signals.md) | рефактор auth | accepted |

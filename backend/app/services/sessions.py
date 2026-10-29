@@ -29,8 +29,10 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession as DbSession
 
+from app.core import geo
 from app.core.config import Settings
 from app.core.errors import AccountNotActiveError, AuthenticationError
+from app.core.geo import Place
 from app.core.security import csrf_token_for, generate_token, hash_token
 from app.models import AuthMethod, Session, User
 from app.repositories import sessions as repo
@@ -65,6 +67,19 @@ class Live:
     session: Session
     # set only when the token was renewed on this request and the cookie has to be rewritten
     renewed: IssuedSession | None = None
+    # Whether this request wrote to the row, and therefore whether somebody has to commit.
+    #
+    # Nothing here can commit on its own — the rule is that the commit belongs to the API
+    # layer — and most requests are reads that never commit anything. So every write made on
+    # the way in used to be rolled back when the session closed, which was not a tidiness
+    # problem: a renewal handed the browser a new token and then threw away the row it
+    # belonged to, and the next request was a 401. Sessions quietly died an hour after they
+    # began, for anybody whose next click happened to be a read.
+    wrote: bool = False
+    # Where this session has just turned up, when it is somewhere it was not before. The
+    # letter belongs to the caller, after the commit — see core/geo.py for why this is almost
+    # always None and why that is the ordinary case rather than a failure.
+    moved_to: Place | None = None
 
 
 @dataclass(frozen=True)
@@ -97,6 +112,9 @@ async def open_session(
     now = datetime.now(UTC)
     token = generate_token()
     family_id = uuid.uuid4()
+    # where it began, so that a later request from somewhere else is a comparison rather than
+    # a first sighting. Blank when nothing can say, which is the ordinary case.
+    began = geo.locate(ip)
     await repo.add(
         db,
         Session(
@@ -105,6 +123,8 @@ async def open_session(
             token_hash=hash_token(token),
             user_agent=user_agent[:255] if user_agent else None,
             ip=ip,
+            country=began.country,
+            asn=began.asn,
             auth_method=AuthMethod.PASSWORD,
             idle_expires_at=now + timedelta(days=settings.session_idle_ttl_days),
             absolute_expires_at=now + timedelta(days=settings.session_absolute_ttl_days),
@@ -133,11 +153,47 @@ async def touch(
     if row.absolute_expires_at <= now or row.idle_expires_at <= now:
         raise SessionExpiredError("Сессия истекла, войдите заново")
 
-    _slide(row, settings, now, ip)
+    wrote = _slide(row, settings, now, ip)
+    recorded, moved_to = _notice_a_move(row, settings, ip, now)
+    wrote = wrote or recorded
     if _is_due_for_renewal(row, settings, now) and row.device_public_key is None:
-        return Live(session=row, renewed=await renew(db, settings, row))
+        return Live(
+            session=row,
+            renewed=await renew(db, settings, row),
+            wrote=True,
+            moved_to=moved_to,
+        )
     await db.flush()
-    return Live(session=row)
+    return Live(session=row, wrote=wrote, moved_to=moved_to)
+
+
+def _notice_a_move(
+    row: Session, settings: Settings, ip: str | None, now: datetime
+) -> tuple[bool, Place | None]:
+    """Whether the row was written to, and where this session has turned up if it has moved.
+
+    Two answers because they are different questions. The place is recorded whenever anybody
+    can name it, so a session that began before a source existed gets filled in on its next
+    request — and that first filling-in is not a move, because there is nothing to have moved
+    from. It is still a write, and a write nobody commits is a write that happens again on
+    every request afterwards.
+
+    The claim that this is the same person is withdrawn when it is: `verified_at` is pushed
+    back just past the step-up window, which is the same as saying the password was proved too
+    long ago. Not a sign-out — people do travel, and ending the session of everybody who
+    boards a plane is a worse platform than one that asks for a password at the gate.
+    """
+    here = geo.locate(ip)
+    if not here.known:
+        return False, None
+    before = Place(country=row.country, asn=row.asn)
+    if (before.country, before.asn) == (here.country, here.asn):
+        return False, None
+    row.country, row.asn = here.country, here.asn
+    if not geo.moved(before, here):
+        return True, None
+    row.verified_at = now - timedelta(minutes=settings.step_up_ttl_minutes + 1)
+    return True, here
 
 
 def _is_due_for_renewal(row: Session, settings: Settings, now: datetime) -> bool:
@@ -187,18 +243,20 @@ async def peek(db: DbSession, settings: Settings, raw_token: str) -> Session | N
     return row
 
 
-def _slide(row: Session, settings: Settings, now: datetime, ip: str | None) -> None:
-    """Pushes the idle clock forward — but not on every single request.
+def _slide(row: Session, settings: Settings, now: datetime, ip: str | None) -> bool:
+    """Pushes the idle clock forward — but not on every single request. Says whether it did.
 
     Writing a row for every image a page loads would turn a read-mostly table into a
-    write-mostly one for no gain: a session that was alive a few seconds ago is alive.
+    write-mostly one for no gain: a session that was alive a few seconds ago is alive. The
+    same throttle is what keeps the commit this now implies down to one a minute per session.
     """
     if now - row.last_seen_at < timedelta(seconds=settings.session_touch_interval_seconds):
-        return
+        return False
     row.last_seen_at = now
     row.idle_expires_at = now + timedelta(days=settings.session_idle_ttl_days)
     if ip is not None:
         row.ip = ip
+    return True
 
 
 async def renew(db: DbSession, settings: Settings, row: Session) -> IssuedSession:
@@ -217,6 +275,8 @@ async def renew(db: DbSession, settings: Settings, row: Session) -> IssuedSessio
             device_public_key=row.device_public_key,
             user_agent=row.user_agent,
             ip=row.ip,
+            country=row.country,
+            asn=row.asn,
             auth_method=row.auth_method,
             # Carried, and this is not bookkeeping: the successor is the row the next proof
             # will be checked against, and a fresh row with no memory would accept the

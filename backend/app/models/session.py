@@ -59,6 +59,12 @@ class Session(UUIDPrimaryKeyMixin, Base):
     # what the session looked like when it began, so a later request from somewhere else is
     # something the platform can notice rather than something it has no memory of
     ip: Mapped[str | None] = mapped_column(String(45))
+    # Where that address was, when anything could tell us — see core/geo.py. Null is the
+    # ordinary case and means "nobody knew", not "nowhere": most addresses resolve to nothing
+    # useful, and a visitor behind a privacy relay is not an intruder. The pair is what makes
+    # "this session is suddenly somewhere else" a question the platform can ask at all.
+    country: Mapped[str | None] = mapped_column(String(2))
+    asn: Mapped[str | None] = mapped_column(String(32))
     auth_method: Mapped[AuthMethod] = mapped_column(
         SAEnum(AuthMethod, name="auth_method", values_callable=lambda e: [m.value for m in e]),
         default=AuthMethod.PASSWORD,

@@ -65,6 +65,22 @@ async def get_session_row(
                 settings, notifications.replayed_token_letter(settings, owner.email)
             )
         raise session_service.InvalidSessionError("Сессия недействительна, войдите заново")
+    if outcome.wrote:
+        # Committed here because nobody else will. Most requests are reads that commit
+        # nothing, and everything `touch` writes used to be rolled back with them — which
+        # turned a renewal into a sign-out: the browser took the new token and the row it
+        # named was never saved. The throttle inside `_slide` keeps this to one commit a
+        # minute per session.
+        await db.commit()
+    if outcome.moved_to is not None:
+        owner = await users_repo.get_by_id(db, outcome.session.user_id)
+        if owner is not None:
+            notifications.deliver(
+                settings,
+                notifications.session_moved_letter(
+                    settings, owner.email, outcome.moved_to.country, outcome.moved_to.asn
+                ),
+            )
     if outcome.renewed is not None:
         set_session_cookies(response, settings, outcome.renewed)
     return outcome.session
