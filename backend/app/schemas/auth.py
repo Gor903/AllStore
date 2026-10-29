@@ -29,9 +29,29 @@ class BuyerRegisterRequest(EmailOwner):
     phone: Phone | None = None
 
 
-class SellerRegisterRequest(BuyerRegisterRequest):
+class BusinessDetails(BaseModel):
+    """What a shop has to say about itself before it can exist: who it is in law, and what it
+    calls itself to buyers. Both are NOT NULL on the table, which is why no path can create a
+    business without asking."""
+
     legal_name: Name
     display_name: Name
+
+
+class SellerRegisterRequest(BuyerRegisterRequest, BusinessDetails):
+    """Both halves at once, because a password registration can ask for both at once."""
+
+
+class BusinessOnboardingRequest(BusinessDetails):
+    """The half asked later, when the first half came from Google.
+
+    Google tells us an address and a name and nothing a shop needs, so a seller who arrived
+    that way has an account and no business — and until this is answered, nothing to sell
+    from. The phone is here rather than on the account form for the same reason: nobody ever
+    asked them for it.
+    """
+
+    phone: Phone | None = None
 
 
 class LoginRequest(EmailOwner):

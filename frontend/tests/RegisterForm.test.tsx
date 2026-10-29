@@ -68,6 +68,25 @@ describe("RegisterForm", () => {
     });
   });
 
+  it("offers Google for whichever account the tab is on", async () => {
+    // the button used to be rendered by the page, outside the tab's reach, so it always said
+    // buyer — and a seller who took it got an account with no shop and no way to make one
+    const user = userEvent.setup();
+    render(<RegisterForm />);
+
+    expect(screen.getByRole("link", { name: /Google/ })).toHaveAttribute(
+      "href",
+      expect.stringContaining("role=buyer"),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Продавец" }));
+
+    expect(screen.getByRole("link", { name: /Google/ })).toHaveAttribute(
+      "href",
+      expect.stringContaining("role=seller"),
+    );
+  });
+
   it("omits an empty phone instead of sending a blank string", async () => {
     const fetchMock = vi.fn<(url: string, init: RequestInit) => Promise<Response>>(async () =>
       mockResponse(201),

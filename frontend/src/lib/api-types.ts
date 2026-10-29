@@ -1522,7 +1522,16 @@ export interface paths {
          */
         get: operations["read_my_business_api_v1_users_me_business_get"];
         put?: never;
-        post?: never;
+        /**
+         * Open My Business
+         * @description For the seller who arrived through Google and therefore has no business yet.
+         *
+         *     A password registration creates both at once and never reaches this; the route exists
+         *     because the other way in cannot. It is deliberately not restricted to Google accounts —
+         *     what matters is whether a business exists, and the unique index answers that better than
+         *     a check on how somebody signed up.
+         */
+        post: operations["open_my_business_api_v1_users_me_business_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1796,6 +1805,23 @@ export interface components {
             offset: number;
             /** Total */
             total: number;
+        };
+        /**
+         * BusinessOnboardingRequest
+         * @description The half asked later, when the first half came from Google.
+         *
+         *     Google tells us an address and a name and nothing a shop needs, so a seller who arrived
+         *     that way has an account and no business — and until this is answered, nothing to sell
+         *     from. The phone is here rather than on the account form for the same reason: nobody ever
+         *     asked them for it.
+         */
+        BusinessOnboardingRequest: {
+            /** Display Name */
+            display_name: string;
+            /** Legal Name */
+            legal_name: string;
+            /** Phone */
+            phone?: string | null;
         };
         /** BusinessRead */
         BusinessRead: {
@@ -2688,7 +2714,10 @@ export interface components {
         RoleChangeRequest: {
             role: components["schemas"]["UserRole"];
         };
-        /** SellerRegisterRequest */
+        /**
+         * SellerRegisterRequest
+         * @description Both halves at once, because a password registration can ask for both at once.
+         */
         SellerRegisterRequest: {
             /** Display Name */
             display_name: string;
@@ -5564,6 +5593,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BusinessRead"];
+                };
+            };
+        };
+    };
+    open_my_business_api_v1_users_me_business_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BusinessOnboardingRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusinessRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

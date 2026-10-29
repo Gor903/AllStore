@@ -24,7 +24,7 @@ from app.core.config import Settings, get_settings
 from app.db.session import get_session
 from app.deps.settings import settings_dep
 from app.main import create_app
-from app.models import User, UserIdentity
+from app.models import Business, User, UserIdentity, UserRole
 from tests.integration.conftest import csrf_headers, register_buyer
 
 pytestmark = pytest.mark.integration
@@ -126,9 +126,9 @@ async def client(session: AsyncSession) -> AsyncIterator[AsyncClient]:
         yield made
 
 
-async def _handshake(client: AsyncClient) -> str:
+async def _handshake(client: AsyncClient, role: str = "buyer") -> str:
     """Walks the first half and returns the state the server expects back."""
-    leaving = await client.get(START, follow_redirects=False)
+    leaving = await client.get(START, params={"role": role}, follow_redirects=False)
     assert leaving.status_code == 307
     return httpx.URL(leaving.headers["location"]).params["state"]
 
@@ -320,6 +320,29 @@ async def test_the_last_way_in_cannot_be_detached(
     )
 
     assert refused.status_code == 409
+
+
+async def test_a_seller_arrives_with_an_account_and_no_shop(
+    client: AsyncClient, google: Any, session: AsyncSession
+) -> None:
+    """Google knows an address; a business needs a legal name, and both of its name columns
+    are NOT NULL. So the shop cannot be created here, and the seller is sent to answer for it
+    — the cabinet redirects to the onboarding screen on exactly this state."""
+    state = await _handshake(client, role="seller")
+    google(nonce=_nonce(client))
+
+    await client.get(CALLBACK, params={"code": "a", "state": state}, follow_redirects=False)
+
+    user = (await session.execute(select(User))).scalars().one()
+    assert user.role is UserRole.SELLER
+    assert (await session.execute(select(Business))).scalars().all() == []
+    # and the way out is open: the onboarding route answers this account
+    opened = await client.post(
+        "/api/v1/users/me/business",
+        json={"legal_name": "ИП Петров", "display_name": "Лавка"},
+        headers=csrf_headers(client),
+    )
+    assert opened.status_code == 201
 
 
 async def test_attaching_and_detaching_a_way_in_is_reported_to_the_owner(
