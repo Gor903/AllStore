@@ -1224,7 +1224,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Read Me */
+        /**
+         * Read Me
+         * @description Reachable while a password is still owed: this is how the client finds out it owes one.
+         */
         get: operations["read_me_api_v1_users_me_get"];
         put?: never;
         post?: never;

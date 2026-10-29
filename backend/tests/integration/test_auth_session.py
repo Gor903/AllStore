@@ -70,20 +70,28 @@ async def test_refresh_rotates_the_token(api_client: AsyncClient, session: Async
 
 
 async def test_replaying_a_rotated_token_kills_every_session(
-    api_client: AsyncClient, session: AsyncSession
+    committing_api_client: AsyncClient, fresh_session: AsyncSession
 ) -> None:
-    """Reuse of an already rotated token means it leaked — every session of that user dies."""
-    settings = get_settings()
-    await register_buyer(api_client)
-    stolen = api_client.cookies[settings.refresh_cookie_name]
-    await api_client.post("/api/v1/auth/refresh", headers=csrf_headers(api_client))
-    api_client.cookies.set(settings.refresh_cookie_name, stolen)
+    """Reuse of an already rotated token means it leaked — every session of that user dies.
 
-    response = await api_client.post("/api/v1/auth/refresh", headers=csrf_headers(api_client))
+    Read from outside the request on purpose. The refusal was never in doubt; what matters is
+    that the revocation it triggers is still there afterwards, and a session that took part in
+    the request would report a write that never reached the database.
+    """
+    settings = get_settings()
+    client = committing_api_client
+    await register_buyer(client)
+    stolen = client.cookies[settings.refresh_cookie_name]
+    await client.post("/api/v1/auth/refresh", headers=csrf_headers(client))
+    client.cookies.set(settings.refresh_cookie_name, stolen)
+
+    response = await client.post("/api/v1/auth/refresh", headers=csrf_headers(client))
 
     assert response.status_code == 401
     assert response.json()["error"]["code"] == "invalid_refresh_token"
-    tokens = (await session.execute(select(RefreshToken))).scalars().all()
+    tokens = (await fresh_session.execute(select(RefreshToken))).scalars().all()
+    # without this the assertion below passes on an empty set and proves nothing
+    assert len(tokens) == 2
     assert all(token.revoked_at is not None for token in tokens)
 
 

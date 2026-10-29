@@ -54,6 +54,79 @@ async def api_client(session: "AsyncSession") -> AsyncIterator[AsyncClient]:
 
 
 @pytest.fixture
+async def committing_api_client(db_engine: "AsyncEngine") -> AsyncIterator[AsyncClient]:
+    """Client whose requests commit for real, and whose session is torn down for real.
+
+    `api_client` hands the endpoint a session **object**, so the dependency never closes and
+    the outer transaction swallows every commit. That is right for most tests and wrong for
+    one question: whether a write survives the request it was made in. A handler that writes
+    and then raises looks identical either way under `api_client` — the rollback that discards
+    the write is precisely what the shared session cannot perform.
+
+    Here the dependency stays a generator, so FastAPI throws the exception into it exactly as
+    it does in production, and the session closes with the transaction it was given. Nothing
+    rolls the test back afterwards, hence the truncate.
+    """
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    from app.db.session import get_session
+    from app.main import create_app
+
+    app = create_app()
+    sessionmaker = async_sessionmaker(db_engine, expire_on_commit=False)
+
+    async def _real_lifecycle() -> AsyncIterator[AsyncSession]:
+        async with sessionmaker() as db_session:
+            yield db_session
+
+    app.dependency_overrides[get_session] = _real_lifecycle
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as async_client:
+            yield async_client
+    finally:
+        await _empty_every_table(db_engine)
+
+
+@pytest.fixture
+async def fresh_session(db_engine: "AsyncEngine") -> AsyncIterator[AsyncSession]:
+    """A session that has seen nothing of the request — what the next caller would see.
+
+    Reading through the session an endpoint used would answer "was it written?" with what is
+    merely pending in that transaction. This one asks the database.
+    """
+    async with AsyncSession(db_engine, expire_on_commit=False) as db_session:
+        yield db_session
+
+
+# Rows that a migration put there, not a test. `categories` is the starting catalogue from
+# migration 0004, and half the suite reads it through `seeded_category`; emptying it leaves a
+# database that no migration will fill again, because the migration has already run. The other
+# two migrations that insert (0016, 0021) backfill from existing rows and seed nothing.
+SEEDED_BY_MIGRATION = frozenset({"categories"})
+
+
+async def _empty_every_table(engine: "AsyncEngine") -> None:
+    """Removes what the test wrote and nothing else.
+
+    `alembic_version` is outside the metadata and so is left alone by construction: the schema
+    outlives the rows.
+    """
+    from sqlalchemy import text
+
+    from app.db.base import Base
+
+    names = ", ".join(
+        f'"{table.name}"'
+        for table in Base.metadata.sorted_tables
+        if table.name not in SEEDED_BY_MIGRATION
+    )
+    async with engine.begin() as connection:
+        await connection.execute(text(f"TRUNCATE {names} RESTART IDENTITY CASCADE"))
+
+
+@pytest.fixture
 def object_storage() -> Iterator[None]:
     """A bucket backed by moto, so the real boto3 path runs without infrastructure.
 
