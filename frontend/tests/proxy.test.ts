@@ -41,13 +41,22 @@ describe("proxy", () => {
     expect(response.headers.get("location")).toBeNull();
   });
 
-  it("runs on the root as well as the protected areas", () => {
-    expect(config.matcher).toEqual([
-      "/",
-      "/dashboard/:path*",
-      "/admin/:path*",
-      "/moderation/:path*",
+  it("runs on every page, so no route can forget to ask for the headers", () => {
+    expect(config.matcher).toHaveLength(1);
+    const [rule] = config.matcher;
+
+    expect(rule?.source).toContain("_next/static");
+    // a prefetch renders nothing and would spend a nonce for nobody
+    expect(rule?.missing).toEqual([
+      { type: "header", key: "next-router-prefetch" },
+      { type: "header", key: "purpose", value: "prefetch" },
     ]);
+  });
+
+  it("leaves a public page alone instead of sending it to the login form", () => {
+    const response = proxy(request("/catalog"));
+
+    expect(response.headers.get("location")).toBeNull();
   });
 
   it("sends an anonymous visitor away from the moderation queue", () => {
@@ -88,5 +97,49 @@ describe("proxy on a storefront subdomain", () => {
 
     expect(rewriteTarget(response)).toBeNull();
     expect(response.headers.get("location")).toBeNull();
+  });
+});
+
+describe("security headers", () => {
+  it("answers every page with a policy", () => {
+    const headers = proxy(request("/catalog")).headers;
+
+    expect(headers.get("content-security-policy")).toContain("default-src 'self'");
+    expect(headers.get("x-content-type-options")).toBe("nosniff");
+    expect(headers.get("x-frame-options")).toBe("DENY");
+    expect(headers.get("referrer-policy")).toBe("no-referrer");
+  });
+
+  it("refuses to be framed, which is what clickjacking needs", () => {
+    const policy = proxy(request("/dashboard", "allstore_access=t")).headers.get(
+      "content-security-policy",
+    );
+
+    expect(policy).toContain("frame-ancestors 'none'");
+    expect(policy).toContain("object-src 'none'");
+    expect(policy).toContain("base-uri 'self'");
+    expect(policy).toContain("form-action 'self'");
+  });
+
+  it("gives each request its own nonce", () => {
+    const first = proxy(request("/catalog")).headers.get("content-security-policy") ?? "";
+    const second = proxy(request("/catalog")).headers.get("content-security-policy") ?? "";
+
+    const nonceOf = (policy: string) => /'nonce-([^']+)'/.exec(policy)?.[1];
+    expect(nonceOf(first)).toBeDefined();
+    expect(nonceOf(first)).not.toBe(nonceOf(second));
+  });
+
+  it("carries the policy on a refusal too, not only on a page that renders", () => {
+    const response = proxy(request("/admin"));
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
+  });
+
+  it("allows a storefront's own colours, which live in a style attribute", () => {
+    const policy = proxy(request("/catalog")).headers.get("content-security-policy") ?? "";
+
+    expect(policy).toContain("style-src 'self' 'unsafe-inline'");
   });
 });

@@ -27,7 +27,7 @@ SELLER_PAYLOAD = {
 
 def csrf_headers(client: AsyncClient) -> dict[str, str]:
     settings = get_settings()
-    return {settings.csrf_header_name: client.cookies[settings.csrf_cookie_name]}
+    return {settings.csrf_header_name: client.cookies[settings.csrf_cookie]}
 
 
 async def register_buyer(client: AsyncClient, **overrides: Any) -> Response:
