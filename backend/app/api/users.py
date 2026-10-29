@@ -1,13 +1,13 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, status
 
 from app.core.errors import NotFoundError
 from app.deps.auth import SessionDep, SignedInUser, require_csrf, require_role
 from app.models import User, UserRole
 from app.repositories import users as users_repo
-from app.schemas.auth import BusinessRead, UserRead
-from app.services import business_moderation
+from app.schemas.auth import BusinessOnboardingRequest, BusinessRead, UserRead
+from app.services import business_moderation, businesses
 
 router = APIRouter(tags=["users"])
 
@@ -26,6 +26,28 @@ async def read_my_business(user: SellerUser, session: SessionDep) -> BusinessRea
     business = await users_repo.get_business_with_reviews(session, user.id)
     if business is None:
         raise NotFoundError("У аккаунта нет магазина")
+    return BusinessRead.of(business)
+
+
+@router.post(
+    "/users/me/business",
+    response_model=BusinessRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_csrf)],
+)
+async def open_my_business(
+    user: SellerUser, payload: BusinessOnboardingRequest, session: SessionDep
+) -> BusinessRead:
+    """For the seller who arrived through Google and therefore has no business yet.
+
+    A password registration creates both at once and never reaches this; the route exists
+    because the other way in cannot. It is deliberately not restricted to Google accounts —
+    what matters is whether a business exists, and the unique index answers that better than
+    a check on how somebody signed up.
+    """
+    business = await businesses.open_for(session, user, payload)
+    await session.commit()
+    await session.refresh(business, attribute_names=["reviews", "created_at"])
     return BusinessRead.of(business)
 
 

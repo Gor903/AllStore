@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { GoogleButton } from "@/components/auth/GoogleButton";
 import { RegisterForm } from "@/components/auth/RegisterForm";
 import { getCurrentUser } from "@/lib/dal";
 import { homeFor } from "@/lib/home";
@@ -24,13 +23,8 @@ export default async function RegisterPage() {
       <p className="text-sm text-ink-muted">
         Магазин продавца проходит проверку модератором до публикации.
       </p>
+      {/* the Google button lives inside the form: the role it carries is the tab selected there */}
       <RegisterForm />
-      <div className="flex items-center gap-3 text-xs text-ink-muted">
-        <span className="h-px flex-1 bg-ink-muted/20" />
-        или
-        <span className="h-px flex-1 bg-ink-muted/20" />
-      </div>
-      <GoogleButton role="buyer" />
       <p className="text-sm text-ink-muted">
         Уже есть аккаунт?{" "}
         <Link href="/login" className="text-brand">
