@@ -64,6 +64,11 @@ class Settings(BaseSettings):
     # front; behind a proxy it must name the proxy, or every visitor shares one allowance.
     trusted_proxies: Annotated[tuple[str, ...], NoDecode] = ()
 
+    # Where the shared rate-limit tally lives. Unset means each worker keeps its own, which
+    # is honest for one worker and quietly doubles the allowance for two — see
+    # app/core/rate_limit.py.
+    redis_url: str | None = None
+
     database_url: PostgresDsn
     db_echo: bool = False
     db_pool_size: int = 5
@@ -178,6 +183,7 @@ class Settings(BaseSettings):
         "s3_public_url",
         "smtp_host",
         "breached_password_url",
+        "redis_url",
         mode="before",
     )
     @classmethod

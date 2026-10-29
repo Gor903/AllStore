@@ -13,10 +13,19 @@ What each one is keyed on is the part worth arguing about, and it is argued in p
 from dataclasses import dataclass
 
 from fastapi import Request
+from redis.asyncio import Redis
 
 from app.core.client_ip import client_ip
+from app.core.config import Settings
 from app.core.errors import TooManyRequestsError
-from app.core.rate_limit import GraduatedDelay, SlidingWindow
+from app.core.rate_limit import (
+    Allowance,
+    Delay,
+    GraduatedDelay,
+    SharedDelay,
+    SharedWindow,
+    SlidingWindow,
+)
 from app.deps.auth import CurrentUser, SettingsDep, SignedInUser
 
 MINUTE = 60.0
@@ -72,28 +81,57 @@ class Limiters:
     """Built once per application, so each process keeps its own tally and a test gets a
     fresh set with its app rather than inheriting the previous test's."""
 
-    login_by_address: SlidingWindow
-    login_by_account: GraduatedDelay
-    registration: SlidingWindow
-    reset_request: SlidingWindow
-    reset_confirm: SlidingWindow
-    refresh: SlidingWindow
-    credential_change: SlidingWindow
-    staff: SlidingWindow
+    login_by_address: Allowance
+    login_by_account: Delay
+    registration: Allowance
+    reset_request: Allowance
+    reset_confirm: Allowance
+    refresh: Allowance
+    credential_change: Allowance
+    staff: Allowance
 
 
-def build_limiters() -> Limiters:
+def build_limiters(settings: Settings) -> Limiters:
+    """One tally for the platform when `REDIS_URL` says where, one per worker otherwise.
+
+    The in-process set is honest for a single worker and quietly wrong for two: each keeps its
+    own count, so the allowance doubles without anybody changing a number. Nothing above this
+    function knows which it got.
+    """
+    if not settings.redis_url:
+        return Limiters(
+            login_by_address=SlidingWindow(LOGIN_ATTEMPTS, LOGIN_WINDOW),
+            login_by_account=GraduatedDelay(
+                LOGIN_FREE_ATTEMPTS, LOGIN_DELAY_WINDOW, LOGIN_DELAY_STEP, LOGIN_DELAY_CAP
+            ),
+            registration=SlidingWindow(REGISTRATION_ATTEMPTS, REGISTRATION_WINDOW),
+            reset_request=SlidingWindow(RESET_REQUEST_ATTEMPTS, RESET_REQUEST_WINDOW),
+            reset_confirm=SlidingWindow(RESET_CONFIRM_ATTEMPTS, RESET_CONFIRM_WINDOW),
+            refresh=SlidingWindow(REFRESH_ATTEMPTS, REFRESH_WINDOW),
+            credential_change=SlidingWindow(CREDENTIAL_CHANGE_ATTEMPTS, CREDENTIAL_CHANGE_WINDOW),
+            staff=SlidingWindow(STAFF_ATTEMPTS, STAFF_WINDOW),
+        )
+    shared = Redis.from_url(settings.redis_url, decode_responses=True)
     return Limiters(
-        login_by_address=SlidingWindow(LOGIN_ATTEMPTS, LOGIN_WINDOW),
-        login_by_account=GraduatedDelay(
-            LOGIN_FREE_ATTEMPTS, LOGIN_DELAY_WINDOW, LOGIN_DELAY_STEP, LOGIN_DELAY_CAP
+        login_by_address=SharedWindow(shared, "login", LOGIN_ATTEMPTS, LOGIN_WINDOW),
+        login_by_account=SharedDelay(
+            shared,
+            "login-account",
+            LOGIN_FREE_ATTEMPTS,
+            LOGIN_DELAY_WINDOW,
+            LOGIN_DELAY_STEP,
+            LOGIN_DELAY_CAP,
         ),
-        registration=SlidingWindow(REGISTRATION_ATTEMPTS, REGISTRATION_WINDOW),
-        reset_request=SlidingWindow(RESET_REQUEST_ATTEMPTS, RESET_REQUEST_WINDOW),
-        reset_confirm=SlidingWindow(RESET_CONFIRM_ATTEMPTS, RESET_CONFIRM_WINDOW),
-        refresh=SlidingWindow(REFRESH_ATTEMPTS, REFRESH_WINDOW),
-        credential_change=SlidingWindow(CREDENTIAL_CHANGE_ATTEMPTS, CREDENTIAL_CHANGE_WINDOW),
-        staff=SlidingWindow(STAFF_ATTEMPTS, STAFF_WINDOW),
+        registration=SharedWindow(shared, "register", REGISTRATION_ATTEMPTS, REGISTRATION_WINDOW),
+        reset_request=SharedWindow(shared, "reset", RESET_REQUEST_ATTEMPTS, RESET_REQUEST_WINDOW),
+        reset_confirm=SharedWindow(
+            shared, "reset-confirm", RESET_CONFIRM_ATTEMPTS, RESET_CONFIRM_WINDOW
+        ),
+        refresh=SharedWindow(shared, "renew", REFRESH_ATTEMPTS, REFRESH_WINDOW),
+        credential_change=SharedWindow(
+            shared, "credentials", CREDENTIAL_CHANGE_ATTEMPTS, CREDENTIAL_CHANGE_WINDOW
+        ),
+        staff=SharedWindow(shared, "staff", STAFF_ATTEMPTS, STAFF_WINDOW),
     )
 
 
@@ -104,49 +142,49 @@ def limiters_of(request: Request) -> Limiters:
     return limiters
 
 
-def _enforce(window: SlidingWindow, key: str) -> None:
-    decision = window.check(key)
+async def _enforce(window: Allowance, key: str) -> None:
+    decision = await window.check(key)
     if not decision.allowed:
         raise TooManyRequestsError(TOO_MANY, retry_after=decision.retry_after_seconds)
 
 
-def limit_login(request: Request, settings: SettingsDep) -> None:
-    _enforce(limiters_of(request).login_by_address, client_ip(request, settings))
+async def limit_login(request: Request, settings: SettingsDep) -> None:
+    await _enforce(limiters_of(request).login_by_address, client_ip(request, settings))
 
 
-def limit_registration(request: Request, settings: SettingsDep) -> None:
-    _enforce(limiters_of(request).registration, client_ip(request, settings))
+async def limit_registration(request: Request, settings: SettingsDep) -> None:
+    await _enforce(limiters_of(request).registration, client_ip(request, settings))
 
 
-def limit_reset_request(request: Request, settings: SettingsDep) -> None:
-    _enforce(limiters_of(request).reset_request, client_ip(request, settings))
+async def limit_reset_request(request: Request, settings: SettingsDep) -> None:
+    await _enforce(limiters_of(request).reset_request, client_ip(request, settings))
 
 
-def limit_reset_confirm(request: Request, settings: SettingsDep) -> None:
-    _enforce(limiters_of(request).reset_confirm, client_ip(request, settings))
+async def limit_reset_confirm(request: Request, settings: SettingsDep) -> None:
+    await _enforce(limiters_of(request).reset_confirm, client_ip(request, settings))
 
 
-def limit_refresh(request: Request, settings: SettingsDep) -> None:
-    _enforce(limiters_of(request).refresh, client_ip(request, settings))
+async def limit_refresh(request: Request, settings: SettingsDep) -> None:
+    await _enforce(limiters_of(request).refresh, client_ip(request, settings))
 
 
-def limit_credential_change(request: Request, user: SignedInUser) -> None:
+async def limit_credential_change(request: Request, user: SignedInUser) -> None:
     """`SignedInUser` rather than `CurrentUser`: this guards `/auth/password`, which an
     account owing a change must still reach, and asking for the stricter one here would shut
     the door this limiter is standing next to."""
-    _enforce(limiters_of(request).credential_change, str(user.id))
+    await _enforce(limiters_of(request).credential_change, str(user.id))
 
 
-def limit_staff_actions(request: Request, admin: CurrentUser) -> None:
-    _enforce(limiters_of(request).staff, str(admin.id))
+async def limit_staff_actions(request: Request, admin: CurrentUser) -> None:
+    await _enforce(limiters_of(request).staff, str(admin.id))
 
 
-def delay_for_account(request: Request, email: str) -> float:
+async def delay_for_account(request: Request, email: str) -> float:
     """Keyed on the address that was typed, because at this point nothing else is known —
     the account may not even exist, and the answer must not reveal which."""
-    return limiters_of(request).login_by_account.delay_for(email)
+    return await limiters_of(request).login_by_account.delay_for(email)
 
 
-def forget_account_delay(request: Request, email: str) -> None:
+async def forget_account_delay(request: Request, email: str) -> None:
     """The guesses that came before somebody proved the account is theirs stop counting."""
-    limiters_of(request).login_by_account.forget(email)
+    await limiters_of(request).login_by_account.forget(email)
