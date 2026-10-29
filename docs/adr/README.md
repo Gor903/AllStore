@@ -13,7 +13,7 @@
 | 2 | [Хранение паролей](0002-password-storage.md) | 2 | accepted |
 | 3 | Стратегия кэширования публичных страниц | 6 | открыт |
 | 4 | [Типы frontend из OpenAPI](0004-api-types-generation.md) | 2 | accepted |
-| 5 | Провайдер email-уведомлений | 8 | открыт |
+| 5 | Провайдер email-уведомлений | 8 | открыт, временно обойдён [ADR 19](0019-transactional-mail.md) |
 | 6 | Стратегия резервного копирования PostgreSQL | 1–9 (до продакшена) | открыт |
 | 7 | [Порог покрытия тестами](0007-test-coverage-threshold.md) | 2 | accepted |
 
@@ -26,3 +26,4 @@
 | 16 | [Админка: жизненный цикл, видимость, состояние](0016-admin-panel-and-visibility.md) | 19 | accepted |
 | 17 | [Модератора заводит администратор, приглашений нет](0017-moderators-appointed-directly.md) | 19 | accepted |
 | 18 | [Серверные сессии и привязка к устройству](0018-server-side-sessions.md) | рефактор auth | accepted |
+| 19 | [Транзакционная почта: временно личный Gmail](0019-transactional-mail.md) | рефактор auth | accepted |

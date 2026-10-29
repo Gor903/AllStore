@@ -1,6 +1,6 @@
 import asyncio
 
-from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Request, Response, status
 
 from app.core.client_ip import client_ip
 from app.core.config import Settings
@@ -36,7 +36,7 @@ from app.schemas.auth import (
     UserRead,
     VerifyRequest,
 )
-from app.services import audit, device_keys
+from app.services import audit, device_keys, notifications
 from app.services import auth as auth_service
 from app.services import sessions as session_service
 
@@ -254,10 +254,19 @@ async def change_password(
     dependencies=[Depends(limit_reset_request)],
 )
 async def request_password_reset(
-    payload: PasswordResetRequest, settings: SettingsDep, session: SessionDep
+    payload: PasswordResetRequest,
+    background: BackgroundTasks,
+    settings: SettingsDep,
+    session: SessionDep,
 ) -> MessageResponse:
-    await auth_service.request_password_reset(session, settings, payload.normalized_email)
+    letter = await auth_service.request_password_reset(session, settings, payload.normalized_email)
+    # committed before the letter is scheduled: the link must not be able to arrive before the
+    # token it points at exists
     await session.commit()
+    if letter is not None:
+        # after the answer, so the time it takes to reach somebody else's mail server is not
+        # part of what this endpoint tells the caller
+        background.add_task(notifications.deliver, settings, letter)
     # the same answer for known and unknown addresses — otherwise this endpoint lists accounts
     return MessageResponse(message="Если аккаунт существует, на почту отправлена инструкция")
 

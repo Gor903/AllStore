@@ -62,6 +62,13 @@ services:
       S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
       S3_BUCKET: ${S3_BUCKET:-allstore-dev}
       S3_PUBLIC_URL: http://localhost:${MINIO_PORT:-9000}/${S3_BUCKET:-allstore-dev}
+      # Empty host keeps the stand without a mail server: letters go to the log, which is
+      # where the reset link is read from locally. Fill these in .env to send for real.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-noreply@allstore.am}
+      SITE_URL: ${SITE_URL:-http://localhost:${HTTP_PORT:-8080}}
       # unset this and the catalogue searches exactly as it did before semantic search
       SEARCH_SERVICE_URL: ${SEARCH_SERVICE_URL-http://search:8000}
       # empty disables the assistant and the site simply does not offer it

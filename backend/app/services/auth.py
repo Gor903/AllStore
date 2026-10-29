@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
 from app.core.errors import AccountNotActiveError, AuthenticationError, ConflictError
+from app.core.mail import Letter
 from app.core.security import (
     generate_token,
     hash_password,
@@ -18,7 +19,7 @@ from app.models import Business, PasswordResetToken, User, UserRole, UserStatus
 from app.repositories import auth_tokens, users
 from app.repositories import sessions as sessions_repo
 from app.schemas.auth import BuyerRegisterRequest, SellerRegisterRequest
-from app.services.notifications import send_password_reset_email
+from app.services import notifications
 from app.services.sessions import CREDENTIALS_CHANGED
 
 
@@ -109,11 +110,19 @@ def _ensure_active(user: User) -> None:
         raise AccountNotActiveError("Доступ к аккаунту ограничен, обратитесь в поддержку")
 
 
-async def request_password_reset(session: AsyncSession, settings: Settings, email: str) -> None:
-    """Always succeeds from the caller's side — the response must not reveal known addresses."""
+async def request_password_reset(
+    session: AsyncSession, settings: Settings, email: str
+) -> Letter | None:
+    """Builds the letter; does not send it. Returns None when there is nobody to write to.
+
+    Sending belongs to the caller, after the commit and after the answer. Waiting on somebody
+    else's mail server inside the request would make the response slower for an address that
+    exists than for one that does not — which is the question this endpoint's identical
+    wording exists to avoid answering.
+    """
     user = await users.get_by_email(session, email.strip().lower())
     if user is None or user.status is not UserStatus.ACTIVE:
-        return
+        return None
     raw_token = generate_token()
     await auth_tokens.add_password_reset_token(
         session,
@@ -123,7 +132,7 @@ async def request_password_reset(session: AsyncSession, settings: Settings, emai
             expires_at=datetime.now(UTC) + timedelta(hours=settings.password_reset_ttl_hours),
         ),
     )
-    await send_password_reset_email(user.email, raw_token)
+    return notifications.password_reset_letter(settings, user.email, raw_token)
 
 
 async def reset_password(session: AsyncSession, raw_token: str, new_password: str) -> User:
