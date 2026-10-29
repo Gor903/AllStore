@@ -3,7 +3,7 @@ from argon2 import PasswordHasher
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.errors import AccountNotActiveError, ConflictError
+from app.core.errors import AccountNotActiveError
 from app.core.security import verify_password
 from app.models import UserRole, UserStatus
 from app.schemas.auth import BuyerRegisterRequest, SellerRegisterRequest
@@ -28,10 +28,18 @@ async def test_registration_stores_only_a_hash(session: AsyncSession) -> None:
     assert verify_password(PASSWORD, user.password_hash)
 
 
-async def test_registration_rejects_a_taken_email(session: AsyncSession) -> None:
+async def test_registration_reports_a_taken_address_inwards_only(
+    session: AsyncSession,
+) -> None:
+    """The service says so; the route does not.
+
+    `AddressAlreadyTaken` exists so the API knows which person to write to — the one who
+    already holds the address, not the one who typed it. It never reaches a caller: both
+    outcomes get the same sentence, see api/auth.py.
+    """
     await auth_service.register_buyer(session, buyer_request())
 
-    with pytest.raises(ConflictError):
+    with pytest.raises(auth_service.AddressAlreadyTaken):
         await auth_service.register_buyer(session, buyer_request())
 
 

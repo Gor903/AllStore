@@ -1,4 +1,6 @@
 import asyncio
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Request, Response, status
 
@@ -23,6 +25,7 @@ from app.deps.rate_limit import (
     limit_reset_confirm,
     limit_reset_request,
 )
+from app.models import User
 from app.schemas.auth import (
     BuyerRegisterRequest,
     EmailChangeRequest,
@@ -33,7 +36,6 @@ from app.schemas.auth import (
     PasswordResetConfirmRequest,
     PasswordResetRequest,
     SellerRegisterRequest,
-    SellerRegisterResponse,
     UserRead,
     VerifyRequest,
 )
@@ -46,6 +48,40 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 # what these entries are about: the account itself, not anything it owns
 ENTITY = "user"
 
+# One sentence for both outcomes of registration. It promises a letter and nothing else,
+# because a letter is the only thing that happens in both cases.
+REGISTERED = "Если адрес свободен, на него отправлено письмо со ссылкой для подтверждения"
+
+
+async def _register(
+    session: SessionDep,
+    background: BackgroundTasks,
+    settings: Settings,
+    payload: BuyerRegisterRequest,
+    create: Callable[[SessionDep, Any], Awaitable[User]],
+) -> None:
+    """Creates the account, or writes to whoever already holds the address.
+
+    Both paths end with exactly one letter sent and nothing returned, so the caller has
+    nothing to tell them apart by.
+    """
+    await auth_service.ensure_password_is_still_a_secret(
+        settings, payload.password.get_secret_value()
+    )
+    try:
+        user = await create(session, payload)
+    except auth_service.AddressAlreadyTaken:
+        await session.commit()
+        background.add_task(
+            notifications.deliver,
+            settings,
+            notifications.registration_attempt_letter(settings, payload.normalized_email),
+        )
+        return
+    letters = await email_verification.request(session, settings, user, user.email)
+    await session.commit()
+    background.add_task(notifications.deliver, settings, letters.confirm)
+
 
 def _context(request: Request, settings: Settings) -> dict[str, str | None]:
     """What a session remembers about where it began, for the device list to show."""
@@ -57,53 +93,51 @@ def _context(request: Request, settings: Settings) -> dict[str, str | None]:
 
 @router.post(
     "/register/buyer",
-    response_model=UserRead,
-    status_code=status.HTTP_201_CREATED,
+    response_model=MessageResponse,
+    status_code=status.HTTP_202_ACCEPTED,
     dependencies=[Depends(limit_registration)],
 )
 async def register_buyer(
     payload: BuyerRegisterRequest,
-    response: Response,
-    request: Request,
     background: BackgroundTasks,
     settings: SettingsDep,
     session: SessionDep,
-) -> UserRead:
-    user = await auth_service.register_buyer(session, payload)
-    issued = await session_service.open_session(
-        session, settings, user, **_context(request, settings)
-    )
-    # the address is asked to answer for itself straight away; nothing waits on the answer
-    letters = await email_verification.request(session, settings, user, user.email)
-    await session.commit()
-    background.add_task(notifications.deliver, settings, letters.confirm)
-    set_session_cookies(response, settings, issued)
-    return UserRead.model_validate(user)
+) -> MessageResponse:
+    """Answers the same way whether the address was free or not.
+
+    It used to refuse a taken address out loud, which made this form a way of asking whether
+    a particular person has an account here — it needs no password and anybody can walk a
+    list of addresses through it. Now both outcomes get this sentence, and the difference
+    lives where it belongs: in who receives a letter and what it says.
+
+    No session either, for the same reason. Signing one person in and not the other is a
+    difference a caller can see without reading a word.
+    """
+    await _register(session, background, settings, payload, auth_service.register_buyer)
+    return MessageResponse(message=REGISTERED)
 
 
 @router.post(
     "/register/seller",
-    response_model=SellerRegisterResponse,
-    status_code=status.HTTP_201_CREATED,
+    response_model=MessageResponse,
+    status_code=status.HTTP_202_ACCEPTED,
     dependencies=[Depends(limit_registration)],
 )
 async def register_seller(
     payload: SellerRegisterRequest,
-    response: Response,
-    request: Request,
     background: BackgroundTasks,
     settings: SettingsDep,
     session: SessionDep,
-) -> SellerRegisterResponse:
-    user, business = await auth_service.register_seller(session, payload)
-    issued = await session_service.open_session(
-        session, settings, user, **_context(request, settings)
-    )
-    letters = await email_verification.request(session, settings, user, user.email)
-    await session.commit()
-    background.add_task(notifications.deliver, settings, letters.confirm)
-    set_session_cookies(response, settings, issued)
-    return SellerRegisterResponse.model_validate({"user": user, "business": business})
+) -> MessageResponse:
+    """The same answer as the buyer path, for the same reason. The shop is created with the
+    account and waits for a moderator either way."""
+
+    async def _create(db: SessionDep, data: SellerRegisterRequest) -> User:
+        user, _business = await auth_service.register_seller(db, data)
+        return user
+
+    await _register(session, background, settings, payload, _create)
+    return MessageResponse(message=REGISTERED)
 
 
 @router.post("/login", response_model=UserRead, dependencies=[Depends(limit_login)])
@@ -293,6 +327,9 @@ async def change_password(
     settings: SettingsDep,
     session: SessionDep,
 ) -> MessageResponse:
+    await auth_service.ensure_password_is_still_a_secret(
+        settings, payload.password.get_secret_value()
+    )
     await auth_service.change_password(
         session,
         user,
@@ -341,6 +378,9 @@ async def confirm_password_reset(
     settings: SettingsDep,
     session: SessionDep,
 ) -> MessageResponse:
+    await auth_service.ensure_password_is_still_a_secret(
+        settings, payload.password.get_secret_value()
+    )
     await auth_service.reset_password(session, payload.token, payload.password.get_secret_value())
     await session.commit()
     # every session was revoked with the password change, so the current cookies are stale

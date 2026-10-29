@@ -18,6 +18,8 @@ _DEFAULTS = {
     # production argon2 parameters spend 19 MiB per hash — that costs minutes across a suite
     "ARGON2_MEMORY_COST": "64",
     "ARGON2_TIME_COST": "1",
+    # the suite talks to nobody: an outage elsewhere must not turn into a red build here
+    "BREACHED_PASSWORD_URL": "",
 }
 for key, value in _DEFAULTS.items():
     os.environ.setdefault(key, value)

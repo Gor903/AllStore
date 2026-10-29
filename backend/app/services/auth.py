@@ -2,16 +2,23 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
-from app.core.errors import AccountNotActiveError, AuthenticationError, ConflictError
+from app.core.errors import (
+    AccountNotActiveError,
+    AuthenticationError,
+    BreachedPasswordError,
+    ConflictError,
+)
 from app.core.mail import Letter
 from app.core.security import (
     generate_token,
     hash_password,
     hash_password_in_thread,
     hash_token,
+    normalise,
     password_needs_rehash,
     verify_password_in_thread,
 )
@@ -19,7 +26,7 @@ from app.models import Business, PasswordResetToken, User, UserRole, UserStatus
 from app.repositories import auth_tokens, users
 from app.repositories import sessions as sessions_repo
 from app.schemas.auth import BuyerRegisterRequest, SellerRegisterRequest
-from app.services import notifications
+from app.services import breached_passwords, notifications
 from app.services.sessions import CREDENTIALS_CHANGED
 
 
@@ -48,22 +55,62 @@ def _dummy_hash() -> str:
     return hash_password("dummy-password-for-timing")
 
 
+class AddressAlreadyTaken(Exception):
+    """Raised inwards, never outwards.
+
+    The caller turns this into the same answer a successful registration gets — see
+    `api/auth.py`. It exists so the API can tell the two apart well enough to write to the
+    right person, and for no other reason.
+    """
+
+
+async def ensure_password_is_still_a_secret(settings: Settings, password: str) -> None:
+    """Refuses a password that is already on a list attackers try first.
+
+    Composition rules were considered and left out: they produce `Password1!` and a note on a
+    monitor. What a password needs is not to be one somebody has already seen — see
+    services/breached_passwords.py, which answers that without the password leaving.
+    """
+    if await breached_passwords.is_known_leaked(settings, normalise(password)):
+        raise BreachedPasswordError(
+            "Этот пароль уже встречался в утечках и больше не секрет — выберите другой"
+        )
+
+
 async def register_buyer(session: AsyncSession, data: BuyerRegisterRequest) -> User:
-    await ensure_identifiers_free(session, data.normalized_email, data.phone)
+    """Inserts, and lets the unique index be the one that decides.
+
+    Looking first and inserting afterwards is two statements with a gap between them, and two
+    registrations for the same address can both pass the look. The index cannot be raced; the
+    check could only ever have been a nicer error message, and it is not even that any more —
+    the answer is the same either way.
+    """
     user = User(
         email=data.normalized_email,
         phone=data.phone,
         password_hash=await hash_password_in_thread(data.password.get_secret_value()),
         role=UserRole.BUYER,
     )
-    return await users.add(session, user)
+    return await _insert(session, user)
+
+
+async def _insert(session: AsyncSession, user: User) -> User:
+    """A savepoint, because a failed insert poisons the transaction it happened in.
+
+    Without one the caller could not go on to write anything else — and it has a letter to
+    send and, on the seller path, a business to create.
+    """
+    try:
+        async with session.begin_nested():
+            return await users.add(session, user)
+    except IntegrityError as taken:
+        raise AddressAlreadyTaken from taken
 
 
 async def register_seller(
     session: AsyncSession, data: SellerRegisterRequest
 ) -> tuple[User, Business]:
-    await ensure_identifiers_free(session, data.normalized_email, data.phone)
-    user = await users.add(
+    user = await _insert(
         session,
         User(
             email=data.normalized_email,
@@ -81,8 +128,13 @@ async def register_seller(
 
 
 async def ensure_identifiers_free(session: AsyncSession, email: str, phone: str | None) -> None:
-    """Public: appointing a moderator goes through its own service rather than this module,
-    and the two must refuse a taken address in the same words."""
+    """For the administrator's own panel, where saying so plainly is the right answer.
+
+    Registration deliberately does not use this. A public form that refuses a taken address
+    out loud is a form anybody can walk a list of addresses through to learn who has an
+    account here; an administrator looking at their own list of moderators is not that, and
+    an address they cannot see the state of is an address they cannot act on.
+    """
     if await users.email_exists(session, email):
         raise ConflictError("Пользователь с таким email уже зарегистрирован")
     if phone is not None and await users.phone_exists(session, phone):

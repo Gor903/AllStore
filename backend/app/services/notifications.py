@@ -83,6 +83,26 @@ def email_change_notice_letter(settings: Settings, old_email: str, new_email: st
     )
 
 
+def registration_attempt_letter(settings: Settings, email: str) -> Letter:
+    """Goes to whoever already owns an address somebody just tried to register with.
+
+    The form answered them the same way it answers a real registration, so this letter is the
+    only thing that happens differently — and it is the half that matters, because the person
+    it concerns is the owner, not the one who typed it.
+    """
+    return Letter(
+        to=email,
+        subject="Попытка регистрации — AllStore.am",
+        body=(
+            "Кто-то попытался зарегистрироваться на AllStore.am с этим адресом, "
+            "но аккаунт на нём уже есть.\n\n"
+            f"Если это были вы — просто войдите: {settings.public_url}/login\n"
+            f"Забыли пароль: {settings.public_url}/password/forgot\n\n"
+            "Если это были не вы — делать ничего не нужно, ваш аккаунт не затронут.\n"
+        ),
+    )
+
+
 async def deliver(settings: Settings, letter: Letter) -> None:
     """Called from a background task, after the answer has gone out.
 

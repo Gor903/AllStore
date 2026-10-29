@@ -42,7 +42,7 @@ async def a_buyer(client: AsyncClient) -> tuple[str, str, dict[str, str]]:
     client.cookies.clear()
     email = f"buyer-{uuid.uuid4().hex}@example.com"
     registered = await register_buyer(client, email=email)
-    assert registered.status_code == 201
+    assert registered.status_code == 202
     return str(registered.json()["id"]), email, dict(client.cookies)
 
 

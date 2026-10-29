@@ -107,17 +107,23 @@ test("продавец регистрируется, заводит магази
     await page.getByLabel("Название магазина").fill(seller.displayName);
     await page.getByRole("button", { name: "Зарегистрироваться" }).click();
 
-    await expect(page).toHaveURL(/\/dashboard$/);
-    await expect(page.getByRole("heading", { name: "Кабинет" })).toBeVisible();
+    // No cabinet yet, and deliberately: the form answers the same way whether the address
+    // was free or already taken, so it can neither sign anybody in nor say which happened.
+    await expect(page.getByText(/Если адрес свободен/)).toBeVisible();
   });
 
-  await test.step("продавец подтверждает адрес", async () => {
-    // a shop cannot be opened until the address has answered, so this is what a real seller
-    // does next. The stand has no mail server, so the letter is in the backend's log —
-    // reading it from there is the e2e equivalent of opening an inbox.
-    await expect(page.getByText(/ещё не подтверждён/)).toBeVisible();
+  await test.step("продавец подтверждает адрес и входит", async () => {
+    // the stand has no mail server, so the letter is in the backend's log — reading it from
+    // there is the e2e equivalent of opening an inbox
     await page.goto(confirmationLinkFor(seller.email));
     await expect(page.getByText("Адрес подтверждён")).toBeVisible();
+
+    await page.goto("/login");
+    await page.getByLabel("Email").fill(seller.email);
+    await page.getByLabel("Пароль").fill(PASSWORD);
+    await page.getByRole("button", { name: "Войти" }).click();
+    await expect(page).toHaveURL(/\/dashboard$/);
+    await expect(page.getByRole("heading", { name: "Кабинет" })).toBeVisible();
   });
 
   const storefrontUrl = await test.step("продавец открывает витрину", async () => {

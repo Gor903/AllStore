@@ -75,6 +75,12 @@ class Settings(BaseSettings):
     # how many passwords may be hashed at once, each costing argon2_memory_cost — see
     # core/security.py. Four is ~76 MiB at the default memory cost
     argon2_max_parallel: int = 4
+    # Whether a chosen password is already on a list attackers try first — see
+    # services/breached_passwords.py. The password never leaves: only five characters of its
+    # hash do. Empty disables the check, which is what the suite does.
+    breached_password_url: str | None = "https://api.pwnedpasswords.com/range"  # noqa: S105
+    # a check that takes longer than this is worse than no check: somebody is waiting
+    breached_password_timeout: float = 3.0
 
     # Session lifetimes and cookie names, see docs/adr/0018-server-side-sessions.md, which
     # revises ADR 1. Two clocks: the sliding one asks whether the person is still around, the
@@ -167,7 +173,12 @@ class Settings(BaseSettings):
     assistant_history_turns: int = 6
 
     @field_validator(
-        "search_service_url", "assistant_base_url", "s3_public_url", "smtp_host", mode="before"
+        "search_service_url",
+        "assistant_base_url",
+        "s3_public_url",
+        "smtp_host",
+        "breached_password_url",
+        mode="before",
     )
     @classmethod
     def _blank_means_unset(cls, value: object) -> object:
