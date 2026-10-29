@@ -25,6 +25,7 @@ from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging, get_logger
 from app.core.storage import ensure_bucket
 from app.db.session import dispose_engine, get_sessionmaker
+from app.deps.rate_limit import build_limiters
 from app.services import admin_bootstrap
 
 logger = get_logger(__name__)
@@ -69,6 +70,10 @@ def create_app() -> FastAPI:
             allow_methods=["*"],
             allow_headers=["*"],
         )
+
+    # per application, so each worker keeps its own tally and a test gets a fresh set with
+    # its app instead of inheriting the previous test's — see app/core/rate_limit.py
+    app.state.limiters = build_limiters()
 
     register_exception_handlers(app)
     app.include_router(health_router)

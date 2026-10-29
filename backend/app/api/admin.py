@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query, status
 
 from app.core.errors import NotFoundError
 from app.deps.auth import SessionDep, require_csrf, require_role
+from app.deps.rate_limit import limit_staff_actions
 from app.models import User, UserRole, UserStatus
 from app.repositories import users as users_repo
 from app.repositories.audit import JournalFilter
@@ -153,7 +154,7 @@ async def list_moderators(
     "/moderators",
     response_model=UserRead,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_csrf)],
+    dependencies=[Depends(require_csrf), Depends(limit_staff_actions)],
 )
 async def create_moderator(
     payload: ModeratorCreateRequest, admin: AdminUser, session: SessionDep
@@ -173,7 +174,7 @@ async def create_moderator(
 @router.post(
     "/moderators/{user_id}/password",
     response_model=UserRead,
-    dependencies=[Depends(require_csrf)],
+    dependencies=[Depends(require_csrf), Depends(limit_staff_actions)],
 )
 async def reset_moderator_password(
     user_id: uuid.UUID,

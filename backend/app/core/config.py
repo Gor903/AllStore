@@ -59,6 +59,10 @@ class Settings(BaseSettings):
     reserved_subdomains: Annotated[frozenset[str], NoDecode] = frozenset(
         DEFAULT_RESERVED_SUBDOMAINS
     )
+    # Addresses and networks whose `X-Forwarded-For` the platform believes — see
+    # core/client_ip.py. Empty means believe nobody, which is right when nothing stands in
+    # front; behind a proxy it must name the proxy, or every visitor shares one allowance.
+    trusted_proxies: Annotated[tuple[str, ...], NoDecode] = ()
 
     database_url: PostgresDsn
     db_echo: bool = False
@@ -68,6 +72,9 @@ class Settings(BaseSettings):
     argon2_time_cost: int = 2
     argon2_memory_cost: int = 19456
     argon2_parallelism: int = 1
+    # how many passwords may be hashed at once, each costing argon2_memory_cost — see
+    # core/security.py. Four is ~76 MiB at the default memory cost
+    argon2_max_parallel: int = 4
 
     # token lifetimes and cookie names, see docs/adr/0001-authentication.md
     access_token_ttl_minutes: int = 15
@@ -140,6 +147,13 @@ class Settings(BaseSettings):
         # HS256 signs with this key; below the hash block size the signature loses strength
         if len(value.get_secret_value()) < MIN_SECRET_KEY_LENGTH:
             raise ValueError(f"SECRET_KEY must be at least {MIN_SECRET_KEY_LENGTH} characters long")
+        return value
+
+    @field_validator("trusted_proxies", mode="before")
+    @classmethod
+    def _split_trusted_proxies(cls, value: object) -> object:
+        if isinstance(value, str):
+            return tuple(item.strip() for item in value.split(",") if item.strip())
         return value
 
     @field_validator("cors_origins", mode="before")

@@ -16,7 +16,7 @@ import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import ConflictError
-from app.core.security import hash_password
+from app.core.security import hash_password_in_thread
 from app.models import User, UserRole
 from app.repositories import users as users_repo
 from app.services import audit, moderator_record, permissions
@@ -41,7 +41,7 @@ async def create(session: AsyncSession, admin: User, email: str, password: str) 
         session,
         User(
             email=normalized,
-            password_hash=hash_password(password),
+            password_hash=await hash_password_in_thread(password),
             role=UserRole.MODERATOR,
             # handed over, therefore temporary — see the module docstring
             must_change_password=True,
@@ -63,7 +63,7 @@ async def reset_password(
     # an account that is not a moderator has no password for this screen to reset, and
     # whether it exists at all is not this screen's business — see moderator_record
     moderator = await moderator_record.find_moderator(session, user_id)
-    moderator.password_hash = hash_password(password)
+    moderator.password_hash = await hash_password_in_thread(password)
     moderator.must_change_password = True
     await session.flush()
     await audit.record(session, admin, "moderator.password_reset", ENTITY, moderator.id)

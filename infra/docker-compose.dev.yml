@@ -49,6 +49,10 @@ services:
       BASE_DOMAIN: ${BASE_DOMAIN:-allstore.localhost}
       CORS_ORIGINS: http://localhost:${HTTP_PORT:-8080},http://localhost:3000
       RESERVED_SUBDOMAINS: ${RESERVED_SUBDOMAINS:-}
+      # the compose network, which is the only thing that can reach this service: nothing
+      # publishes the backend port, so nginx is the only possible caller. Without this every
+      # visitor arrives from nginx's address and shares one allowance — see core/client_ip.py
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-172.16.0.0/12}
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-allstore}:${POSTGRES_PASSWORD:-allstore}@postgres:5432/${POSTGRES_DB:-allstore}
       # the first administrator: unset leaves the platform without one until bootstrap is run
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
