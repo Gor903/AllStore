@@ -50,7 +50,7 @@ async def test_login_succeeds_with_correct_password(api_client: AsyncClient) -> 
 
     assert response.status_code == 200
     assert response.json()["email"] == EMAIL
-    assert api_client.cookies[get_settings().access_cookie_name]
+    assert api_client.cookies[get_settings().access_cookie]
 
 
 async def test_login_is_case_insensitive_in_email(api_client: AsyncClient) -> None:
@@ -106,8 +106,8 @@ async def test_logout_clears_cookies(api_client: AsyncClient) -> None:
 
     await api_client.post("/api/v1/auth/logout", headers=csrf_headers(api_client))
 
-    assert settings.access_cookie_name not in api_client.cookies
-    assert settings.refresh_cookie_name not in api_client.cookies
+    assert settings.access_cookie not in api_client.cookies
+    assert settings.refresh_cookie not in api_client.cookies
 
 
 async def test_logout_without_csrf_header_is_refused(api_client: AsyncClient) -> None:

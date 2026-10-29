@@ -116,7 +116,7 @@ async def login(
 async def refresh(
     request: Request, response: Response, settings: SettingsDep, session: SessionDep
 ) -> UserRead:
-    raw_refresh = request.cookies.get(settings.refresh_cookie_name)
+    raw_refresh = request.cookies.get(settings.refresh_cookie)
     if not raw_refresh:
         raise AuthenticationError("Сессия недействительна, войдите заново")
     outcome = await auth_service.rotate_refresh_token(
@@ -138,7 +138,7 @@ async def refresh(
 async def logout(
     request: Request, response: Response, settings: SettingsDep, session: SessionDep
 ) -> None:
-    raw_refresh = request.cookies.get(settings.refresh_cookie_name)
+    raw_refresh = request.cookies.get(settings.refresh_cookie)
     if raw_refresh:
         await auth_service.revoke_refresh_token(session, raw_refresh)
         await session.commit()

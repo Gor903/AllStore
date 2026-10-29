@@ -84,6 +84,9 @@ class Settings(BaseSettings):
     refresh_cookie_name: str = "allstore_refresh"
     csrf_cookie_name: str = "allstore_csrf"
     csrf_header_name: str = "X-CSRF-Token"
+    # Where a request is allowed to have come from for a mutating call to be served. Empty
+    # falls back to the site's own address — see deps/auth.require_csrf.
+    allowed_origins: Annotated[tuple[str, ...], NoDecode] = ()
 
     # the first administrator, read once by scripts/bootstrap_admin.py and never again: after
     # that the database is the authority on who administers the platform, not the environment
@@ -149,9 +152,9 @@ class Settings(BaseSettings):
             raise ValueError(f"SECRET_KEY must be at least {MIN_SECRET_KEY_LENGTH} characters long")
         return value
 
-    @field_validator("trusted_proxies", mode="before")
+    @field_validator("trusted_proxies", "allowed_origins", mode="before")
     @classmethod
-    def _split_trusted_proxies(cls, value: object) -> object:
+    def _split_comma_separated(cls, value: object) -> object:
         if isinstance(value, str):
             return tuple(item.strip() for item in value.split(",") if item.strip())
         return value
@@ -176,6 +179,49 @@ class Settings(BaseSettings):
     @property
     def is_local(self) -> bool:
         return self.app_env == "local"
+
+    @property
+    def access_cookie(self) -> str:
+        """The name the browser actually sees.
+
+        `__Host-` is not decoration. A browser refuses to store a cookie under that prefix
+        unless it is `Secure`, carries no `Domain` and sits at `Path=/` — so host-only stops
+        being a promise we make and becomes a rule the client enforces. It also means no
+        subdomain can overwrite it, which is the whole of the cookie-tossing problem.
+
+        The prefix needs `Secure`, which the plain-http local stand cannot offer, so there the
+        bare name is used. Both names must match the frontend's NEXT_PUBLIC_ACCESS_COOKIE.
+        """
+        return self.access_cookie_name if self.is_local else f"__Host-{self.access_cookie_name}"
+
+    @property
+    def refresh_cookie(self) -> str:
+        """`__Secure-`, not `__Host-`, and the difference is deliberate.
+
+        This cookie is scoped to the auth routes so it does not ride along on every request,
+        and `__Host-` demands `Path=/`. The narrow path is worth more than the prefix's extra
+        promise. The pair of tokens collapses into one server-side session in a later phase,
+        and the question disappears with it.
+        """
+        return self.refresh_cookie_name if self.is_local else f"__Secure-{self.refresh_cookie_name}"
+
+    @property
+    def csrf_cookie(self) -> str:
+        """`__Host-` like the access cookie: it is host-only and at the root already, and the
+        prefix is what stops a neighbouring subdomain from planting its own value here and
+        satisfying the double submit with it."""
+        return self.csrf_cookie_name if self.is_local else f"__Host-{self.csrf_cookie_name}"
+
+    @property
+    def trusted_origins(self) -> tuple[str, ...]:
+        """Where a mutating request may have come from.
+
+        Falls back to the CORS list rather than inventing an address: those are already the
+        origins a browser is allowed to call us from, and keeping two lists that mean almost
+        the same thing is how they come to disagree. Empty means the check has nothing to
+        compare against and stands down — the CSRF token still has to match.
+        """
+        return self.allowed_origins or tuple(self.cors_origins)
 
 
 @lru_cache

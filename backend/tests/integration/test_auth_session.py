@@ -31,7 +31,7 @@ async def test_me_returns_the_logged_in_user(api_client: AsyncClient) -> None:
 async def test_tampered_access_token_is_rejected(api_client: AsyncClient) -> None:
     settings = get_settings()
     await register_buyer(api_client)
-    api_client.cookies.set(settings.access_cookie_name, "not.a.jwt")
+    api_client.cookies.set(settings.access_cookie, "not.a.jwt")
 
     response = await api_client.get("/api/v1/users/me")
 
@@ -57,12 +57,12 @@ async def test_blocking_an_account_takes_effect_before_the_token_expires(
 async def test_refresh_rotates_the_token(api_client: AsyncClient, session: AsyncSession) -> None:
     settings = get_settings()
     await register_buyer(api_client)
-    first_refresh = api_client.cookies[settings.refresh_cookie_name]
+    first_refresh = api_client.cookies[settings.refresh_cookie]
 
     response = await api_client.post("/api/v1/auth/refresh", headers=csrf_headers(api_client))
 
     assert response.status_code == 200
-    assert api_client.cookies[settings.refresh_cookie_name] != first_refresh
+    assert api_client.cookies[settings.refresh_cookie] != first_refresh
     tokens = (await session.execute(select(RefreshToken))).scalars().all()
     assert len(tokens) == 2
     rotated = next(token for token in tokens if token.revoked_at is not None)
@@ -81,9 +81,9 @@ async def test_replaying_a_rotated_token_kills_every_session(
     settings = get_settings()
     client = committing_api_client
     await register_buyer(client)
-    stolen = client.cookies[settings.refresh_cookie_name]
+    stolen = client.cookies[settings.refresh_cookie]
     await client.post("/api/v1/auth/refresh", headers=csrf_headers(client))
-    client.cookies.set(settings.refresh_cookie_name, stolen)
+    client.cookies.set(settings.refresh_cookie, stolen)
 
     response = await client.post("/api/v1/auth/refresh", headers=csrf_headers(client))
 
@@ -118,10 +118,10 @@ async def test_refresh_after_logout_is_refused(api_client: AsyncClient) -> None:
     await register_buyer(api_client)
     headers = csrf_headers(api_client)
     settings = get_settings()
-    refresh_cookie = api_client.cookies[settings.refresh_cookie_name]
+    refresh_cookie = api_client.cookies[settings.refresh_cookie]
     await api_client.post("/api/v1/auth/logout", headers=headers)
-    api_client.cookies.set(settings.refresh_cookie_name, refresh_cookie)
-    api_client.cookies.set(settings.csrf_cookie_name, headers[settings.csrf_header_name])
+    api_client.cookies.set(settings.refresh_cookie, refresh_cookie)
+    api_client.cookies.set(settings.csrf_cookie, headers[settings.csrf_header_name])
 
     response = await api_client.post("/api/v1/auth/refresh", headers=headers)
 
@@ -132,7 +132,7 @@ async def test_refresh_without_a_cookie_is_refused(api_client: AsyncClient) -> N
     settings = get_settings()
     await register_buyer(api_client)
     headers = csrf_headers(api_client)
-    api_client.cookies.delete(settings.refresh_cookie_name)
+    api_client.cookies.delete(settings.refresh_cookie)
 
     response = await api_client.post("/api/v1/auth/refresh", headers=headers)
 
@@ -142,7 +142,7 @@ async def test_refresh_without_a_cookie_is_refused(api_client: AsyncClient) -> N
 async def test_refresh_with_an_unknown_token_is_refused(api_client: AsyncClient) -> None:
     settings = get_settings()
     await register_buyer(api_client)
-    api_client.cookies.set(settings.refresh_cookie_name, "token-that-was-never-issued")
+    api_client.cookies.set(settings.refresh_cookie, "token-that-was-never-issued")
 
     response = await api_client.post("/api/v1/auth/refresh", headers=csrf_headers(api_client))
 

@@ -25,7 +25,7 @@ SettingsDep = Annotated[Settings, Depends(settings_dep)]
 
 async def get_signed_in_user(request: Request, settings: SettingsDep, session: SessionDep) -> User:
     """Who is signed in, without asking whether the password is theirs."""
-    token = request.cookies.get(settings.access_cookie_name)
+    token = request.cookies.get(settings.access_cookie)
     if not token:
         raise AuthenticationError("Требуется вход")
     try:
@@ -68,7 +68,7 @@ async def get_optional_user(
     may have been barred from one particular shop, which the catalogue filter has to know
     about. Neither case may fail: a barred or missing account browses as a guest does.
     """
-    token = request.cookies.get(settings.access_cookie_name)
+    token = request.cookies.get(settings.access_cookie)
     if not token:
         return None
     try:
@@ -98,11 +98,43 @@ def require_role(*roles: UserRole) -> Callable[[User], Awaitable[User]]:
     return dependency
 
 
+# What the browser says about where it sent this from. `cross-site` is the one that must
+# never reach a mutating route; `same-origin` and `same-site` are ours, and `none` is a user
+# typing an address or following a bookmark, which cannot be a forged POST.
+HOSTILE_FETCH_SITE = "cross-site"
+
+
 def require_csrf(request: Request, settings: SettingsDep) -> None:
-    """Double submit: the header must repeat the cookie a cross-site page cannot read."""
-    cookie_token = request.cookies.get(settings.csrf_cookie_name)
+    """Three questions, cheapest first, and each one catches what the others cannot.
+
+    The token is the old guarantee: a cross-site page cannot read our cookie, so it cannot
+    repeat it in a header. `Sec-Fetch-Site` is the browser's own account of where the request
+    came from, which a page cannot write. `Origin` is checked against the addresses we expect
+    to be called from, for the browsers that do not send the first.
+
+    None of the three is sufficient alone — the token says nothing if an attacker can plant a
+    cookie, the fetch metadata is absent in older browsers, and `Origin` is absent on some
+    same-origin requests. Together they fail closed.
+    """
+    if request.headers.get("sec-fetch-site") == HOSTILE_FETCH_SITE:
+        raise PermissionDeniedError("Запрос пришёл со стороннего сайта")
+    _ensure_origin_is_ours(request, settings)
+
+    cookie_token = request.cookies.get(settings.csrf_cookie)
     header_token = request.headers.get(settings.csrf_header_name)
     if not cookie_token or not header_token:
         raise PermissionDeniedError("Отсутствует CSRF-токен")
     if not secrets.compare_digest(cookie_token, header_token):
         raise PermissionDeniedError("CSRF-токен не совпадает")
+
+
+def _ensure_origin_is_ours(request: Request, settings: Settings) -> None:
+    """An absent `Origin` is not an offence: browsers omit it on same-origin GETs and on some
+    form posts, and a server-to-server caller has none to send. A present one that we do not
+    recognise is, and nothing configured to recognise means the question is not asked."""
+    origin = request.headers.get("origin")
+    expected = settings.trusted_origins
+    if origin is None or not expected:
+        return
+    if origin not in expected:
+        raise PermissionDeniedError("Запрос пришёл со стороннего сайта")

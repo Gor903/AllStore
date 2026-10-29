@@ -43,9 +43,9 @@ async def test_registration_sets_all_auth_cookies(api_client: AsyncClient) -> No
 
     await register_buyer(api_client)
 
-    assert api_client.cookies[settings.access_cookie_name]
-    assert api_client.cookies[settings.refresh_cookie_name]
-    assert api_client.cookies[settings.csrf_cookie_name]
+    assert api_client.cookies[settings.access_cookie]
+    assert api_client.cookies[settings.refresh_cookie]
+    assert api_client.cookies[settings.csrf_cookie]
 
 
 async def test_duplicate_email_returns_conflict_not_server_error(api_client: AsyncClient) -> None:

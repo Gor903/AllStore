@@ -10,6 +10,13 @@ export const metadata: Metadata = {
   alternates: { canonical: "/assistant" },
 };
 
+/**
+ * Rendered per request, which this page does not otherwise need: the Content-Security-Policy
+ * carries a fresh nonce and Next.js can only attach it while rendering. Prerendered at build
+ * time there is no nonce to attach, and the page's own scripts would be the ones refused.
+ */
+export const dynamic = "force-dynamic";
+
 export default function AssistantPage() {
   return (
     <>
