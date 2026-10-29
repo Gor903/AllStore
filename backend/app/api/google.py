@@ -19,7 +19,7 @@ import uuid
 from hashlib import sha256
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
 
 from app.core.client_ip import client_ip
@@ -38,7 +38,7 @@ from app.deps.rate_limit import limit_login
 from app.models import UserRole
 from app.repositories import identities
 from app.schemas.session import IdentityRead
-from app.services import audit, google_oidc
+from app.services import audit, google_oidc, notifications
 from app.services import sessions as session_service
 
 router = APIRouter(prefix="/auth/google", tags=["google"])
@@ -145,6 +145,7 @@ async def start_linking(user: CurrentUser, settings: SettingsDep) -> RedirectRes
 async def callback(
     request: Request,
     viewer: OptionalUser,
+    background: BackgroundTasks,
     settings: SettingsDep,
     session: SessionDep,
     code: Annotated[str, Query()],
@@ -172,6 +173,11 @@ async def callback(
             session, viewer, "user.google_linked", ENTITY, viewer.id, email=assertion.email
         )
         await session.commit()
+        background.add_task(
+            notifications.deliver,
+            settings,
+            notifications.google_link_letter(settings, viewer.email, attached=True),
+        )
         linked = RedirectResponse(
             f"{settings.public_url}/devices", status_code=status.HTTP_303_SEE_OTHER
         )
@@ -222,6 +228,8 @@ async def unlink(
     identity_id: uuid.UUID,
     user: CurrentUser,
     current: CurrentSession,
+    background: BackgroundTasks,
+    settings: SettingsDep,
     session: SessionDep,
 ) -> None:
     """Detaches a provider — unless it is the only way in this account has left.
@@ -240,3 +248,8 @@ async def unlink(
     await identities.remove(session, doomed)
     await audit.record(session, user, "user.google_unlinked", ENTITY, user.id)
     await session.commit()
+    background.add_task(
+        notifications.deliver,
+        settings,
+        notifications.google_link_letter(settings, user.email, attached=False),
+    )

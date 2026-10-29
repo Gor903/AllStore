@@ -77,6 +77,28 @@ async def revoke_every_other_family(
     await session.flush()
 
 
+async def has_live_family(session: AsyncSession, user_id: uuid.UUID) -> bool:
+    """Whether this account is open anywhere at all.
+
+    Asked at sign-in, before the new session exists, so it means "was it already open
+    somewhere else" — which is what makes a new device worth writing about. The first sign-in
+    on a fresh account is news to nobody, and a letter for every one of somebody's own daily
+    logins is a letter they stop reading.
+    """
+    now = datetime.now(UTC)
+    result = await session.execute(
+        select(Session.id)
+        .where(
+            Session.user_id == user_id,
+            Session.revoked_at.is_(None),
+            Session.idle_expires_at > now,
+            Session.absolute_expires_at > now,
+        )
+        .limit(1)
+    )
+    return result.scalar_one_or_none() is not None
+
+
 async def live_for_user(session: AsyncSession, user_id: uuid.UUID) -> Sequence[Session]:
     """The devices somebody is signed in on, newest first.
 

@@ -11,7 +11,12 @@ import pytest
 
 from app.core.config import Settings, get_settings
 from app.core.mail import Letter
-from app.services.notifications import deliver, password_reset_letter
+from app.services.notifications import (
+    deliver,
+    google_link_letter,
+    new_device_letter,
+    password_reset_letter,
+)
 
 TOKEN = "reset-token-value"
 
@@ -42,6 +47,33 @@ def test_the_address_falls_back_to_the_domain_we_know() -> None:
     )
 
     assert "https://allstore.am/password/reset" in letter.body
+
+
+def test_a_letter_about_a_new_device_says_where_from() -> None:
+    """A letter that only says "somebody signed in" leaves the reader with no way to tell
+    whether it was their own phone."""
+    letter = new_device_letter(_settings(), "buyer@x.com", "Firefox on Linux", "203.0.113.7")
+
+    assert "Firefox on Linux" in letter.body
+    assert "203.0.113.7" in letter.body
+
+
+def test_a_device_that_said_nothing_about_itself_is_still_reported() -> None:
+    """A proxy that strips the headers must not turn the letter into a blank."""
+    letter = new_device_letter(_settings(), "buyer@x.com", None, None)
+
+    assert "неизвестное устройство" in letter.body
+
+
+@pytest.mark.parametrize("attached", [True, False])
+def test_both_directions_of_a_google_link_are_reported(attached: bool) -> None:
+    """Attaching lets somebody in without the password; detaching locks the owner out of the
+    way in they had. Neither is something to find out about later."""
+    letter = google_link_letter(_settings(), "buyer@x.com", attached=attached)
+
+    assert ("привязан" in letter.body) is attached
+    assert ("отвязан" in letter.body) is not attached
+    assert "/password/forgot" in letter.body
 
 
 async def test_a_stand_with_no_mail_server_logs_the_letter(
