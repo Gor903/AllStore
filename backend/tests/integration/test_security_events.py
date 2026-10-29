@@ -84,6 +84,34 @@ async def test_a_replayed_token_is_recorded_against_nobody(
     assert replayed.details["device"]
 
 
+async def test_the_owner_hears_about_a_replayed_token(
+    committing_api_client: AsyncClient, fresh_session: AsyncSession, letters: list[Letter]
+) -> None:
+    """The one place that could not write to anybody before the queue existed: a dependency
+    has no `BackgroundTasks`. And it is the only moment the platform ever has evidence that a
+    token left the device it was issued to."""
+    settings = get_settings()
+    client = committing_api_client
+    await register_buyer(client)
+    stolen = client.cookies[settings.session_cookie]
+    await client.post("/api/v1/auth/renew", headers=csrf_headers(client))
+    await fresh_session.execute(
+        text(
+            "UPDATE sessions SET revoked_at = now() - interval '1 hour' "
+            "WHERE revoked_at IS NOT NULL"
+        )
+    )
+    await fresh_session.commit()
+    client.cookies.set(settings.session_cookie, stolen)
+    letters.clear()
+
+    await client.get("/api/v1/users/me")
+
+    assert _subjects(letters) == ["Подозрительный вход — AllStore.am"]
+    assert letters[0].to == EMAIL
+    assert "/password/forgot" in letters[0].body
+
+
 async def test_the_first_administrator_leaves_an_actorless_trace(session: AsyncSession) -> None:
     """The one appointment the interface cannot make, and therefore the one nobody would
     otherwise be able to account for afterwards."""

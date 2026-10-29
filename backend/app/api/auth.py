@@ -160,7 +160,7 @@ async def login(
         await asyncio.sleep(waiting)
     try:
         user = await auth_service.authenticate(
-            session, payload.normalized_email, payload.password.get_secret_value()
+            session, settings, payload.normalized_email, payload.password.get_secret_value()
         )
     except AppError as refusal:
         # Logged, deliberately not written to the journal. The journal is the record of

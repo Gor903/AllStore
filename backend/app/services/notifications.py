@@ -146,6 +146,26 @@ def password_changed_letter(settings: Settings, email: str) -> Letter:
     )
 
 
+def replayed_token_letter(settings: Settings, email: str) -> Letter:
+    """Somebody presented a session token that had already been retired.
+
+    Every session on that device was ended as a precaution, which the owner is about to
+    notice anyway — this is the letter that tells them it was not a glitch. It is also the
+    only moment the platform ever has evidence that a token left the device it was issued to.
+    """
+    return Letter(
+        to=email,
+        subject="Подозрительный вход — AllStore.am",
+        body=(
+            "В ваш аккаунт на AllStore.am попытались войти по устаревшему ключу сессии.\n\n"
+            "На всякий случай мы завершили все сессии на этом устройстве — возможно, вам "
+            "придётся войти заново, и это нормально.\n\n"
+            "Если вы ничего необычного не делали, смените пароль: ключ мог попасть не в те "
+            f"руки.\n{settings.public_url}/password/forgot\n"
+        ),
+    )
+
+
 def second_factor_letter(settings: Settings, email: str, *, on: bool) -> Letter:
     """The second factor was switched on, or off.
 

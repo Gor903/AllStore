@@ -63,7 +63,9 @@ async def test_seller_registration_links_user_and_business(session: AsyncSession
 async def test_authenticate_returns_the_user(session: AsyncSession) -> None:
     await auth_service.register_buyer(session, buyer_request())
 
-    user = await auth_service.authenticate(session, "svc-buyer@example.com", PASSWORD)
+    user = await auth_service.authenticate(
+        session, get_settings(), "svc-buyer@example.com", PASSWORD
+    )
 
     assert user.email == "svc-buyer@example.com"
 
@@ -72,12 +74,14 @@ async def test_authenticate_rejects_a_wrong_password(session: AsyncSession) -> N
     await auth_service.register_buyer(session, buyer_request())
 
     with pytest.raises(auth_service.InvalidCredentialsError):
-        await auth_service.authenticate(session, "svc-buyer@example.com", "wrong-password-1")
+        await auth_service.authenticate(
+            session, get_settings(), "svc-buyer@example.com", "wrong-password-1"
+        )
 
 
 async def test_authenticate_rejects_an_unknown_email(session: AsyncSession) -> None:
     with pytest.raises(auth_service.InvalidCredentialsError):
-        await auth_service.authenticate(session, "nobody@example.com", PASSWORD)
+        await auth_service.authenticate(session, get_settings(), "nobody@example.com", PASSWORD)
 
 
 async def test_authenticate_refuses_a_suspended_account(session: AsyncSession) -> None:
@@ -86,7 +90,7 @@ async def test_authenticate_refuses_a_suspended_account(session: AsyncSession) -
     await session.flush()
 
     with pytest.raises(AccountNotActiveError):
-        await auth_service.authenticate(session, "svc-buyer@example.com", PASSWORD)
+        await auth_service.authenticate(session, get_settings(), "svc-buyer@example.com", PASSWORD)
 
 
 async def test_login_upgrades_a_hash_made_with_weaker_parameters(session: AsyncSession) -> None:
@@ -96,7 +100,7 @@ async def test_login_upgrades_a_hash_made_with_weaker_parameters(session: AsyncS
     await session.flush()
     weak_hash = user.password_hash
 
-    await auth_service.authenticate(session, "svc-buyer@example.com", PASSWORD)
+    await auth_service.authenticate(session, get_settings(), "svc-buyer@example.com", PASSWORD)
 
     assert user.password_hash != weak_hash
     assert verify_password(PASSWORD, password_of(user))

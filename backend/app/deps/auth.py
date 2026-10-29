@@ -22,7 +22,8 @@ from app.core.security import csrf_token_for
 from app.db.session import get_session
 from app.deps.settings import settings_dep
 from app.models import Session, User, UserRole
-from app.services import audit, totp
+from app.repositories import users as users_repo
+from app.services import audit, notifications, totp
 from app.services import auth as auth_service
 from app.services import sessions as session_service
 
@@ -50,10 +51,19 @@ async def get_session_row(
         await audit.record(
             db, None, "session.replayed", "user", outcome.user_id, device=str(outcome.family_id)
         )
+        owner = await users_repo.get_by_id(db, outcome.user_id)
         # `touch` has revoked the family; committing it is this line's job and nobody else's.
         # The route never runs, so the commit it would have done never happens — which is
         # exactly how the old refresh rotation threw its own answer to a theft away.
         await db.commit()
+        if owner is not None:
+            # The one place that could not write to anybody before the queue existed: a
+            # dependency has no `BackgroundTasks`, so this letter simply could not be sent.
+            # Queued after the commit, like every other — a letter about a revocation that
+            # was rolled back would be a lie.
+            notifications.deliver(
+                settings, notifications.replayed_token_letter(settings, owner.email)
+            )
         raise session_service.InvalidSessionError("Сессия недействительна, войдите заново")
     if outcome.renewed is not None:
         set_session_cookies(response, settings, outcome.renewed)

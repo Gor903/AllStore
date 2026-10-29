@@ -22,6 +22,7 @@ import argparse
 import asyncio
 import os
 import sys
+from datetime import UTC, datetime
 
 # the defaults of the compose stack, so the script runs with no shell setup
 _DEFAULTS = {
@@ -74,6 +75,7 @@ async def apply(
             # account in once and no further — same rule as an administrator bootstrapped
             # from the environment
             must_change_password=True,
+            password_handed_over_at=datetime.now(UTC),
         )
         session.add(created)
         await session.flush()
@@ -84,6 +86,7 @@ async def apply(
         user.password_hash = hash_password(password)
         # handed over again, so it expires again
         user.must_change_password = True
+        user.password_handed_over_at = datetime.now(UTC)
         # and the second factor with it: this is the way back in for somebody who lost the
         # telephone, and leaving it in force would make a new password no use to them
         if await totp.revoke(session, user.id):

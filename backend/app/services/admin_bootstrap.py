@@ -98,6 +98,7 @@ async def bootstrap(
             # the password came out of a deploy variable, which is as good as written on a
             # wall: it gets the administrator in once, and then they choose their own
             must_change_password=True,
+            password_handed_over_at=datetime.now(UTC),
         ),
     )
     await _write_it_down(session, created, "user.admin_bootstrapped")
@@ -131,6 +132,7 @@ async def _keep_or_restore(
     admin.password_hash = hash_password(password)
     # same reasoning as a fresh bootstrap: whoever holds the server now knows this password
     admin.must_change_password = True
+    admin.password_handed_over_at = datetime.now(UTC)
     await _reactivate(session, admin)
     # The reason anybody runs this is that the account may not be theirs any more, so leaving
     # whoever is already signed in signed in would answer the wrong half of the problem: the

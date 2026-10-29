@@ -39,6 +39,16 @@ class InvalidResetTokenError(AuthenticationError):
     code = "invalid_reset_token"
 
 
+class HandedOverPasswordExpired(AuthenticationError):
+    """The password was right and is too old to be anybody's.
+
+    A distinct code because the person has something to do about it, and it is not "try
+    again" — it is "ask whoever gave it to you for another".
+    """
+
+    code = "handed_over_password_expired"
+
+
 class SameEmailError(ConflictError):
     """Asked to change the login to the one it already is.
 
@@ -142,7 +152,9 @@ async def ensure_identifiers_free(session: AsyncSession, email: str, phone: str 
         raise ConflictError("Пользователь с таким телефоном уже зарегистрирован")
 
 
-async def authenticate(session: AsyncSession, email: str, password: str) -> User:
+async def authenticate(
+    session: AsyncSession, settings: Settings, email: str, password: str
+) -> User:
     user = await users.get_by_email(session, email.strip().lower())
     if user is None or user.password_hash is None:
         # An account with no password is one that signs in with a provider. It gets the same
@@ -155,6 +167,7 @@ async def authenticate(session: AsyncSession, email: str, password: str) -> User
     if password_needs_rehash(user.password_hash):
         user.password_hash = await hash_password_in_thread(password)
     _ensure_active(user)
+    _ensure_not_stale(user, settings)
     # after the status check: a refused attempt is not a login, however correct the password
     user.last_login_at = datetime.now(UTC)
     await session.flush()
@@ -164,6 +177,26 @@ async def authenticate(session: AsyncSession, email: str, password: str) -> User
 def _ensure_active(user: User) -> None:
     if user.status is not UserStatus.ACTIVE:
         raise AccountNotActiveError("Доступ к аккаунту ограничен, обратитесь в поддержку")
+
+
+def _ensure_not_stale(user: User, settings: Settings) -> None:
+    """A password handed over by somebody else stops working.
+
+    Without this, "temporary" meant nothing: the password an administrator typed into a
+    command line six months ago still opened the account, and the one thing known about it is
+    that somebody other than its owner has seen it. The refusal says what to do, because the
+    person it refuses cannot fix it alone — only whoever handed it over can hand over another.
+
+    Only accounts that still owe a change are looked at: once they have chosen their own, the
+    stamp means nothing and is cleared with the flag.
+    """
+    if not user.must_change_password or user.password_handed_over_at is None:
+        return
+    age = datetime.now(UTC) - user.password_handed_over_at
+    if age > timedelta(hours=settings.handed_over_password_ttl_hours):
+        raise HandedOverPasswordExpired(
+            "Срок действия выданного пароля истёк — попросите новый у администратора"
+        )
 
 
 async def request_password_reset(
@@ -202,6 +235,7 @@ async def reset_password(session: AsyncSession, raw_token: str, new_password: st
     user.password_hash = await hash_password_in_thread(new_password)
     # whatever the old password was, this one they chose themselves
     user.must_change_password = False
+    user.password_handed_over_at = None
     await auth_tokens.mark_password_reset_used(session, stored)
     # a password change ends every session: that is the point of a reset
     await sessions_repo.revoke_all_for_user(session, user.id, CREDENTIALS_CHANGED)
@@ -246,6 +280,7 @@ async def change_password(
         raise InvalidCredentialsError("Текущий пароль неверен")
     user.password_hash = await hash_password_in_thread(new_password)
     user.must_change_password = False
+    user.password_handed_over_at = None
     # same rule as a reset: a password change ends every session, this one included
     await sessions_repo.revoke_all_for_user(session, user.id, CREDENTIALS_CHANGED)
 

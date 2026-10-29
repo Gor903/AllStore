@@ -221,6 +221,25 @@ async def test_a_token_that_fails_any_check_is_refused(
     assert refused.status_code == 403, why
 
 
+async def test_a_code_cannot_be_spent_twice(client: AsyncClient, google: Any) -> None:
+    """The last of the negative set the plan asked for.
+
+    Google itself refuses a reused code, but relying on that would be relying on somebody
+    else's server to hold our line. The handshake cookie is deleted on the way out and the
+    state has to match what it said, so a second arrival with the same code has nothing to be
+    checked against — which is the property worth having a test for, because it holds whether
+    or not the provider is doing its job.
+    """
+    state = await _handshake(client)
+    google(nonce=_nonce(client))
+    first = await client.get(CALLBACK, params={"code": "a", "state": state}, follow_redirects=False)
+    assert first.status_code == 303
+
+    again = await client.get(CALLBACK, params={"code": "a", "state": state}, follow_redirects=False)
+
+    assert again.status_code == 403
+
+
 async def test_a_state_that_does_not_match_is_refused(client: AsyncClient, google: Any) -> None:
     """Without it, anybody could hand somebody else's code to somebody else's session."""
     await _handshake(client)

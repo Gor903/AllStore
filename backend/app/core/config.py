@@ -119,6 +119,11 @@ class Settings(BaseSettings):
     # how long proving the password again buys, for the actions that ask for it twice
     step_up_ttl_minutes: int = 10
     password_reset_ttl_hours: int = 2
+    # How long a password handed over by somebody else keeps working. Seventy-two hours is the
+    # far end of the range the plan allowed: long enough that a moderator appointed on a Friday
+    # can still get in on Monday, short enough that a password typed on somebody's command line
+    # does not quietly become a permanent one.
+    handed_over_password_ttl_hours: int = 72
     # longer than a reset link: confirming an address is not urgent, and a link that expires
     # while somebody is away from their inbox just means another round of letters
     email_verification_ttl_hours: int = 24
