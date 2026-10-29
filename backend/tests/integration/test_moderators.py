@@ -15,7 +15,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.security import verify_password
 from app.models import AuditLog, User, UserRole
 from app.services.auth import password_of
-from tests.integration.conftest import act_as, csrf_headers, login, register_buyer, seed_staff
+from tests.integration.conftest import (
+    act_as,
+    answer_second_factor,
+    csrf_headers,
+    enrol_second_factor,
+    login,
+    register_buyer,
+    seed_staff,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -84,9 +92,12 @@ async def test_the_new_moderator_gets_in_once_and_no_further(
     assert refused.json()["error"]["code"] == "password_change_required"
 
 
-async def test_choosing_a_password_opens_the_queue(
+async def test_choosing_a_password_is_the_first_of_two_gates(
     api_client: AsyncClient, session: AsyncSession
 ) -> None:
+    """A moderator owes two things on the way in: a password that is their own, and a second
+    factor. The queue opens after both, and the order is fixed — enrolling an authenticator
+    against a password somebody else chose would be enrolling it for them."""
     await act_as(api_client, await seed_staff(session, UserRole.ADMIN))
     email = an_email()
     await create(api_client, email)
@@ -100,6 +111,16 @@ async def test_choosing_a_password_opens_the_queue(
     )
     api_client.cookies.clear()
     await login(api_client, email, CHOSEN)
+
+    still_owing = await api_client.get("/api/v1/moderation/products")
+    assert still_owing.status_code == 403
+    assert still_owing.json()["error"]["code"] == "totp_setup_required"
+
+    moderator = (await session.execute(select(User).where(User.email == email))).scalar_one()
+    await enrol_second_factor(session, moderator)
+    api_client.cookies.clear()
+    await login(api_client, email, CHOSEN)
+    await answer_second_factor(api_client, moderator)
 
     assert (await api_client.get("/api/v1/moderation/products")).status_code == 200
 

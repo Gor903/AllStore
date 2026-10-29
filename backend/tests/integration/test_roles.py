@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import User, UserRole
-from tests.integration.conftest import register_buyer, register_seller
+from tests.integration.conftest import enrol_second_factor, register_buyer, register_seller
 
 pytestmark = pytest.mark.integration
 
@@ -63,6 +63,9 @@ async def test_admin_can_read_any_user(api_client: AsyncClient, session: AsyncSe
         await session.execute(select(User).where(User.email == "admin@example.com"))
     ).scalar_one()
     admin.role = UserRole.ADMIN
+    # and a second factor with it: an administrator without one is stopped at the setup
+    # screen, which would make this test about the gate rather than about the role
+    await enrol_second_factor(session, admin)
     await session.flush()
 
     response = await api_client.get(f"/api/v1/admin/users/{target.id}")
@@ -77,6 +80,8 @@ async def test_admin_gets_404_for_a_missing_user(
     await register_buyer(api_client, email="admin@example.com")
     user = (await session.execute(select(User))).scalars().one()
     user.role = UserRole.ADMIN
+    # and a second factor with it, for the same reason as above
+    await enrol_second_factor(session, user)
     await session.flush()
 
     response = await api_client.get(f"/api/v1/admin/users/{uuid.uuid4()}")

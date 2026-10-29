@@ -23,6 +23,10 @@ const ACTION: Record<string, string> = {
   "user.google_signed_in": "вошёл через Google",
   "user.google_linked": "привязал Google",
   "user.google_unlinked": "отвязал Google",
+  "user.totp_enabled": "включил вход по коду",
+  "user.totp_disabled": "выключил вход по коду",
+  "user.totp_recovery_used": "вошёл по резервному коду",
+  "user.totp_revoked": "сняло вход по коду с аккаунта",
   "user.blocked": "заблокировал",
   "user.unblocked": "разблокировал",
   "session.replayed": "предъявил отозванный токен — сессии устройства завершены",
@@ -61,6 +65,7 @@ const NOBODY: Record<string, string> = {
   "user.admin_promoted": "развёртывание",
   "user.admin_password_reset": "развёртывание",
   "user.role_granted": "серверная оболочка",
+  "user.totp_revoked": "серверная оболочка",
   "user.password_granted": "серверная оболочка",
 };
 

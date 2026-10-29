@@ -42,7 +42,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine  # noqa: E4
 from app.core.config import get_settings  # noqa: E402
 from app.core.security import hash_password  # noqa: E402
 from app.models import User, UserRole  # noqa: E402
-from app.services import audit  # noqa: E402
+from app.services import audit, totp  # noqa: E402
 
 ENTITY = "user"
 
@@ -84,6 +84,10 @@ async def apply(
         user.password_hash = hash_password(password)
         # handed over again, so it expires again
         user.must_change_password = True
+        # and the second factor with it: this is the way back in for somebody who lost the
+        # telephone, and leaving it in force would make a new password no use to them
+        if await totp.revoke(session, user.id):
+            await _write_it_down(session, user, "user.totp_revoked")
         await _write_it_down(session, user, "user.password_granted")
         return f"{email}: {role.value} (пароль заменён, временный)"
     if user.role is role:

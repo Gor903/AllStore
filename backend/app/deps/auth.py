@@ -15,13 +15,14 @@ from app.core.errors import (
     EmailNotVerifiedError,
     PasswordChangeRequiredError,
     PermissionDeniedError,
+    SecondFactorSetupRequiredError,
     VerificationRequiredError,
 )
 from app.core.security import csrf_token_for
 from app.db.session import get_session
 from app.deps.settings import settings_dep
 from app.models import Session, User, UserRole
-from app.services import audit
+from app.services import audit, totp
 from app.services import auth as auth_service
 from app.services import sessions as session_service
 
@@ -71,7 +72,23 @@ async def get_signed_in_user(row: CurrentSession, db: SessionDep) -> User:
     return await auth_service.get_active_user(db, row.user_id)
 
 
-async def get_current_user(user: Annotated[User, Depends(get_signed_in_user)]) -> User:
+async def get_user_owing_a_second_factor(
+    user: Annotated[User, Depends(get_signed_in_user)],
+) -> User:
+    """Past the password gate and not yet past the second-factor one.
+
+    Exists so that the two gates are ordered rather than alternatives. An administrator
+    holding a password somebody else chose should replace it first and enrol second; a tier
+    that skipped both would have let them enrol with a password that is not theirs.
+    """
+    if user.must_change_password:
+        raise PasswordChangeRequiredError("Сначала задайте свой пароль")
+    return user
+
+
+async def get_current_user(
+    user: Annotated[User, Depends(get_user_owing_a_second_factor)], db: SessionDep
+) -> User:
     """The ordinary door, and the one a route gets by saying nothing.
 
     An account whose password was handed to it by somebody else gets no further than the
@@ -80,13 +97,21 @@ async def get_current_user(user: Annotated[User, Depends(get_signed_in_user)]) -
     anybody deciding that, and the list said `/auth/logout`, which never passed this way at
     all. Now a route opts out by asking for `SignedInUser` instead — so a route that says
     nothing is closed, and the mistake somebody makes is a locked door rather than an open one.
+
+    A moderator or an administrator with no second factor gets no further than the screen
+    that sets one up. The lookup is one indexed row and is only made for those two roles, so
+    the ordinary request of an ordinary account pays nothing for it.
     """
-    if user.must_change_password:
-        raise PasswordChangeRequiredError("Сначала задайте свой пароль")
+    if totp.required_of(user) and not await totp.in_force(db, user):
+        raise SecondFactorSetupRequiredError("Настройте вход по коду, чтобы продолжить")
     return user
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
+
+# Signed in, past the password gate, and allowed to go on owing a second factor. Exactly the
+# routes that set one up — anything wider would be a way around the gate rather than through it.
+UserSettingUpTotp = Annotated[User, Depends(get_user_owing_a_second_factor)]
 
 # Signed in, and deliberately not asked whether the password is their own. Exactly two routes
 # want this: the change itself, and the "who am I" the client asks to find out it owes one.

@@ -146,6 +146,50 @@ def password_changed_letter(settings: Settings, email: str) -> Letter:
     )
 
 
+def second_factor_letter(settings: Settings, email: str, *, on: bool) -> Letter:
+    """The second factor was switched on, or off.
+
+    Off is the one that matters. Somebody who has taken an account over turns the second
+    factor off, because it is the thing stopping them coming back tomorrow — and the owner,
+    who still reads this address, is the only person in a position to notice.
+    """
+    what = (
+        "Для вашего аккаунта на AllStore.am включён вход по коду из приложения."
+        if on
+        else "Для вашего аккаунта на AllStore.am выключен вход по коду из приложения."
+    )
+    return Letter(
+        to=email,
+        subject="Вход по коду изменён — AllStore.am",
+        body=(
+            f"{what}\n\n"
+            "Если это были вы — ничего делать не нужно.\n\n"
+            "Если нет — немедленно смените пароль и завершите чужие сессии:\n"
+            f"{settings.public_url}/password/forgot\n"
+            f"{settings.public_url}/devices\n"
+        ),
+    )
+
+
+def recovery_code_letter(settings: Settings, email: str) -> Letter:
+    """One of the codes kept for a lost telephone has just been spent.
+
+    An ordinary accident and the shape of an attack look identical from here, which is exactly
+    why the owner is told rather than left to find out.
+    """
+    return Letter(
+        to=email,
+        subject="Использован резервный код — AllStore.am",
+        body=(
+            "В аккаунт на AllStore.am вошли по резервному коду вместо кода из приложения.\n\n"
+            "Если это были вы — зайдите в настройки и привяжите приложение заново, "
+            f"чтобы выпустить новые резервные коды:\n{settings.public_url}/devices\n\n"
+            "Если нет — немедленно смените пароль:\n"
+            f"{settings.public_url}/password/forgot\n"
+        ),
+    )
+
+
 def google_link_letter(settings: Settings, email: str, *, attached: bool) -> Letter:
     """A way into the account was added, or taken away.
 

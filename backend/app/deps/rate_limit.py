@@ -46,6 +46,13 @@ LOGIN_DELAY_WINDOW = 15 * MINUTE
 LOGIN_DELAY_STEP = 0.5
 LOGIN_DELAY_CAP = 8.0
 
+# Six digits is a million, and a code lives for ninety seconds counting the drift either
+# side. Ten tries in five minutes is far more than anybody fumbling their own telephone
+# needs, and nowhere near enough to be worth guessing: at this rate a million codes take
+# about a year, by which time every one of them has changed.
+SECOND_FACTOR_ATTEMPTS = 10
+SECOND_FACTOR_WINDOW = 5 * MINUTE
+
 # Registering is a once-in-a-lifetime act for a person and a bulk one for a script.
 REGISTRATION_ATTEMPTS = 10
 REGISTRATION_WINDOW = HOUR
@@ -90,6 +97,7 @@ class Limiters:
     reset_confirm: Allowance
     refresh: Allowance
     credential_change: Allowance
+    second_factor: Allowance
     staff: Allowance
 
 
@@ -111,6 +119,7 @@ def build_limiters(settings: Settings) -> Limiters:
             reset_confirm=SlidingWindow(RESET_CONFIRM_ATTEMPTS, RESET_CONFIRM_WINDOW),
             refresh=SlidingWindow(REFRESH_ATTEMPTS, REFRESH_WINDOW),
             credential_change=SlidingWindow(CREDENTIAL_CHANGE_ATTEMPTS, CREDENTIAL_CHANGE_WINDOW),
+            second_factor=SlidingWindow(SECOND_FACTOR_ATTEMPTS, SECOND_FACTOR_WINDOW),
             staff=SlidingWindow(STAFF_ATTEMPTS, STAFF_WINDOW),
         )
     shared = Redis.from_url(settings.redis_url, decode_responses=True)
@@ -148,6 +157,7 @@ def build_limiters(settings: Settings) -> Limiters:
         credential_change=window(
             "credentials", CREDENTIAL_CHANGE_ATTEMPTS, CREDENTIAL_CHANGE_WINDOW
         ),
+        second_factor=window("totp", SECOND_FACTOR_ATTEMPTS, SECOND_FACTOR_WINDOW),
         staff=window("staff", STAFF_ATTEMPTS, STAFF_WINDOW),
     )
 
@@ -205,3 +215,14 @@ async def delay_for_account(request: Request, email: str) -> float:
 async def forget_account_delay(request: Request, email: str) -> None:
     """The guesses that came before somebody proved the account is theirs stop counting."""
     await limiters_of(request).login_by_account.forget(email)
+
+
+async def limit_second_factor(request: Request, settings: SettingsDep) -> None:
+    """Keyed on where the attempt came from, not on the account.
+
+    The account is the obvious key and the wrong one: at this point the password is already
+    known to the caller, so keying on it would let somebody with a stolen password lock the
+    owner out of their own second factor by spending the allowance. The address bears the
+    cost instead — the same reasoning as the sign-in limit above.
+    """
+    await _enforce(limiters_of(request).second_factor, client_ip(request, settings))

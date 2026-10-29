@@ -25,6 +25,7 @@ from fastapi.responses import RedirectResponse
 from app.core.client_ip import client_ip
 from app.core.config import Settings
 from app.core.cookies import set_session_cookies
+from app.core.half_sign_in import remember
 from app.deps.auth import (
     CurrentSession,
     CurrentUser,
@@ -38,7 +39,7 @@ from app.deps.rate_limit import limit_login
 from app.models import UserRole
 from app.repositories import identities
 from app.schemas.session import IdentityRead
-from app.services import audit, google_oidc, notifications
+from app.services import audit, google_oidc, notifications, totp
 from app.services import sessions as session_service
 
 router = APIRouter(prefix="/auth/google", tags=["google"])
@@ -185,6 +186,17 @@ async def callback(
     user, created = await google_oidc.sign_in(
         session, assertion, OPEN_ROLES[remembered.get("role", "buyer")]
     )
+    if await totp.in_force(session, user):
+        # Staff cannot be created this way, but staff who linked Google can sign in this way —
+        # and a second factor only one of the two doors asks for is not a second factor.
+        # A redirect rather than a refusal: this browser has just come back from an external
+        # site and must land on a page, not on a JSON error it cannot read.
+        paused = RedirectResponse(
+            f"{settings.public_url}/login?totp=1", status_code=status.HTTP_303_SEE_OTHER
+        )
+        remember(paused, settings, user)
+        paused.delete_cookie(HANDSHAKE_COOKIE, path="/")
+        return paused
     issued = await session_service.open_session(
         session,
         settings,

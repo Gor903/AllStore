@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 
 import { DeviceList } from "@/components/auth/DeviceList";
-import { getMyDevices, requireUser } from "@/lib/dal";
+import { SecondFactor } from "@/components/auth/SecondFactor";
+import { getMyDevices, getSecondFactor, requireUser } from "@/lib/dal";
 
 export const dynamic = "force-dynamic";
 
@@ -16,8 +17,9 @@ export const metadata: Metadata = {
  * find the list — the same reasoning that put `/password` here.
  */
 export default async function DevicesPage() {
-  await requireUser();
-  const devices = await getMyDevices();
+  // the one page a staff account still owing a second factor has to reach
+  await requireUser({ owingASecondFactor: true });
+  const [devices, secondFactor] = await Promise.all([getMyDevices(), getSecondFactor()]);
 
   return (
     <main className="mx-auto flex max-w-2xl flex-col gap-6 px-6 py-10">
@@ -26,6 +28,7 @@ export default async function DevicesPage() {
         Здесь видно, откуда выполнен вход. Если какая-то строка вам незнакома — выйдите на всех
         остальных устройствах и смените пароль: смена пароля тоже завершает все сессии.
       </p>
+      {secondFactor === null ? null : <SecondFactor status={secondFactor} />}
       {devices === null ? (
         <p className="text-sm text-danger">Список устройств сейчас недоступен.</p>
       ) : (

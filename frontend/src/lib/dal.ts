@@ -53,7 +53,13 @@ export const getCurrentUser = cache(async (): Promise<User | null> =>
   backendGet<User>("/users/me"),
 );
 
-export async function requireUser(): Promise<User> {
+/**
+ * Signed in, past both gates, or sent to the screen that clears whichever is in the way.
+ *
+ * `owingASecondFactor` is for exactly one page — the one that attaches an authenticator.
+ * Without it that page would redirect to itself, which is a loop rather than a gate.
+ */
+export async function requireUser({ owingASecondFactor = false } = {}): Promise<User> {
   const user = await getCurrentUser();
   if (user === null) {
     redirect("/login");
@@ -63,8 +69,20 @@ export async function requireUser(): Promise<User> {
   if (user.must_change_password) {
     redirect("/password");
   }
+  // The same, for the second gate. Staff with no authenticator are refused everywhere except
+  // the screen that attaches one, and arriving at a blank moderation queue is not an answer
+  // anybody can act on. The order matters and matches the server's: password first.
+  if (!owingASecondFactor && STAFF.includes(user.role)) {
+    const factor = await getSecondFactor();
+    if (factor !== null && factor.required && !factor.enabled) {
+      redirect("/devices");
+    }
+  }
   return user;
 }
+
+/** The roles the backend requires a second factor of — see its services/totp.py. */
+const STAFF: User["role"][] = ["admin", "moderator"];
 
 /** Authorization sits next to the data, not in a layout: layouts do not re-render on navigation. */
 export async function requireRole(...roles: User["role"][]): Promise<User> {
@@ -81,7 +99,19 @@ export async function getMyBusiness(): Promise<Business | null> {
   return backendGet<Business>("/users/me/business");
 }
 
+export type SecondFactorStatus = {
+  enabled: boolean;
+  required: boolean;
+  recovery_codes_left: number;
+};
+
+/** Readable while a staff account still owes a second factor — that is the point of it. */
+export async function getSecondFactor(): Promise<SecondFactorStatus | null> {
+  return backendGet<SecondFactorStatus>("/auth/totp");
+}
+
 /** The devices this account is signed in on. Everyone has at least one: the one asking. */
+
 export async function getMyDevices(): Promise<DeviceList | null> {
   return backendGet<DeviceList>("/auth/sessions");
 }

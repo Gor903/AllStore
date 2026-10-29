@@ -65,6 +65,18 @@ class AccountNotActiveError(PermissionDeniedError):
     code = "account_not_active"
 
 
+class SecondFactorSetupRequiredError(PermissionDeniedError):
+    """Signed in as staff, with no second factor on the account.
+
+    A distinct code because the client has somewhere to send them, and because the alternative
+    — letting them work without one — is the thing the requirement exists to prevent. An
+    administrator can bar an account, change a role and hand over the platform; a password is
+    one thing somebody knows.
+    """
+
+    code = "totp_setup_required"
+
+
 class VerificationRequiredError(PermissionDeniedError):
     """Signed in long enough ago that the platform wants the password again.
 

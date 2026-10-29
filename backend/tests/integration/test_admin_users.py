@@ -9,6 +9,7 @@ from app.models import AuditLog, User, UserRole
 from tests.integration.conftest import (
     act_as,
     csrf_headers,
+    enrol_second_factor,
     register_buyer,
     register_seller,
     seed_staff,
@@ -114,6 +115,10 @@ async def test_new_rights_apply_without_a_second_login(
     admin = await seed_staff(session, UserRole.ADMIN)
     await act_as(api_client, admin)
     await set_role(api_client, buyer_id, "moderator")
+
+    # a moderator may not act without a second factor, and the promotion did not give them one
+    promoted = (await session.execute(select(User).where(User.id == buyer_id))).scalar_one()
+    await enrol_second_factor(session, promoted)
 
     api_client.cookies.clear()
     api_client.cookies.update(buyer_cookies)
