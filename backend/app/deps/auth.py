@@ -281,10 +281,14 @@ def _ensure_double_submit(request: Request, settings: Settings) -> None:
 def _ensure_origin_is_ours(request: Request, settings: Settings) -> None:
     """An absent `Origin` is not an offence: browsers omit it on same-origin GETs and on some
     form posts, and a server-to-server caller has none to send. A present one that we do not
-    recognise is, and nothing configured to recognise means the question is not asked."""
+    recognise is, and nothing configured to recognise means the question is not asked.
+
+    Recognising is two questions rather than one — see `Settings.is_our_origin`. A storefront
+    is a host nobody listed, because the seller who opened the shop created it, and a check
+    that only knew the list would refuse every complaint filed from a shop's own page.
+    """
     origin = request.headers.get("origin")
-    expected = settings.trusted_origins
-    if origin is None or not expected:
+    if origin is None or not settings.trusted_origins:
         return
-    if origin not in expected:
+    if not settings.is_our_origin(origin):
         raise PermissionDeniedError("Запрос пришёл со стороннего сайта")

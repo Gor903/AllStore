@@ -21,6 +21,29 @@ function isGuarded(pathname: string): boolean {
 }
 
 /**
+ * The same path on the main domain.
+ *
+ * The cabinet used to be served on a storefront host as well, which worked only because the
+ * session cookie was shared across subdomains. It is host-only now (ADR 18), so there is no
+ * session to find there — the page would bounce to `/login`, the form would post to the apex,
+ * the cookie would land on the apex, and the redirect back to the subdomain would find
+ * nothing again. A loop, and the way out of it is not to offer the door.
+ *
+ * Chosen over an SSO handoff: a handoff is a second exchange with its own lifetimes and its
+ * own ways to go wrong, bought to keep a page at an address nobody asked for it to be at.
+ */
+function apexUrl(request: NextRequest): URL {
+  // Built on the configured public address rather than on the incoming URL. Inside the
+  // container the request arrives on port 3000, so reusing its host would send somebody to a
+  // port nothing publishes — and behind a TLS-terminating proxy it would also get the scheme
+  // wrong. `siteUrl` is already the one value that means "where this site answers".
+  const apex = new URL(env.siteUrl);
+  apex.pathname = request.nextUrl.pathname;
+  apex.search = request.nextUrl.search;
+  return apex;
+}
+
+/**
  * A fresh nonce per request, which is what makes `strict-dynamic` worth having: an injected
  * script cannot run without one, and it cannot guess one.
  *
@@ -83,12 +106,16 @@ export function proxy(request: NextRequest): NextResponse {
   const carryOn = (): NextResponse => NextResponse.next({ request: { headers: forwarded } });
 
   const subdomain = subdomainFromHost(request.headers.get("host"), env.baseDomain);
-  // only the root: /login and the cabinet stay reachable on a storefront host
-  if (subdomain !== null && request.nextUrl.pathname === "/") {
-    const storefront = NextResponse.rewrite(new URL(`/s/${subdomain}`, request.url), {
-      request: { headers: forwarded },
-    });
-    return withHeaders(storefront, headers);
+  if (subdomain !== null) {
+    if (request.nextUrl.pathname === "/") {
+      const storefront = NextResponse.rewrite(new URL(`/s/${subdomain}`, request.url), {
+        request: { headers: forwarded },
+      });
+      return withHeaders(storefront, headers);
+    }
+    if (isGuarded(request.nextUrl.pathname)) {
+      return withHeaders(NextResponse.redirect(apexUrl(request)), headers);
+    }
   }
   if (!isGuarded(request.nextUrl.pathname) || request.cookies.has(env.sessionCookie)) {
     return withHeaders(carryOn(), headers);

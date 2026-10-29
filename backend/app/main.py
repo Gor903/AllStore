@@ -69,6 +69,11 @@ def create_app() -> FastAPI:
         app.add_middleware(
             CORSMiddleware,
             allow_origins=settings.cors_origins,
+            # Storefronts as well, by pattern. Their addresses are created when a seller picks
+            # a subdomain, so an exact list is a list that is wrong as soon as a shop opens —
+            # and without this a page on `cups.allstore.am` cannot call the API at all, which
+            # is how a signed-in buyer's complaint would stop working the day subdomains ship.
+            allow_origin_regex=settings.storefront_origin_pattern,
             allow_credentials=True,
             allow_methods=["*"],
             allow_headers=["*"],

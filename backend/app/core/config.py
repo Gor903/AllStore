@@ -1,3 +1,4 @@
+import re
 from functools import lru_cache
 from typing import Annotated, Literal
 
@@ -303,6 +304,25 @@ class Settings(BaseSettings):
         return self.celery_broker_url or self.redis_url
 
     @property
+    def storefront_origin_pattern(self) -> str:
+        """Every storefront host, as a pattern, because they cannot be listed.
+
+        A shop's address is created when a seller picks a subdomain, so an exact list of
+        origins is a list that is wrong the moment anybody opens a shop. The browser needs
+        one of them to let a storefront page call the API — a complaint, a cart — and
+        `allow_origins` only does exact matches.
+
+        Anchored at both ends and with the domain escaped: a pattern that matched
+        `allstore.am.evil.test` would be worse than having none, because it would be a
+        permission granted to somebody who registered a domain.
+        """
+        domain = re.escape(self.base_domain)
+        scheme = "http" if self.is_local else "https"
+        # the port is part of the origin, and the local stand has one
+        port = r"(:\d+)?" if self.is_local else ""
+        return rf"^{scheme}://([a-z0-9-]+\.)?{domain}{port}$"
+
+    @property
     def trusted_origins(self) -> tuple[str, ...]:
         """Where a mutating request may have come from.
 
@@ -312,6 +332,18 @@ class Settings(BaseSettings):
         compare against and stands down — the CSRF token still has to match.
         """
         return self.allowed_origins or tuple(self.cors_origins)
+
+    def is_our_origin(self, origin: str) -> bool:
+        """Whether a mutating request may have come from here.
+
+        Two ways to qualify, because there are two kinds of address. The listed ones are the
+        marketplace itself and whatever a deploy adds; the pattern covers the storefronts,
+        which nobody can list because sellers create them. A page on `cups.allstore.am` files
+        a complaint against the API on the apex, and that request carries its own origin.
+        """
+        return origin in self.trusted_origins or bool(
+            re.match(self.storefront_origin_pattern, origin)
+        )
 
 
 @lru_cache
