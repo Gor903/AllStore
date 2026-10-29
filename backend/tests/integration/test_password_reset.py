@@ -5,8 +5,9 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.mail import Letter
 from app.models import PasswordResetToken, Session, User
-from app.services import auth as auth_service
+from app.services import notifications
 from tests.integration.conftest import login, register_buyer
 
 pytestmark = pytest.mark.integration
@@ -17,13 +18,18 @@ NEW_PASSWORD = "brand-new-password-1"
 
 @pytest.fixture
 def sent_tokens(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, str]]:
-    """The email provider arrives in stage 8; until then the reset token is captured here."""
+    """Catches the letter on its way to the wire and pulls the token back out of it.
+
+    Patched at the transport rather than at the composer, so what is captured is what would
+    actually have been sent — the link included.
+    """
     captured: list[tuple[str, str]] = []
 
-    async def fake_send(email: str, token: str) -> None:
-        captured.append((email, token))
+    async def fake_deliver(settings: object, letter: Letter) -> None:
+        token = letter.body.split("token=", 1)[1].split()[0]
+        captured.append((letter.to, token))
 
-    monkeypatch.setattr(auth_service, "send_password_reset_email", fake_send)
+    monkeypatch.setattr(notifications, "deliver", fake_deliver)
     return captured
 
 

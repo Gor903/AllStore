@@ -26,6 +26,11 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
       <h1 className="text-2xl font-semibold">Вход</h1>
       <LoginForm next={target} />
       <p className="text-sm text-ink-muted">
+        <Link href="/password/forgot" className="text-brand">
+          Забыли пароль?
+        </Link>
+      </p>
+      <p className="text-sm text-ink-muted">
         Нет аккаунта?{" "}
         <Link href="/register" className="text-brand">
           Зарегистрироваться

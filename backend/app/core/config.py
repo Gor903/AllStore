@@ -101,6 +101,23 @@ class Settings(BaseSettings):
     # falls back to the site's own address — see deps/auth.require_csrf.
     allowed_origins: Annotated[tuple[str, ...], NoDecode] = ()
 
+    # Mail. Unset SMTP_HOST means no transport: the local stand logs its letters and the
+    # suite needs no mail server. See docs/adr/0019-transactional-mail.md — this is a stopgap
+    # on a personal account, and the whole point of keeping it to four settings is that
+    # moving to a hosted provider is a change of four settings.
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_user: str | None = None
+    smtp_password: SecretStr | None = None
+    smtp_starttls: bool = True
+    smtp_timeout: float = 20.0
+    # Gmail rewrites this to the account that authenticated, so on a personal account it has
+    # to be that address. A hosted provider lets it be anything on a verified domain.
+    mail_from: str = "noreply@allstore.am"
+    mail_from_name: str = "AllStore.am"
+    # where a link in a letter points; the backend has no other way to know its own address
+    site_url: str | None = None
+
     # the first administrator, read once by scripts/bootstrap_admin.py and never again: after
     # that the database is the authority on who administers the platform, not the environment
     admin_email: str | None = None
@@ -146,7 +163,9 @@ class Settings(BaseSettings):
     # how much of the conversation travels back: enough to follow up, not to pay for a novel
     assistant_history_turns: int = 6
 
-    @field_validator("search_service_url", "assistant_base_url", "s3_public_url", mode="before")
+    @field_validator(
+        "search_service_url", "assistant_base_url", "s3_public_url", "smtp_host", mode="before"
+    )
     @classmethod
     def _blank_means_unset(cls, value: object) -> object:
         """An empty variable is how an env file says "off".
@@ -217,6 +236,11 @@ class Settings(BaseSettings):
         prefix is what stops a neighbouring subdomain from planting its own value here and
         satisfying the double submit with it."""
         return self.csrf_cookie_name if self.is_local else f"__Host-{self.csrf_cookie_name}"
+
+    @property
+    def public_url(self) -> str:
+        """What a link in a letter has to say. Falls back to the domain we already know."""
+        return self.site_url or f"https://{self.base_domain}"
 
     @property
     def trusted_origins(self) -> tuple[str, ...]:
