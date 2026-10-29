@@ -61,6 +61,13 @@ class PasswordChangeRequest(BaseModel):
     password: Password
 
 
+class EmailConfirmRequest(BaseModel):
+    """The token from the link, and nothing else: whoever opens it may be on a device that
+    was never signed in, which is the ordinary case for a letter."""
+
+    token: str
+
+
 class VerifyRequest(BaseModel):
     """Only the password: the account is already known, this is about the moment."""
 

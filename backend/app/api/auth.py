@@ -26,6 +26,7 @@ from app.deps.rate_limit import (
 from app.schemas.auth import (
     BuyerRegisterRequest,
     EmailChangeRequest,
+    EmailConfirmRequest,
     LoginRequest,
     MessageResponse,
     PasswordChangeRequest,
@@ -36,7 +37,7 @@ from app.schemas.auth import (
     UserRead,
     VerifyRequest,
 )
-from app.services import audit, device_keys, notifications
+from app.services import audit, device_keys, email_verification, notifications
 from app.services import auth as auth_service
 from app.services import sessions as session_service
 
@@ -64,6 +65,7 @@ async def register_buyer(
     payload: BuyerRegisterRequest,
     response: Response,
     request: Request,
+    background: BackgroundTasks,
     settings: SettingsDep,
     session: SessionDep,
 ) -> UserRead:
@@ -71,7 +73,10 @@ async def register_buyer(
     issued = await session_service.open_session(
         session, settings, user, **_context(request, settings)
     )
+    # the address is asked to answer for itself straight away; nothing waits on the answer
+    letters = await email_verification.request(session, settings, user, user.email)
     await session.commit()
+    background.add_task(notifications.deliver, settings, letters.confirm)
     set_session_cookies(response, settings, issued)
     return UserRead.model_validate(user)
 
@@ -86,6 +91,7 @@ async def register_seller(
     payload: SellerRegisterRequest,
     response: Response,
     request: Request,
+    background: BackgroundTasks,
     settings: SettingsDep,
     session: SessionDep,
 ) -> SellerRegisterResponse:
@@ -93,7 +99,9 @@ async def register_seller(
     issued = await session_service.open_session(
         session, settings, user, **_context(request, settings)
     )
+    letters = await email_verification.request(session, settings, user, user.email)
     await session.commit()
+    background.add_task(notifications.deliver, settings, letters.confirm)
     set_session_cookies(response, settings, issued)
     return SellerRegisterResponse.model_validate({"user": user, "business": business})
 
@@ -207,18 +215,69 @@ async def logout(
 async def change_email(
     payload: EmailChangeRequest,
     user: CurrentUser,
+    background: BackgroundTasks,
+    settings: SettingsDep,
+    session: SessionDep,
+) -> MessageResponse:
+    """Asks the new address to answer. Nothing moves until it does.
+
+    This used to change the login on the spot, which meant a typo in the new address locked
+    the owner out of their own account: the password was right and the login was a place
+    nobody could read. The session is deliberately left alone — it ends when the move actually
+    happens, not when somebody merely asks for one.
+    """
+    await auth_service.verify_password_of(user, payload.current_password.get_secret_value())
+    if payload.normalized_email == user.email:
+        raise email_verification.AddressUnchangedError("Это и есть текущий логин — менять нечего")
+    letters = await email_verification.request(session, settings, user, payload.normalized_email)
+    await audit.record(
+        session, user, "user.email_change_requested", ENTITY, user.id, to=payload.normalized_email
+    )
+    await session.commit()
+    background.add_task(notifications.deliver, settings, letters.confirm)
+    if letters.notice is not None:
+        background.add_task(notifications.deliver, settings, letters.notice)
+    return MessageResponse(message="Ссылка отправлена на новый адрес, подтвердите его")
+
+
+@router.post(
+    "/email/verify",
+    response_model=MessageResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(require_bound_csrf), Depends(limit_credential_change)],
+)
+async def request_email_verification(
+    user: SignedInUser,
+    background: BackgroundTasks,
+    settings: SettingsDep,
+    session: SessionDep,
+) -> MessageResponse:
+    """Sends the confirmation letter again, for the address the account already has."""
+    letters = await email_verification.request(session, settings, user, user.email)
+    await session.commit()
+    background.add_task(notifications.deliver, settings, letters.confirm)
+    return MessageResponse(message="Письмо отправлено, проверьте почту")
+
+
+@router.post("/email/confirm", response_model=MessageResponse)
+async def confirm_email(
+    payload: EmailConfirmRequest,
     response: Response,
     settings: SettingsDep,
     session: SessionDep,
 ) -> MessageResponse:
-    was = await auth_service.change_email(
-        session, user, payload.current_password.get_secret_value(), payload.normalized_email
-    )
-    await audit.record(session, user, "user.email_changed", ENTITY, user.id, **{"from": was})
+    """Spends the link. Needs no session of its own: the token is the proof, and the person
+    opening it may well be on a device that was never signed in."""
+    outcome = await email_verification.confirm(session, payload.token)
+    user = outcome.user
+    await audit.record(session, user, "user.email_verified", ENTITY, user.id, email=user.email)
     await session.commit()
-    # the address is half of the credentials, so the sessions holding the old one ended with it
-    clear_session_cookies(response, settings)
-    return MessageResponse(message="Логин изменён, войдите заново")
+    if outcome.moved:
+        # a move ends every session, so whatever cookies this browser holds are stale.
+        # Confirming the address you registered with is not a move and does not sign you out.
+        clear_session_cookies(response, settings)
+        return MessageResponse(message="Адрес изменён, войдите заново")
+    return MessageResponse(message="Адрес подтверждён")
 
 
 @router.post(

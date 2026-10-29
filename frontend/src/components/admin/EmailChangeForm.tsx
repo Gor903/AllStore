@@ -1,14 +1,19 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
 import { Field } from "@/components/auth/Field";
 import { apiPost } from "@/lib/browser-api";
 import type { FormError } from "@/lib/errors";
 
+/**
+ * Asking to move, not moving. Nothing changes until somebody opens the letter at the new
+ * address — so this screen stays where it is and the session is left alone. It used to send
+ * people to the login page, which was right when the change took effect on submit and is a
+ * lie now.
+ */
 export function EmailChangeForm() {
-  const router = useRouter();
+  const [asked, setAsked] = useState(false);
   const [error, setError] = useState<FormError | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -26,9 +31,16 @@ export function EmailChangeForm() {
       setError(result.error);
       return;
     }
-    // half the credentials changed, so the sessions holding the other half ended with them
-    router.push("/login");
-    router.refresh();
+    setAsked(true);
+  }
+
+  if (asked) {
+    return (
+      <p className="text-sm text-ink-muted" role="status">
+        Ссылка отправлена на новый адрес. Пока он не подтверждён, вход по старому продолжает
+        работать. На старый адрес ушло уведомление — если смену запрашивали не вы, смените пароль.
+      </p>
+    );
   }
 
   return (

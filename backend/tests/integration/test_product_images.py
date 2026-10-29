@@ -218,7 +218,7 @@ async def test_a_photo_cannot_be_added_to_a_foreign_product(
     api_client: AsyncClient, session: AsyncSession, object_storage: None
 ) -> None:
     product_id = await a_product(api_client, session)
-    await register_second_seller(api_client)
+    await register_second_seller(api_client, session)
 
     response = await upload(api_client, product_id)
 
@@ -290,7 +290,7 @@ async def test_a_foreign_photo_cannot_be_deleted(
 ) -> None:
     product_id = await a_product(api_client, session)
     image = (await upload(api_client, product_id)).json()
-    await register_second_seller(api_client)
+    await register_second_seller(api_client, session)
 
     response = await api_client.delete(
         f"{images_url(product_id)}/{image['id']}", headers=csrf_headers(api_client)

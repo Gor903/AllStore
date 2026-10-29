@@ -42,14 +42,14 @@ async def seed_business_with_store(session: AsyncSession, subdomain: str) -> Bus
     return business
 
 
-async def register_second_seller(client: AsyncClient) -> None:
+async def register_second_seller(client: AsyncClient, session: AsyncSession) -> None:
     """A seller registration replaces the cookies, so the client acts as the new account."""
     client.cookies.clear()
-    await register_seller(client, email=f"seller-{uuid.uuid4().hex}@example.com")
+    await register_seller(client, session, email=f"seller-{uuid.uuid4().hex}@example.com")
 
 
-async def test_seller_creates_a_store(api_client: AsyncClient) -> None:
-    await register_seller(api_client)
+async def test_seller_creates_a_store(api_client: AsyncClient, session: AsyncSession) -> None:
+    await register_seller(api_client, session)
 
     response = await create_store(api_client, "cups")
 
@@ -60,9 +60,11 @@ async def test_seller_creates_a_store(api_client: AsyncClient) -> None:
     assert body["theme_id"] == "default"
 
 
-async def test_subdomain_is_stored_in_lower_case(api_client: AsyncClient) -> None:
+async def test_subdomain_is_stored_in_lower_case(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
     """DNS reads a label case-insensitively, so CUPS is the same address, not a broken one."""
-    await register_seller(api_client)
+    await register_seller(api_client, session)
 
     response = await create_store(api_client, "  CUPS  ")
 
@@ -70,10 +72,12 @@ async def test_subdomain_is_stored_in_lower_case(api_client: AsyncClient) -> Non
     assert response.json()["subdomain"] == "cups"
 
 
-async def test_taken_subdomain_is_rejected_with_409(api_client: AsyncClient) -> None:
-    await register_seller(api_client)
+async def test_taken_subdomain_is_rejected_with_409(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    await register_seller(api_client, session)
     assert (await create_store(api_client, "cups")).status_code == 201
-    await register_second_seller(api_client)
+    await register_second_seller(api_client, session)
 
     response = await create_store(api_client, "cups")
 
@@ -85,8 +89,10 @@ async def test_taken_subdomain_is_rejected_with_409(api_client: AsyncClient) -> 
 
 
 @pytest.mark.parametrize("subdomain", ["www", "api", "admin", "dashboard", "WWW"])
-async def test_reserved_subdomain_is_rejected(api_client: AsyncClient, subdomain: str) -> None:
-    await register_seller(api_client)
+async def test_reserved_subdomain_is_rejected(
+    api_client: AsyncClient, session: AsyncSession, subdomain: str
+) -> None:
+    await register_seller(api_client, session)
 
     response = await create_store(api_client, subdomain)
 
@@ -108,8 +114,10 @@ async def test_reserved_subdomain_is_rejected(api_client: AsyncClient, subdomain
         "",  # empty
     ],
 )
-async def test_malformed_subdomain_is_rejected(api_client: AsyncClient, subdomain: str) -> None:
-    await register_seller(api_client)
+async def test_malformed_subdomain_is_rejected(
+    api_client: AsyncClient, session: AsyncSession, subdomain: str
+) -> None:
+    await register_seller(api_client, session)
 
     response = await create_store(api_client, subdomain)
 
@@ -117,8 +125,10 @@ async def test_malformed_subdomain_is_rejected(api_client: AsyncClient, subdomai
     assert response.json()["error"]["code"] == "validation_failed"
 
 
-async def test_second_store_for_the_same_business_is_rejected(api_client: AsyncClient) -> None:
-    await register_seller(api_client)
+async def test_second_store_for_the_same_business_is_rejected(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    await register_seller(api_client, session)
     assert (await create_store(api_client, "cups")).status_code == 201
 
     response = await create_store(api_client, "mugs")
@@ -130,7 +140,7 @@ async def test_second_store_for_the_same_business_is_rejected(api_client: AsyncC
 async def test_blocked_business_cannot_create_a_store(
     api_client: AsyncClient, session: AsyncSession
 ) -> None:
-    await register_seller(api_client)
+    await register_seller(api_client, session)
     business = (await session.execute(select(Business))).scalars().one()
     business.status = BusinessStatus.BLOCKED
     await session.flush()
@@ -144,7 +154,7 @@ async def test_blocked_business_cannot_create_a_store(
 async def test_seller_without_a_business_gets_404(
     api_client: AsyncClient, session: AsyncSession
 ) -> None:
-    await register_seller(api_client)
+    await register_seller(api_client, session)
     await session.execute(delete(Business))
     await session.flush()
 
@@ -171,16 +181,19 @@ async def test_anonymous_cannot_create_a_store(api_client: AsyncClient) -> None:
 
 async def test_creating_a_store_without_the_csrf_header_is_forbidden(
     api_client: AsyncClient,
+    session: AsyncSession,
 ) -> None:
-    await register_seller(api_client)
+    await register_seller(api_client, session)
 
     response = await api_client.post(CREATE_URL, json={"subdomain": "cups"})
 
     assert response.status_code == 403
 
 
-async def test_store_of_the_seller_is_readable_after_creation(api_client: AsyncClient) -> None:
-    await register_seller(api_client)
+async def test_store_of_the_seller_is_readable_after_creation(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    await register_seller(api_client, session)
     assert (await api_client.get(ME_URL)).status_code == 404
     created = await create_store(api_client, "cups")
 
@@ -190,10 +203,12 @@ async def test_store_of_the_seller_is_readable_after_creation(api_client: AsyncC
     assert response.json()["id"] == created.json()["id"]
 
 
-async def test_another_seller_does_not_see_a_foreign_store(api_client: AsyncClient) -> None:
-    await register_seller(api_client)
+async def test_another_seller_does_not_see_a_foreign_store(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    await register_seller(api_client, session)
     assert (await create_store(api_client, "cups")).status_code == 201
-    await register_second_seller(api_client)
+    await register_second_seller(api_client, session)
 
     response = await api_client.get(ME_URL)
 
@@ -221,9 +236,9 @@ async def test_losing_the_race_on_the_unique_index_is_reported_as_taken(
     api_client: AsyncClient, session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Simulates the window between the availability check and the insert of a second seller."""
-    await register_seller(api_client)
+    await register_seller(api_client, session)
     assert (await create_store(api_client, "cups")).status_code == 201
-    await register_second_seller(api_client)
+    await register_second_seller(api_client, session)
 
     async def taken_by_nobody(*_: object, **__: object) -> Store | None:
         return None

@@ -1,3 +1,5 @@
+import { execSync } from "node:child_process";
+
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 /**
@@ -15,6 +17,27 @@ const MODERATOR = {
 
 const PASSWORD = "e2e-password-1";
 const PHONE = "+37410123456";
+
+/**
+ * Pulls the confirmation link out of the backend's log.
+ *
+ * The stand deliberately has no mail server — `SMTP_HOST` is empty, so letters are written to
+ * the log instead, which is the only way to walk a link locally. Reading it here is the same
+ * act as opening an inbox, done the only way this stack allows.
+ */
+function confirmationLinkFor(email: string): string {
+  const log = execSync("docker compose logs backend --no-log-prefix", {
+    cwd: "..",
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  const after = log.split(`letter to ${email}:`).at(-1) ?? "";
+  const link = /https?:\/\/\S*\/email\/confirm\?token=[\w-]+/.exec(after)?.[0];
+  if (link === undefined) {
+    throw new Error(`no confirmation letter for ${email} in the backend log`);
+  }
+  return new URL(link).pathname + new URL(link).search;
+}
 
 /** Every run leaves its rows behind, so nothing it creates may collide with a previous one. */
 const run = Date.now().toString(36);
@@ -88,7 +111,17 @@ test("продавец регистрируется, заводит магази
     await expect(page.getByRole("heading", { name: "Кабинет" })).toBeVisible();
   });
 
+  await test.step("продавец подтверждает адрес", async () => {
+    // a shop cannot be opened until the address has answered, so this is what a real seller
+    // does next. The stand has no mail server, so the letter is in the backend's log —
+    // reading it from there is the e2e equivalent of opening an inbox.
+    await expect(page.getByText(/ещё не подтверждён/)).toBeVisible();
+    await page.goto(confirmationLinkFor(seller.email));
+    await expect(page.getByText("Адрес подтверждён")).toBeVisible();
+  });
+
   const storefrontUrl = await test.step("продавец открывает витрину", async () => {
+    await page.goto("/dashboard");
     await page.getByLabel("Адрес магазина").fill(subdomain);
     await page.getByRole("button", { name: "Создать магазин" }).click();
 

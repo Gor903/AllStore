@@ -12,6 +12,7 @@ from app.core.cookies import set_session_cookies
 from app.core.errors import (
     AppError,
     AuthenticationError,
+    EmailNotVerifiedError,
     PasswordChangeRequiredError,
     PermissionDeniedError,
     VerificationRequiredError,
@@ -136,6 +137,27 @@ def require_fresh_verification(row: CurrentSession, settings: SettingsDep) -> No
     """
     if not session_service.is_freshly_verified(row, settings):
         raise VerificationRequiredError("Подтвердите пароль, чтобы продолжить")
+
+
+def ensure_verified_email(user: User) -> User:
+    """For the one thing the platform does on somebody's behalf in public.
+
+    Opening a shop puts a name, a storefront and a way to be paid in front of strangers, and
+    the platform is the one presenting it. An address nobody has answered at is not a way to
+    reach the person behind that, so it is the moment the confirmation has to have happened.
+
+    Nothing else asks. Browsing, buying, complaining and even running a shop that already
+    exists are untouched: a gate on everything would be a gate people route around by not
+    signing up, and the address is not what makes any of those safe.
+
+    A plain function rather than a dependency, so the route composes it *after* the role
+    check. As a route-level dependency it ran first, and a buyer reaching for a shop was told
+    to confirm their address — an answer about the wrong problem, and one that implies the
+    shop was otherwise theirs to open.
+    """
+    if user.email_verified_at is None:
+        raise EmailNotVerifiedError("Подтвердите адрес почты, чтобы открыть магазин")
+    return user
 
 
 def require_role(*roles: UserRole) -> Callable[[User], Awaitable[User]]:

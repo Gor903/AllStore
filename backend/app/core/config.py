@@ -94,6 +94,9 @@ class Settings(BaseSettings):
     # how long proving the password again buys, for the actions that ask for it twice
     step_up_ttl_minutes: int = 10
     password_reset_ttl_hours: int = 2
+    # longer than a reset link: confirming an address is not urgent, and a link that expires
+    # while somebody is away from their inbox just means another round of letters
+    email_verification_ttl_hours: int = 24
     session_cookie_name: str = "allstore_session"
     csrf_cookie_name: str = "allstore_csrf"
     csrf_header_name: str = "X-CSRF-Token"

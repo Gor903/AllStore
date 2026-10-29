@@ -1,5 +1,6 @@
 import uuid
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
 from httpx import AsyncClient, Response
@@ -34,8 +35,21 @@ async def register_buyer(client: AsyncClient, **overrides: Any) -> Response:
     return await client.post("/api/v1/auth/register/buyer", json={**BUYER_PAYLOAD, **overrides})
 
 
-async def register_seller(client: AsyncClient, **overrides: Any) -> Response:
-    return await client.post("/api/v1/auth/register/seller", json={**SELLER_PAYLOAD, **overrides})
+async def register_seller(
+    client: AsyncClient, session: AsyncSession | None = None, **overrides: Any
+) -> Response:
+    """Registers a seller, and — when given a session — confirms their address.
+
+    Opening a shop needs a confirmed address, so a test that goes on to create one has to do
+    what a real seller does first. The session is optional because plenty of tests register a
+    seller only to check that something refuses them, and those never get that far.
+    """
+    response = await client.post(
+        "/api/v1/auth/register/seller", json={**SELLER_PAYLOAD, **overrides}
+    )
+    if session is not None and response.status_code == 201:
+        await confirm_email(session, str(response.json()["user"]["id"]))
+    return response
 
 
 async def login(client: AsyncClient, email: str, password: str) -> Response:
@@ -74,10 +88,10 @@ async def become_moderator(client: AsyncClient, session: AsyncSession) -> User:
     return user
 
 
-async def register_second_seller(client: AsyncClient) -> None:
+async def register_second_seller(client: AsyncClient, session: AsyncSession) -> None:
     """A seller registration replaces the cookies, so the client acts as the new account."""
     client.cookies.clear()
-    await register_seller(client, email=f"seller-{uuid.uuid4().hex}@example.com")
+    await register_seller(client, session, email=f"seller-{uuid.uuid4().hex}@example.com")
 
 
 async def seeded_category(session: AsyncSession, slug: str = "electronics") -> Category:
@@ -131,6 +145,19 @@ async def anonymous(client: AsyncClient) -> None:
     client.cookies.clear()
 
 
+async def confirm_email(session: AsyncSession, user_id: str) -> None:
+    """Marks the address as answered for, the way a letter would.
+
+    Set on the row rather than walked through a link: the token exists only inside the letter,
+    and a test about shops should not have to compose and read one. What the flow itself does
+    is covered where it belongs, in test_email_verification.py.
+    """
+    user = await session.get(User, uuid.UUID(user_id))
+    assert user is not None
+    user.email_verified_at = datetime.now(UTC)
+    await session.flush()
+
+
 async def a_live_shop(client: AsyncClient, session: AsyncSession, subdomain: str) -> Shop:
     # cookies restored by switch() carry no domain, so a fresh Set-Cookie would sit beside
     # them rather than replace them — the jar is emptied before a new session starts
@@ -138,6 +165,8 @@ async def a_live_shop(client: AsyncClient, session: AsyncSession, subdomain: str
     registered = await register_seller(client, email=f"seller-{uuid.uuid4().hex}@example.com")
     business_id = str(registered.json()["business"]["id"])
     seller_id = str(registered.json()["user"]["id"])
+    # opening a shop needs a confirmed address, which is what a real seller does first
+    await confirm_email(session, seller_id)
     created = await client.post(
         STORES_URL, json={"subdomain": subdomain}, headers=csrf_headers(client)
     )

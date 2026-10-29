@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { LogoutButton } from "@/components/auth/LogoutButton";
+import { VerifyEmailNotice } from "@/components/auth/VerifyEmailNotice";
 import { StatusPill } from "@/components/dashboard/StatusPill";
 import { ResubmitBusiness } from "@/components/dashboard/ResubmitBusiness";
 import { StoreForm } from "@/components/dashboard/StoreForm";
@@ -42,6 +43,10 @@ export default async function DashboardPage() {
           <LogoutButton />
         </div>
       </header>
+
+      {user.email_verified_at === null ? (
+        <VerifyEmailNotice email={user.email} seller={seller} />
+      ) : null}
 
       <dl className="grid gap-2 text-sm">
         <div className="flex gap-2">

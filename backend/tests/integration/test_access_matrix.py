@@ -184,7 +184,7 @@ async def become(client: AsyncClient, session: AsyncSession, role: str) -> None:
         await register_buyer(client, email=f"buyer-{uuid.uuid4().hex}@example.com")
         return
     if role == "seller":
-        await register_seller(client, email=f"seller-{uuid.uuid4().hex}@example.com")
+        await register_seller(client, session, email=f"seller-{uuid.uuid4().hex}@example.com")
         return
     await act_as(client, await seed_staff(session, UserRole(role)))
 

@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, File, UploadFile, status
 
 from app.core import storage
 from app.core.errors import NotFoundError
-from app.deps.auth import SessionDep, SettingsDep, require_csrf, require_role
+from app.deps.auth import SessionDep, SettingsDep, ensure_verified_email, require_csrf, require_role
 from app.deps.business import CurrentBusiness
 from app.models import User, UserRole
 from app.repositories import stores as stores_repo
@@ -19,6 +19,19 @@ router = APIRouter(prefix="/stores", tags=["stores"])
 SellerUser = Annotated[User, Depends(require_role(UserRole.SELLER))]
 
 
+async def _seller_who_answered_their_mail(user: SellerUser) -> User:
+    """Opening a shop is the one thing the platform does on somebody's behalf in public, and
+    an address nobody has answered at is not a way to reach the person behind it.
+
+    Composed on top of the role rather than standing beside it, so somebody who may not open
+    a shop at all is told that, and not asked to confirm an address that would not help them.
+    """
+    return ensure_verified_email(user)
+
+
+VerifiedSeller = Annotated[User, Depends(_seller_who_answered_their_mail)]
+
+
 @router.post(
     "",
     response_model=StoreRead,
@@ -26,7 +39,7 @@ SellerUser = Annotated[User, Depends(require_role(UserRole.SELLER))]
     dependencies=[Depends(require_csrf)],
 )
 async def create_store(
-    payload: StoreCreateRequest, user: SellerUser, settings: SettingsDep, session: SessionDep
+    payload: StoreCreateRequest, user: VerifiedSeller, settings: SettingsDep, session: SessionDep
 ) -> StoreRead:
     business = await users_repo.get_business_of(session, user.id)
     if business is None:

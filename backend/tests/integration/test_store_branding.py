@@ -26,10 +26,10 @@ ME_URL = f"{STORES_URL}/me"
 STOREFRONT_URL = "/api/v1/storefront"
 
 
-async def a_shopkeeper(client: AsyncClient, subdomain: str = "cups") -> str:
+async def a_shopkeeper(client: AsyncClient, session: AsyncSession, subdomain: str = "cups") -> str:
     """A seller with a storefront, which is what every branding request needs."""
     client.cookies.clear()
-    await register_seller(client, email=f"seller-{uuid.uuid4().hex}@example.com")
+    await register_seller(client, session, email=f"seller-{uuid.uuid4().hex}@example.com")
     created = await client.post(
         STORES_URL, json={"subdomain": subdomain}, headers=csrf_headers(client)
     )
@@ -52,8 +52,10 @@ async def put_image(
     )
 
 
-async def test_a_seller_describes_their_shop(api_client: AsyncClient) -> None:
-    await a_shopkeeper(api_client)
+async def test_a_seller_describes_their_shop(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    await a_shopkeeper(api_client, session)
 
     response = await patch_store(api_client, description="Керамика ручной работы из Гюмри.")
 
@@ -64,8 +66,10 @@ async def test_a_seller_describes_their_shop(api_client: AsyncClient) -> None:
     ] == "Керамика ручной работы из Гюмри."
 
 
-async def test_the_description_may_be_cleared(api_client: AsyncClient) -> None:
-    await a_shopkeeper(api_client)
+async def test_the_description_may_be_cleared(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    await a_shopkeeper(api_client, session)
     await patch_store(api_client, description="Было описание")
 
     response = await patch_store(api_client, description=None)
@@ -74,8 +78,10 @@ async def test_the_description_may_be_cleared(api_client: AsyncClient) -> None:
     assert response.json()["description"] is None
 
 
-async def test_an_absent_field_is_left_alone(api_client: AsyncClient) -> None:
-    await a_shopkeeper(api_client)
+async def test_an_absent_field_is_left_alone(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    await a_shopkeeper(api_client, session)
     await patch_store(api_client, description="Описание", primary_color="#c4805c")
 
     await patch_store(api_client, primary_color="#343e4e")
@@ -85,8 +91,10 @@ async def test_an_absent_field_is_left_alone(api_client: AsyncClient) -> None:
     assert body["primary_color"] == "#343e4e"
 
 
-async def test_a_colour_is_stored_in_one_shape(api_client: AsyncClient) -> None:
-    await a_shopkeeper(api_client)
+async def test_a_colour_is_stored_in_one_shape(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    await a_shopkeeper(api_client, session)
 
     response = await patch_store(api_client, primary_color="#C4805C", secondary_color="#EED6BA")
 
@@ -97,9 +105,9 @@ async def test_a_colour_is_stored_in_one_shape(api_client: AsyncClient) -> None:
 
 @pytest.mark.parametrize("colour", ["c4805c", "#c4805", "#ggg000", "красный", "#c4805c8", ""])
 async def test_a_value_that_is_not_a_colour_is_rejected(
-    api_client: AsyncClient, colour: str
+    api_client: AsyncClient, session: AsyncSession, colour: str
 ) -> None:
-    await a_shopkeeper(api_client)
+    await a_shopkeeper(api_client, session)
 
     response = await patch_store(api_client, primary_color=colour)
 
@@ -107,8 +115,10 @@ async def test_a_value_that_is_not_a_colour_is_rejected(
     assert (await api_client.get(ME_URL)).json()["primary_color"] is None
 
 
-async def test_a_colour_may_be_cleared_back_to_the_theme(api_client: AsyncClient) -> None:
-    await a_shopkeeper(api_client)
+async def test_a_colour_may_be_cleared_back_to_the_theme(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    await a_shopkeeper(api_client, session)
     await patch_store(api_client, primary_color="#c4805c")
 
     response = await patch_store(api_client, primary_color=None)
@@ -117,9 +127,9 @@ async def test_a_colour_may_be_cleared_back_to_the_theme(api_client: AsyncClient
     assert response.json()["primary_color"] is None
 
 
-async def test_an_unknown_theme_is_refused(api_client: AsyncClient) -> None:
+async def test_an_unknown_theme_is_refused(api_client: AsyncClient, session: AsyncSession) -> None:
     """A theme the storefront cannot render would be a look the seller never gets."""
-    await a_shopkeeper(api_client)
+    await a_shopkeeper(api_client, session)
 
     response = await patch_store(api_client, theme_id="neon")
 
@@ -127,17 +137,17 @@ async def test_an_unknown_theme_is_refused(api_client: AsyncClient) -> None:
     assert (await api_client.get(ME_URL)).json()["theme_id"] == "default"
 
 
-async def test_the_theme_cannot_be_cleared(api_client: AsyncClient) -> None:
-    await a_shopkeeper(api_client)
+async def test_the_theme_cannot_be_cleared(api_client: AsyncClient, session: AsyncSession) -> None:
+    await a_shopkeeper(api_client, session)
 
     response = await patch_store(api_client, theme_id=None)
 
     assert response.status_code == 422
 
 
-async def test_an_unknown_field_is_refused(api_client: AsyncClient) -> None:
+async def test_an_unknown_field_is_refused(api_client: AsyncClient, session: AsyncSession) -> None:
     """The subdomain is the address the seller already gave out — not editable here."""
-    await a_shopkeeper(api_client)
+    await a_shopkeeper(api_client, session)
 
     response = await patch_store(api_client, subdomain="other")
 
@@ -145,9 +155,9 @@ async def test_an_unknown_field_is_refused(api_client: AsyncClient) -> None:
 
 
 async def test_a_logo_lands_in_the_object_store(
-    api_client: AsyncClient, object_storage: None
+    api_client: AsyncClient, session: AsyncSession, object_storage: None
 ) -> None:
-    store_id = await a_shopkeeper(api_client)
+    store_id = await a_shopkeeper(api_client, session)
 
     response = await put_image(api_client)
 
@@ -162,9 +172,9 @@ async def test_a_logo_lands_in_the_object_store(
 
 
 async def test_a_banner_is_kept_apart_from_the_logo(
-    api_client: AsyncClient, object_storage: None
+    api_client: AsyncClient, session: AsyncSession, object_storage: None
 ) -> None:
-    await a_shopkeeper(api_client)
+    await a_shopkeeper(api_client, session)
 
     await put_image(api_client, kind="logo")
     body = (await put_image(api_client, kind="banner", data=PNG)).json()
@@ -178,11 +188,11 @@ async def test_a_banner_is_kept_apart_from_the_logo(
 
 
 async def test_a_second_upload_replaces_the_first(
-    api_client: AsyncClient, object_storage: None
+    api_client: AsyncClient, session: AsyncSession, object_storage: None
 ) -> None:
     """One logo per storefront: the displaced object goes, so the bucket does not grow
     by one file every time a seller tries another picture."""
-    await a_shopkeeper(api_client)
+    await a_shopkeeper(api_client, session)
     first = (await put_image(api_client)).json()["logo_url"]
     old_key = key_from_url(get_settings(), first)
 
@@ -194,9 +204,9 @@ async def test_a_second_upload_replaces_the_first(
 
 
 async def test_a_cleared_logo_leaves_no_object_behind(
-    api_client: AsyncClient, object_storage: None
+    api_client: AsyncClient, session: AsyncSession, object_storage: None
 ) -> None:
-    await a_shopkeeper(api_client)
+    await a_shopkeeper(api_client, session)
     uploaded = (await put_image(api_client)).json()["logo_url"]
     key = key_from_url(get_settings(), uploaded)
 
@@ -208,9 +218,9 @@ async def test_a_cleared_logo_leaves_no_object_behind(
 
 
 async def test_clearing_a_logo_that_is_not_there_is_not_an_error(
-    api_client: AsyncClient, object_storage: None
+    api_client: AsyncClient, session: AsyncSession, object_storage: None
 ) -> None:
-    await a_shopkeeper(api_client)
+    await a_shopkeeper(api_client, session)
 
     response = await api_client.delete(f"{ME_URL}/images/logo", headers=csrf_headers(api_client))
 
@@ -219,10 +229,10 @@ async def test_clearing_a_logo_that_is_not_there_is_not_an_error(
 
 
 async def test_a_file_that_is_not_an_image_is_refused(
-    api_client: AsyncClient, object_storage: None
+    api_client: AsyncClient, session: AsyncSession, object_storage: None
 ) -> None:
     """The content type of a part is written by the sender; the signature is not."""
-    await a_shopkeeper(api_client)
+    await a_shopkeeper(api_client, session)
 
     response = await put_image(api_client, data=b"MZ\x90\x00" + b"\x00" * 64)
 
@@ -232,9 +242,9 @@ async def test_a_file_that_is_not_an_image_is_refused(
 
 
 async def test_a_file_over_the_limit_is_refused(
-    api_client: AsyncClient, object_storage: None
+    api_client: AsyncClient, session: AsyncSession, object_storage: None
 ) -> None:
-    await a_shopkeeper(api_client)
+    await a_shopkeeper(api_client, session)
     too_big = JPEG + b"\x00" * (get_settings().max_upload_size_mb * BYTES_IN_MB)
 
     response = await put_image(api_client, data=too_big)
@@ -243,8 +253,10 @@ async def test_a_file_over_the_limit_is_refused(
     assert response.json()["error"]["code"] == "image_too_large"
 
 
-async def test_an_unknown_kind_is_not_a_route(api_client: AsyncClient) -> None:
-    await a_shopkeeper(api_client)
+async def test_an_unknown_kind_is_not_a_route(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    await a_shopkeeper(api_client, session)
 
     response = await put_image(api_client, kind="favicon")
 
@@ -253,9 +265,10 @@ async def test_an_unknown_kind_is_not_a_route(api_client: AsyncClient) -> None:
 
 async def test_the_contacts_route_is_not_swallowed_by_the_image_route(
     api_client: AsyncClient,
+    session: AsyncSession,
 ) -> None:
     """`/stores/me/contacts` and `/stores/me/images/{kind}` live next to each other."""
-    await a_shopkeeper(api_client)
+    await a_shopkeeper(api_client, session)
 
     response = await api_client.put(
         f"{ME_URL}/contacts",
@@ -267,12 +280,14 @@ async def test_the_contacts_route_is_not_swallowed_by_the_image_route(
     assert response.json()["items"][0]["platform"] == "phone"
 
 
-async def test_a_seller_does_not_dress_another_sellers_shop(api_client: AsyncClient) -> None:
-    await a_shopkeeper(api_client, "cups")
+async def test_a_seller_does_not_dress_another_sellers_shop(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    await a_shopkeeper(api_client, session, "cups")
     await patch_store(api_client, description="Первая лавка", primary_color="#c4805c")
     first = dict(api_client.cookies)
 
-    await a_shopkeeper(api_client, "plates")
+    await a_shopkeeper(api_client, session, "plates")
     await patch_store(api_client, description="Вторая лавка", primary_color="#343e4e")
 
     api_client.cookies.clear()
@@ -283,8 +298,10 @@ async def test_a_seller_does_not_dress_another_sellers_shop(api_client: AsyncCli
     assert body["subdomain"] == "cups"
 
 
-async def test_a_seller_without_a_storefront_gets_404(api_client: AsyncClient) -> None:
-    await register_seller(api_client, email=f"seller-{uuid.uuid4().hex}@example.com")
+async def test_a_seller_without_a_storefront_gets_404(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    await register_seller(api_client, session, email=f"seller-{uuid.uuid4().hex}@example.com")
 
     response = await patch_store(api_client, description="Описание")
 
@@ -301,8 +318,9 @@ async def test_a_buyer_has_no_shop_to_dress(api_client: AsyncClient) -> None:
 
 async def test_dressing_a_shop_without_the_csrf_header_is_forbidden(
     api_client: AsyncClient,
+    session: AsyncSession,
 ) -> None:
-    await a_shopkeeper(api_client)
+    await a_shopkeeper(api_client, session)
 
     response = await api_client.patch(ME_URL, json={"description": "Описание"})
 

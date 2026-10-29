@@ -190,7 +190,7 @@ async def test_the_list_holds_only_the_sellers_own_products(
     await register_seller(api_client)
     category = await seeded_category(session)
     assert (await create_product(api_client, category.id, name="Мой товар")).status_code == 201
-    await register_second_seller(api_client)
+    await register_second_seller(api_client, session)
     await create_product(api_client, category.id, name="Чужой товар")
 
     response = await api_client.get(PRODUCTS_URL)
@@ -248,7 +248,7 @@ async def test_a_foreign_product_is_not_readable(
     await register_seller(api_client)
     category = await seeded_category(session)
     created = (await create_product(api_client, category.id)).json()
-    await register_second_seller(api_client)
+    await register_second_seller(api_client, session)
 
     response = await api_client.get(f"{PRODUCTS_URL}/{created['id']}")
 
@@ -315,7 +315,7 @@ async def test_a_foreign_product_cannot_be_edited(
     await register_seller(api_client)
     category = await seeded_category(session)
     created = (await create_product(api_client, category.id)).json()
-    await register_second_seller(api_client)
+    await register_second_seller(api_client, session)
 
     response = await api_client.patch(
         f"{PRODUCTS_URL}/{created['id']}",
@@ -335,7 +335,7 @@ async def test_a_foreign_product_cannot_be_archived(
     await register_seller(api_client)
     category = await seeded_category(session)
     created = (await create_product(api_client, category.id)).json()
-    await register_second_seller(api_client)
+    await register_second_seller(api_client, session)
 
     response = await api_client.delete(
         f"{PRODUCTS_URL}/{created['id']}", headers=csrf_headers(api_client)
@@ -354,7 +354,7 @@ async def test_a_seller_cannot_file_a_product_into_a_foreign_business(
     await register_seller(api_client)
     category = await seeded_category(session)
     first = (await session.execute(select(Business))).scalars().one()
-    await register_second_seller(api_client)
+    await register_second_seller(api_client, session)
 
     created = await create_product(api_client, category.id)
 

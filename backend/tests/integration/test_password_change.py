@@ -164,7 +164,7 @@ async def test_an_account_owing_nothing_is_not_asked_for_anything(
     assert response.json()["error"]["code"] != "password_change_required"
 
 
-async def test_changing_the_login_needs_the_password_and_ends_the_sessions(
+async def test_asking_to_change_the_login_needs_the_password_and_moves_nothing(
     api_client: AsyncClient, session: AsyncSession
 ) -> None:
     await register_buyer(api_client)
@@ -178,11 +178,13 @@ async def test_changing_the_login_needs_the_password_and_ends_the_sessions(
 
     assert response.status_code == 200
     await session.refresh(user)
-    assert user.email == "moved@example.com"
+    # nothing has moved yet, and that is the point: a typo in the new address must not lock
+    # somebody out of an account whose password they still know
+    assert user.email == EMAIL
     live = await session.execute(
         select(Session).where(Session.user_id == user.id, Session.revoked_at.is_(None))
     )
-    assert live.scalars().all() == []
+    assert live.scalars().all() != [], "asking is not moving, so the session stays"
 
 
 async def test_the_address_it_already_is_gets_refused(
@@ -211,9 +213,20 @@ async def test_the_address_it_already_is_gets_refused(
     assert live.scalars().all() != []
 
 
-async def test_a_taken_address_is_refused(api_client: AsyncClient, session: AsyncSession) -> None:
+async def test_a_taken_address_is_not_refused_out_loud(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    """Asking to move to somebody else's address gets the same answer as asking to move to a
+    free one.
+
+    Refusing here would make this form a way of asking whether a particular person has an
+    account on the platform — the password it requires is the asker's own, so anybody could
+    walk a list of addresses through it. The letter goes to whoever actually owns the address,
+    saying somebody tried; the move itself fails later, when the link is opened.
+    """
     await register_buyer(api_client)
-    session.add(User(email="taken@example.com", password_hash="x", role=UserRole.BUYER))
+    owner = User(email="taken@example.com", password_hash="x", role=UserRole.BUYER)
+    session.add(owner)
     await session.flush()
 
     response = await api_client.post(
@@ -222,7 +235,9 @@ async def test_a_taken_address_is_refused(api_client: AsyncClient, session: Asyn
         headers=csrf_headers(api_client),
     )
 
-    assert response.status_code == 409
+    assert response.status_code == 200
+    mover = (await session.execute(select(User).where(User.email == EMAIL))).scalars().one()
+    assert mover.email == EMAIL, "nothing moves until the link is opened"
 
 
 async def test_both_changes_reach_the_journal(
@@ -246,10 +261,11 @@ async def test_both_changes_reach_the_journal(
     entries = (await session.execute(select(AuditLog))).scalars().all()
     actions = {entry.action for entry in entries}
     assert "user.password_changed" in actions
-    assert "user.email_changed" in actions
-    moved = next(entry for entry in entries if entry.action == "user.email_changed")
-    # what it was, because after the write nobody can tell any more
-    assert moved.details["from"] == EMAIL
+    assert "user.email_change_requested" in actions
+    asked = next(entry for entry in entries if entry.action == "user.email_change_requested")
+    # where it was going, recorded when it was asked for rather than when it lands: an attempt
+    # that is never confirmed is still a thing an administrator should be able to see
+    assert asked.details["to"] == "moved@example.com"
 
 
 async def test_a_change_without_the_flag_is_an_ordinary_thing_to_do(
