@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, status
 
 from app.core.errors import NotFoundError
-from app.deps.auth import SessionDep, require_csrf, require_role
+from app.deps.auth import SessionDep, require_csrf, require_fresh_verification, require_role
 from app.deps.rate_limit import limit_staff_actions
 from app.models import User, UserRole, UserStatus
 from app.repositories import users as users_repo
@@ -44,6 +44,10 @@ MAX_PAGE_SIZE = 100
 QUERY_MAX_LENGTH = 320
 
 AdminUser = Annotated[User, Depends(require_role(UserRole.ADMIN))]
+# For the actions that cannot be undone by pressing the other button: a role handed over, a
+# moderator appointed, somebody's password replaced. Goes beside the role check rather than
+# replacing it — being recently verified is not a permission.
+STEP_UP = Depends(require_fresh_verification)
 Limit = Annotated[int, Query(ge=1, le=MAX_PAGE_SIZE)]
 Offset = Annotated[int, Query(ge=0)]
 SearchQuery = Annotated[str | None, Query(min_length=1, max_length=QUERY_MAX_LENGTH)]
@@ -99,7 +103,11 @@ async def read_user(user_id: uuid.UUID, _: AdminUser, session: SessionDep) -> Us
     return UserRead.model_validate(user)
 
 
-@router.post("/users/{user_id}/role", response_model=UserRead, dependencies=[Depends(require_csrf)])
+@router.post(
+    "/users/{user_id}/role",
+    response_model=UserRead,
+    dependencies=[Depends(require_csrf), STEP_UP],
+)
 async def change_role(
     user_id: uuid.UUID, payload: RoleChangeRequest, admin: AdminUser, session: SessionDep
 ) -> UserRead:
@@ -111,7 +119,7 @@ async def change_role(
 @router.post(
     "/users/{user_id}/transfer-admin",
     response_model=UserRead,
-    dependencies=[Depends(require_csrf)],
+    dependencies=[Depends(require_csrf), STEP_UP],
 )
 async def transfer_admin(user_id: uuid.UUID, admin: AdminUser, session: SessionDep) -> UserRead:
     """Hands over the one administrator role. The caller is a moderator when this returns.
@@ -154,7 +162,7 @@ async def list_moderators(
     "/moderators",
     response_model=UserRead,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_csrf), Depends(limit_staff_actions)],
+    dependencies=[Depends(require_csrf), Depends(limit_staff_actions), STEP_UP],
 )
 async def create_moderator(
     payload: ModeratorCreateRequest, admin: AdminUser, session: SessionDep
@@ -174,7 +182,7 @@ async def create_moderator(
 @router.post(
     "/moderators/{user_id}/password",
     response_model=UserRead,
-    dependencies=[Depends(require_csrf), Depends(limit_staff_actions)],
+    dependencies=[Depends(require_csrf), Depends(limit_staff_actions), STEP_UP],
 )
 async def reset_moderator_password(
     user_id: uuid.UUID,

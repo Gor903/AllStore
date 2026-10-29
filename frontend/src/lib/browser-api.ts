@@ -94,8 +94,14 @@ export async function apiGet<T>(path: string): Promise<ApiResult<T>> {
   return send<T>("GET", path, {});
 }
 
-export async function apiPost<T>(path: string, body: unknown): Promise<ApiResult<T>> {
-  return send<T>("POST", path, withJson(body));
+export async function apiPost<T>(
+  path: string,
+  body: unknown,
+  headers: Record<string, string> = {},
+): Promise<ApiResult<T>> {
+  const init = withJson(body);
+  // extra headers are for the device proof, which is per-request and cannot live in `send`
+  return send<T>("POST", path, { ...init, headers: { ...init.headers, ...headers } });
 }
 
 export async function apiPatch<T>(path: string, body: unknown): Promise<ApiResult<T>> {

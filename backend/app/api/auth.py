@@ -2,15 +2,23 @@ import asyncio
 
 from fastapi import APIRouter, Depends, Request, Response, status
 
-from app.core.cookies import clear_auth_cookies, set_auth_cookies
-from app.core.errors import AuthenticationError
-from app.deps.auth import CurrentUser, SessionDep, SettingsDep, SignedInUser, require_csrf
+from app.core.client_ip import client_ip
+from app.core.config import Settings
+from app.core.cookies import clear_session_cookies, set_session_cookies
+from app.deps.auth import (
+    CurrentSession,
+    CurrentUser,
+    SessionDep,
+    SettingsDep,
+    SignedInUser,
+    require_bound_csrf,
+    require_csrf,
+)
 from app.deps.rate_limit import (
     delay_for_account,
     forget_account_delay,
     limit_credential_change,
     limit_login,
-    limit_refresh,
     limit_registration,
     limit_reset_confirm,
     limit_reset_request,
@@ -26,14 +34,24 @@ from app.schemas.auth import (
     SellerRegisterRequest,
     SellerRegisterResponse,
     UserRead,
+    VerifyRequest,
 )
-from app.services import audit
+from app.services import audit, device_keys
 from app.services import auth as auth_service
+from app.services import sessions as session_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 # what these entries are about: the account itself, not anything it owns
 ENTITY = "user"
+
+
+def _context(request: Request, settings: Settings) -> dict[str, str | None]:
+    """What a session remembers about where it began, for the device list to show."""
+    return {
+        "ip": client_ip(request, settings),
+        "user_agent": request.headers.get("user-agent"),
+    }
 
 
 @router.post(
@@ -50,11 +68,11 @@ async def register_buyer(
     session: SessionDep,
 ) -> UserRead:
     user = await auth_service.register_buyer(session, payload)
-    tokens = await auth_service.issue_tokens(
-        session, settings, user, request.headers.get("user-agent")
+    issued = await session_service.open_session(
+        session, settings, user, **_context(request, settings)
     )
     await session.commit()
-    set_auth_cookies(response, settings, tokens)
+    set_session_cookies(response, settings, issued)
     return UserRead.model_validate(user)
 
 
@@ -72,11 +90,11 @@ async def register_seller(
     session: SessionDep,
 ) -> SellerRegisterResponse:
     user, business = await auth_service.register_seller(session, payload)
-    tokens = await auth_service.issue_tokens(
-        session, settings, user, request.headers.get("user-agent")
+    issued = await session_service.open_session(
+        session, settings, user, **_context(request, settings)
     )
     await session.commit()
-    set_auth_cookies(response, settings, tokens)
+    set_session_cookies(response, settings, issued)
     return SellerRegisterResponse.model_validate({"user": user, "business": business})
 
 
@@ -100,36 +118,68 @@ async def login(
     )
     # they proved the account is theirs, so the guesses that came before them stop counting
     forget_account_delay(request, payload.normalized_email)
-    tokens = await auth_service.issue_tokens(
-        session, settings, user, request.headers.get("user-agent")
+    issued = await session_service.open_session(
+        session, settings, user, **_context(request, settings)
     )
     await session.commit()
-    set_auth_cookies(response, settings, tokens)
+    set_session_cookies(response, settings, issued)
     return UserRead.model_validate(user)
 
 
 @router.post(
-    "/refresh",
+    "/renew",
     response_model=UserRead,
-    dependencies=[Depends(require_csrf), Depends(limit_refresh)],
+    dependencies=[Depends(require_bound_csrf)],
 )
-async def refresh(
-    request: Request, response: Response, settings: SettingsDep, session: SessionDep
+async def renew(
+    request: Request,
+    row: CurrentSession,
+    user: SignedInUser,
+    response: Response,
+    settings: SettingsDep,
+    session: SessionDep,
 ) -> UserRead:
-    raw_refresh = request.cookies.get(settings.refresh_cookie)
-    if not raw_refresh:
-        raise AuthenticationError("Сессия недействительна, войдите заново")
-    outcome = await auth_service.rotate_refresh_token(
-        session, settings, raw_refresh, request.headers.get("user-agent")
-    )
-    # committed before the branch, because both outcomes wrote something worth keeping: a
-    # rotation on one side, the revocation of a stolen family on the other. Refusing first
-    # and committing second is exactly what lost the revocation — see ReuseDetected
+    """Asks for a fresh token now rather than when it is due.
+
+    For a session with no device key this is a convenience: the server renews such sessions
+    by itself on whatever request is in flight when a token gets old enough. For a bound one
+    it is the only way, because only the browser can sign the proof — and renewal is exactly
+    the moment binding exists to protect.
+    """
+    if row.device_public_key is not None:
+        issued_at = device_keys.verify(
+            row,
+            request.headers.get(device_keys.HEADER),
+            method=request.method,
+            url=str(request.url),
+        )
+        await device_keys.remember(session, row, issued_at)
+    issued = await session_service.renew(session, settings, row)
     await session.commit()
-    if isinstance(outcome, auth_service.ReuseDetected):
-        raise auth_service.InvalidRefreshTokenError("Сессия недействительна, войдите заново")
-    set_auth_cookies(response, settings, outcome.tokens)
-    return UserRead.model_validate(outcome.user)
+    set_session_cookies(response, settings, issued)
+    return UserRead.model_validate(user)
+
+
+@router.post(
+    "/verify",
+    response_model=MessageResponse,
+    dependencies=[Depends(require_bound_csrf), Depends(limit_credential_change)],
+)
+async def verify_password(
+    payload: VerifyRequest,
+    row: CurrentSession,
+    user: SignedInUser,
+    session: SessionDep,
+) -> MessageResponse:
+    """Proves the password again, for the actions that will not take a session's word for it.
+
+    No new session and no new cookie: this is the same session saying it is still the person
+    who opened it, and `verified_at` is where that is written down.
+    """
+    await auth_service.verify_password_of(user, payload.password.get_secret_value())
+    await session_service.mark_verified(session, row)
+    await session.commit()
+    return MessageResponse(message="Пароль подтверждён")
 
 
 @router.post(
@@ -138,17 +188,21 @@ async def refresh(
 async def logout(
     request: Request, response: Response, settings: SettingsDep, session: SessionDep
 ) -> None:
-    raw_refresh = request.cookies.get(settings.refresh_cookie)
-    if raw_refresh:
-        await auth_service.revoke_refresh_token(session, raw_refresh)
-        await session.commit()
-    clear_auth_cookies(response, settings)
+    """Deliberately forgiving: a session that is already gone still leaves with its cookies
+    cleared, because the one thing somebody pressing "sign out" must never see is a refusal."""
+    token = request.cookies.get(settings.session_cookie)
+    if token:
+        row = await session_service.peek(session, settings, token)
+        if row is not None:
+            await session_service.sign_out(session, row)
+            await session.commit()
+    clear_session_cookies(response, settings)
 
 
 @router.post(
     "/email",
     response_model=MessageResponse,
-    dependencies=[Depends(require_csrf), Depends(limit_credential_change)],
+    dependencies=[Depends(require_bound_csrf), Depends(limit_credential_change)],
 )
 async def change_email(
     payload: EmailChangeRequest,
@@ -163,14 +217,14 @@ async def change_email(
     await audit.record(session, user, "user.email_changed", ENTITY, user.id, **{"from": was})
     await session.commit()
     # the address is half of the credentials, so the sessions holding the old one ended with it
-    clear_auth_cookies(response, settings)
+    clear_session_cookies(response, settings)
     return MessageResponse(message="Логин изменён, войдите заново")
 
 
 @router.post(
     "/password",
     response_model=MessageResponse,
-    dependencies=[Depends(require_csrf), Depends(limit_credential_change)],
+    dependencies=[Depends(require_bound_csrf), Depends(limit_credential_change)],
 )
 async def change_password(
     payload: PasswordChangeRequest,
@@ -189,7 +243,7 @@ async def change_password(
     await audit.record(session, user, "user.password_changed", ENTITY, user.id)
     await session.commit()
     # every session ended with the change, so the cookies in hand are stale
-    clear_auth_cookies(response, settings)
+    clear_session_cookies(response, settings)
     return MessageResponse(message="Пароль изменён, войдите заново")
 
 
@@ -222,5 +276,5 @@ async def confirm_password_reset(
     await auth_service.reset_password(session, payload.token, payload.password.get_secret_value())
     await session.commit()
     # every session was revoked with the password change, so the current cookies are stale
-    clear_auth_cookies(response, settings)
+    clear_session_cookies(response, settings)
     return MessageResponse(message="Пароль изменён, войдите заново")

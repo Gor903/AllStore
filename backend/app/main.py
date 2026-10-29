@@ -17,6 +17,7 @@ from app.api.moderation import router as moderation_router
 from app.api.products import router as products_router
 from app.api.reports import public_router as reports_public_router
 from app.api.reports import router as reports_router
+from app.api.sessions import router as sessions_router
 from app.api.storefront import router as storefront_router
 from app.api.stores import router as stores_router
 from app.api.users import router as users_router
@@ -78,6 +79,7 @@ def create_app() -> FastAPI:
     register_exception_handlers(app)
     app.include_router(health_router)
     app.include_router(auth_router, prefix=settings.api_prefix)
+    app.include_router(sessions_router, prefix=settings.api_prefix)
     app.include_router(users_router, prefix=settings.api_prefix)
     app.include_router(stores_router, prefix=settings.api_prefix)
     app.include_router(contacts_router, prefix=settings.api_prefix)

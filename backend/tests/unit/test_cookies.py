@@ -9,10 +9,10 @@ back to being something we merely intend.
 from fastapi import Response
 
 from app.core.config import Settings, get_settings
-from app.core.cookies import clear_auth_cookies, set_auth_cookies
-from app.services.auth import IssuedTokens
+from app.core.cookies import clear_session_cookies, set_session_cookies
+from app.services.sessions import IssuedSession
 
-TOKENS = IssuedTokens(access_token="access", refresh_token="refresh", csrf_token="csrf")
+ISSUED = IssuedSession(token="a-session-token", csrf_token="a-csrf-token")
 
 
 def _deployed() -> Settings:
@@ -21,7 +21,7 @@ def _deployed() -> Settings:
 
 def _cookies(settings: Settings) -> dict[str, str]:
     response = Response()
-    set_auth_cookies(response, settings, TOKENS)
+    set_session_cookies(response, settings, ISSUED)
     return {line.split("=", 1)[0]: line for line in response.headers.getlist("set-cookie")}
 
 
@@ -36,22 +36,18 @@ def test_the_session_and_the_csrf_token_are_host_locked() -> None:
     settings = _deployed()
     issued = _cookies(settings)
 
-    for name in (settings.access_cookie, settings.csrf_cookie):
+    for name in (settings.session_cookie, settings.csrf_cookie):
         assert name.startswith("__Host-")
         line = issued[name].lower()
         assert "secure" in line
         assert "path=/;" in line or line.rstrip().endswith("path=/")
 
 
-def test_the_refresh_token_stays_on_its_own_path() -> None:
-    """`__Host-` would demand Path=/, and the narrow path is worth more here: a credential
-    that renews a whole session should not ride along on every request for a photo."""
-    settings = _deployed()
-    line = _cookies(settings)[settings.refresh_cookie]
-
-    assert settings.refresh_cookie.startswith("__Secure-")
-    assert "Path=/api/v1/auth" in line
-    assert "Secure" in line
+def test_there_is_no_second_cookie_to_scope() -> None:
+    """The refresh token had to settle for `__Secure-` and a narrow path, because `__Host-`
+    demands Path=/ and a credential that could renew a session should not ride on every
+    request for a photo. One server-side session leaves nothing to make that trade about."""
+    assert len(_cookies(_deployed())) == 2
 
 
 def test_the_local_stand_keeps_the_bare_names() -> None:
@@ -62,9 +58,9 @@ def test_the_local_stand_keeps_the_bare_names() -> None:
 
     issued = _cookies(settings)
 
-    assert settings.access_cookie == settings.access_cookie_name
+    assert settings.session_cookie == settings.session_cookie_name
     assert not any(name.startswith("__") for name in issued)
-    assert "secure" not in issued[settings.access_cookie].lower()
+    assert "secure" not in issued[settings.session_cookie].lower()
 
 
 def test_only_the_csrf_token_is_readable_by_scripts() -> None:
@@ -72,8 +68,7 @@ def test_only_the_csrf_token_is_readable_by_scripts() -> None:
     settings = _deployed()
     issued = _cookies(settings)
 
-    assert "httponly" in issued[settings.access_cookie].lower()
-    assert "httponly" in issued[settings.refresh_cookie].lower()
+    assert "httponly" in issued[settings.session_cookie].lower()
     assert "httponly" not in issued[settings.csrf_cookie].lower()
 
 
@@ -82,9 +77,8 @@ def test_clearing_uses_the_same_names_and_paths() -> None:
     settings = _deployed()
     response = Response()
 
-    clear_auth_cookies(response, settings)
+    clear_session_cookies(response, settings)
 
     cleared = response.headers.getlist("set-cookie")
-    assert any(settings.access_cookie in line for line in cleared)
-    assert any(settings.refresh_cookie in line and "Path=/api/v1/auth" in line for line in cleared)
+    assert any(settings.session_cookie in line for line in cleared)
     assert any(settings.csrf_cookie in line for line in cleared)

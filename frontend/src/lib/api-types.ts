@@ -436,7 +436,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Logout */
+        /**
+         * Logout
+         * @description Deliberately forgiving: a session that is already gone still leaves with its cookies
+         *     cleared, because the one thing somebody pressing "sign out" must never see is a refusal.
+         */
         post: operations["logout_api_v1_auth_logout_post"];
         delete?: never;
         options?: never;
@@ -495,23 +499,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/auth/refresh": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Refresh */
-        post: operations["refresh_api_v1_auth_refresh_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/auth/register/buyer": {
         parameters: {
             query?: never;
@@ -540,6 +527,121 @@ export interface paths {
         put?: never;
         /** Register Seller */
         post: operations["register_seller_api_v1_auth_register_seller_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/renew": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Renew
+         * @description Asks for a fresh token now rather than when it is due.
+         *
+         *     For a session with no device key this is a convenience: the server renews such sessions
+         *     by itself on whatever request is in flight when a token gets old enough. For a bound one
+         *     it is the only way, because only the browser can sign the proof — and renewal is exactly
+         *     the moment binding exists to protect.
+         */
+        post: operations["renew_api_v1_auth_renew_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Sessions */
+        get: operations["list_sessions_api_v1_auth_sessions_get"];
+        put?: never;
+        post?: never;
+        /**
+         * Revoke Other Sessions
+         * @description "Sign out everywhere else" — the one answer to "somebody else is in my account" that
+         *     does not require knowing which of the devices on the list is theirs.
+         */
+        delete: operations["revoke_other_sessions_api_v1_auth_sessions_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/sessions/device-key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bind Device Key
+         * @description Attaches this browser's key to this session, and buys it a longer life for it.
+         *
+         *     A session that can prove it is still the same device is worth trusting for longer than one
+         *     that can only produce a cookie, so binding extends the absolute clock rather than the
+         *     unbound case being punished for a browser's shortcomings.
+         */
+        post: operations["bind_device_key_api_v1_auth_sessions_device_key_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/sessions/{family_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke Session
+         * @description Signs one device out. Naming the one you are holding is allowed — it is just a logout
+         *     with a longer way of saying it, so the cookies go too.
+         */
+        delete: operations["revoke_session_api_v1_auth_sessions__family_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify Password
+         * @description Proves the password again, for the actions that will not take a session's word for it.
+         *
+         *     No new session and no new cookie: this is the same session saying it is still the person
+         *     who opened it, and `verified_at` is where that is written down.
+         */
+        post: operations["verify_password_api_v1_auth_verify_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1866,6 +1968,17 @@ export interface components {
             reports: number;
         };
         /**
+         * DeviceKeyRequest
+         * @description The public half of a key the browser keeps and cannot export.
+         *
+         *     SPKI, base64 — what `crypto.subtle.exportKey("spki", ...)` produces once it has been
+         *     through the usual dance into text.
+         */
+        DeviceKeyRequest: {
+            /** Public Key */
+            public_key: string;
+        };
+        /**
          * EmailChangeRequest
          * @description The login is proved with the password, the same way the password is.
          */
@@ -2398,6 +2511,46 @@ export interface components {
             business: components["schemas"]["BusinessRead"];
             user: components["schemas"]["UserRead"];
         };
+        /** SessionListResponse */
+        SessionListResponse: {
+            /** Items */
+            items: components["schemas"]["SessionRead"][];
+        };
+        /**
+         * SessionRead
+         * @description One device, as its owner sees it.
+         *
+         *     The token is not here and never will be — not even a prefix of it. A list of devices is a
+         *     screen people are told to check when something feels wrong, which makes it a screen an
+         *     attacker reads too, and the only reason to put a fragment of a live credential on it would
+         *     be to help somebody recognise their own laptop. The time and the browser do that.
+         */
+        SessionRead: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Current
+             * @default false
+             */
+            current: boolean;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Ip */
+            ip: string | null;
+            /**
+             * Last Seen At
+             * Format: date-time
+             */
+            last_seen_at: string;
+            /** User Agent */
+            user_agent: string | null;
+        };
         /** StoreCreateRequest */
         StoreCreateRequest: {
             /** Subdomain */
@@ -2601,6 +2754,17 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /**
+         * VerifyRequest
+         * @description Only the password: the account is already known, this is about the moment.
+         */
+        VerifyRequest: {
+            /**
+             * Password
+             * Format: password
+             */
+            password: string;
         };
     };
     responses: never;
@@ -3444,26 +3608,6 @@ export interface operations {
             };
         };
     };
-    refresh_api_v1_auth_refresh_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["UserRead"];
-                };
-            };
-        };
-    };
     register_buyer_api_v1_auth_register_buyer_post: {
         parameters: {
             query?: never;
@@ -3517,6 +3661,157 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SellerRegisterResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    renew_api_v1_auth_renew_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserRead"];
+                };
+            };
+        };
+    };
+    list_sessions_api_v1_auth_sessions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionListResponse"];
+                };
+            };
+        };
+    };
+    revoke_other_sessions_api_v1_auth_sessions_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    bind_device_key_api_v1_auth_sessions_device_key_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeviceKeyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_session_api_v1_auth_sessions__family_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                family_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    verify_password_api_v1_auth_verify_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageResponse"];
                 };
             };
             /** @description Validation Error */

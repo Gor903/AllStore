@@ -20,10 +20,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.errors import ConflictError
 from app.models import AccountBlock, User, UserStatus
 from app.repositories import account_blocks as blocks_repo
-from app.repositories import auth_tokens
+from app.repositories import sessions as sessions_repo
 from app.repositories import users as users_repo
 from app.repositories.users import AccountFilter
-from app.services import admin_users, audit, permissions
+from app.services import admin_users, audit, permissions, sessions
 
 ENTITY = "user"
 
@@ -46,9 +46,10 @@ async def block(session: AsyncSession, actor: User, user_id: uuid.UUID, reason: 
     await blocks_repo.add(
         session, AccountBlock(user_id=target.id, actor_user_id=actor.id, reason=reason)
     )
-    # the access token stays valid for minutes, so the status alone would be enough; revoking
-    # the refresh tokens is what stops the session from quietly renewing itself afterwards
-    await auth_tokens.revoke_all_for_user(session, target.id)
+    # the status alone already shuts every request out, because it is re-read on each one.
+    # Revoking is what takes the barred account off the device list and out of the table,
+    # rather than leaving a session that is alive in the data and refused in practice
+    await sessions_repo.revoke_all_for_user(session, target.id, sessions.ACCOUNT_BLOCKED)
     await session.flush()
     await audit.record(session, actor, "user.blocked", ENTITY, target.id, reason=reason)
     return target

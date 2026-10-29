@@ -2,7 +2,7 @@
 
 from app.models.account_block import AccountBlock
 from app.models.audit import AuditLog
-from app.models.auth import PasswordResetToken, RefreshToken
+from app.models.auth import PasswordResetToken
 from app.models.business import Business, BusinessStatus
 from app.models.category import Category, CategoryStatus
 from app.models.contact import PHONE_PLATFORMS, ContactPlatform, SocialLink
@@ -23,6 +23,7 @@ from app.models.product import (
 )
 from app.models.product_revision import ProductRevision, RevisionStatus
 from app.models.report import Report, ReportStatus
+from app.models.session import AuthMethod, Session
 from app.models.store import Store, StoreStatus
 from app.models.user import User, UserRole, UserStatus
 
@@ -31,6 +32,7 @@ __all__ = [
     "PHONE_PLATFORMS",
     "AccountBlock",
     "AuditLog",
+    "AuthMethod",
     "Business",
     "BusinessCustomerBlock",
     "BusinessDecision",
@@ -49,10 +51,10 @@ __all__ = [
     "ProductImage",
     "ProductRevision",
     "PublicationStatus",
-    "RefreshToken",
     "Report",
     "ReportStatus",
     "RevisionStatus",
+    "Session",
     "SocialLink",
     "Store",
     "StoreStatus",

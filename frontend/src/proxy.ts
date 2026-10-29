@@ -90,7 +90,7 @@ export function proxy(request: NextRequest): NextResponse {
     });
     return withHeaders(storefront, headers);
   }
-  if (!isGuarded(request.nextUrl.pathname) || request.cookies.has(env.accessCookie)) {
+  if (!isGuarded(request.nextUrl.pathname) || request.cookies.has(env.sessionCookie)) {
     return withHeaders(carryOn(), headers);
   }
   const loginUrl = new URL("/login", request.url);

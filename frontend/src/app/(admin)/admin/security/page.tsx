@@ -41,6 +41,17 @@ export default async function AdminSecurityPage() {
       </section>
 
       <section className="flex flex-col gap-3 rounded-card border border-ink-muted/20 p-4">
+        <h2 className="font-medium">Устройства</h2>
+        <p className="text-sm text-ink-muted">
+          Откуда выполнен вход в этот аккаунт —{" "}
+          <Link href="/devices" className="text-brand">
+            /devices
+          </Link>
+          . Там же можно выйти на всех устройствах, кроме текущего.
+        </p>
+      </section>
+
+      <section className="flex flex-col gap-3 rounded-card border border-ink-muted/20 p-4">
         <h2 className="font-medium">Логин</h2>
         <p className="text-sm text-ink-muted">Сейчас: {user.email}</p>
         <EmailChangeForm />

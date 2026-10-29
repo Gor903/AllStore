@@ -61,6 +61,12 @@ class PasswordChangeRequest(BaseModel):
     password: Password
 
 
+class VerifyRequest(BaseModel):
+    """Only the password: the account is already known, this is about the moment."""
+
+    password: SecretStr
+
+
 class UserRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

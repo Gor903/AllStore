@@ -1,57 +1,44 @@
-"""The three cookies a session travels in, and where each is allowed to go.
+"""The two cookies a session travels in, and where they are allowed to go.
 
-They are host-only. ADR 1 originally put them on `.allstore.am` so that a storefront on a
-subdomain shared the visitor's session, and the price of that was never paid only because the
-branch never ran: every configuration in the repository is `APP_ENV=local`, where the domain
-was already omitted. The price would have been real — a cross-site scripting hole in any one
-seller's storefront, or a single hijacked subdomain, would hand over the session for the whole
-platform, and a subdomain could plant its own CSRF cookie and satisfy the double submit with
-it.
+There were three, and the third was the price of ADR 1's pair of tokens: a refresh token that
+could only be spent at `/auth/refresh`, scoped to that path so it did not ride along on every
+request. One server-side session leaves nothing to scope — see services/sessions.py — so both
+of these sit at the root and both can wear `__Host-`.
+
+They are host-only. ADR 1 put them on `.allstore.am` so a storefront on a subdomain shared the
+visitor's session, and the price was never actually paid only because the branch never ran:
+every configuration in the repository is `APP_ENV=local`, where the domain was already
+omitted. The price would have been real — cross-site scripting in any one seller's storefront
+would hand over the session for the whole platform.
 
 Nothing is lost by refusing to pay it. The browser still sends these to the API from a page on
 a storefront host, because `shop.allstore.am` and `allstore.am` are the same site even though
-they are different origins. What a subdomain no longer gets is the right to speak for the
-session on its own — see the name prefixes in core/config.py, which make the browser enforce
-exactly that.
+they are different origins.
 """
 
 from fastapi import Response
 
 from app.core.config import Settings
-from app.services.auth import IssuedTokens
+from app.services.sessions import IssuedSession
 
 
-def _refresh_path(settings: Settings) -> str:
-    """Narrower than the rest on purpose: a credential that can renew a whole session should
-    not ride along on every request for a product image."""
-    return f"{settings.api_prefix}/auth"
-
-
-def set_auth_cookies(response: Response, settings: Settings, tokens: IssuedTokens) -> None:
+def set_session_cookies(response: Response, settings: Settings, issued: IssuedSession) -> None:
     secure = not settings.is_local
+    lifetime = settings.session_idle_ttl_days * 24 * 3600
     response.set_cookie(
-        settings.access_cookie,
-        tokens.access_token,
-        max_age=settings.access_token_ttl_minutes * 60,
+        settings.session_cookie,
+        issued.token,
+        max_age=lifetime,
         httponly=True,
         secure=secure,
         samesite="lax",
         path="/",
     )
-    response.set_cookie(
-        settings.refresh_cookie,
-        tokens.refresh_token,
-        max_age=settings.refresh_token_ttl_days * 24 * 3600,
-        httponly=True,
-        secure=secure,
-        samesite="lax",
-        path=_refresh_path(settings),
-    )
     # readable by scripts on purpose: the client echoes it back in a header (double submit)
     response.set_cookie(
         settings.csrf_cookie,
-        tokens.csrf_token,
-        max_age=settings.refresh_token_ttl_days * 24 * 3600,
+        issued.csrf_token,
+        max_age=lifetime,
         httponly=False,
         secure=secure,
         samesite="lax",
@@ -59,9 +46,8 @@ def set_auth_cookies(response: Response, settings: Settings, tokens: IssuedToken
     )
 
 
-def clear_auth_cookies(response: Response, settings: Settings) -> None:
+def clear_session_cookies(response: Response, settings: Settings) -> None:
     """Deleted at the same name and path they were set at: a cookie removed at a different
     path is not removed at all, it is merely shadowed until the browser notices."""
-    response.delete_cookie(settings.access_cookie, path="/")
-    response.delete_cookie(settings.refresh_cookie, path=_refresh_path(settings))
+    response.delete_cookie(settings.session_cookie, path="/")
     response.delete_cookie(settings.csrf_cookie, path="/")

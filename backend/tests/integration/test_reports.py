@@ -404,7 +404,7 @@ async def test_a_stale_session_complains_as_a_guest(
     shop = await a_live_shop(api_client, session, "cups")
     product_id = await a_published_product(api_client, session, shop)
     await anonymous(api_client)
-    api_client.cookies.set(get_settings().access_cookie, "not-a-token")
+    api_client.cookies.set(get_settings().session_cookie, "not-a-token")
 
     response = await complain(api_client, product_id=product_id, reason=REASON)
 

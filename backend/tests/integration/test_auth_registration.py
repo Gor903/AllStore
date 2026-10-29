@@ -43,8 +43,7 @@ async def test_registration_sets_all_auth_cookies(api_client: AsyncClient) -> No
 
     await register_buyer(api_client)
 
-    assert api_client.cookies[settings.access_cookie]
-    assert api_client.cookies[settings.refresh_cookie]
+    assert api_client.cookies[settings.session_cookie]
     assert api_client.cookies[settings.csrf_cookie]
 
 

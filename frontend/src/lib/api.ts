@@ -44,6 +44,8 @@ export type AssistantLine =
 export type ReportQueue = components["schemas"]["ReportQueueResponse"];
 export type ReportedSubject = components["schemas"]["ReportedSubjectRead"];
 export type AuditEntry = components["schemas"]["AuditLogRead"];
+export type Device = components["schemas"]["SessionRead"];
+export type DeviceList = components["schemas"]["SessionListResponse"];
 
 export const PAGE_SIZE = 24;
 

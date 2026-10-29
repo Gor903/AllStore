@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import verify_password
-from app.models import AuditLog, RefreshToken, User, UserRole
+from app.models import AuditLog, Session, User, UserRole
 from tests.integration.conftest import csrf_headers, login, register_buyer
 
 pytestmark = pytest.mark.integration
@@ -144,9 +144,7 @@ async def test_the_change_ends_every_session(
     )
 
     live = await session.execute(
-        select(RefreshToken).where(
-            RefreshToken.user_id == user.id, RefreshToken.revoked_at.is_(None)
-        )
+        select(Session).where(Session.user_id == user.id, Session.revoked_at.is_(None))
     )
     assert live.scalars().all() == []
 
@@ -182,9 +180,7 @@ async def test_changing_the_login_needs_the_password_and_ends_the_sessions(
     await session.refresh(user)
     assert user.email == "moved@example.com"
     live = await session.execute(
-        select(RefreshToken).where(
-            RefreshToken.user_id == user.id, RefreshToken.revoked_at.is_(None)
-        )
+        select(Session).where(Session.user_id == user.id, Session.revoked_at.is_(None))
     )
     assert live.scalars().all() == []
 
@@ -209,9 +205,7 @@ async def test_the_address_it_already_is_gets_refused(
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "same_email"
     live = await session.execute(
-        select(RefreshToken).where(
-            RefreshToken.user_id == user.id, RefreshToken.revoked_at.is_(None)
-        )
+        select(Session).where(Session.user_id == user.id, Session.revoked_at.is_(None))
     )
     # the sessions are untouched: nothing happened, so nothing ends
     assert live.scalars().all() != []

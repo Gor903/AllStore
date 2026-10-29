@@ -35,7 +35,12 @@ export default async function DashboardPage() {
     <main className="mx-auto flex max-w-4xl flex-col gap-8 px-6 py-10">
       <header className="flex items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold">Кабинет</h1>
-        <LogoutButton />
+        <div className="flex items-center gap-3">
+          <Link href="/devices" className="text-sm hover:text-brand">
+            Устройства
+          </Link>
+          <LogoutButton />
+        </div>
       </header>
 
       <dl className="grid gap-2 text-sm">

@@ -1,5 +1,7 @@
 import hashlib
+import hmac
 import secrets
+import uuid
 from functools import lru_cache
 
 import anyio
@@ -7,7 +9,7 @@ import anyio.to_thread
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError
 
-from app.core.config import get_settings
+from app.core.config import Settings, get_settings
 
 MIN_PASSWORD_LENGTH = 10
 MAX_PASSWORD_LENGTH = 128
@@ -69,6 +71,23 @@ def password_needs_rehash(password_hash: str) -> bool:
 def generate_token() -> str:
     """Opaque token for refresh and password reset — the client sees it exactly once."""
     return secrets.token_urlsafe(32)
+
+
+def csrf_token_for(settings: Settings, family_id: uuid.UUID) -> str:
+    """The CSRF value this device, and only this device, should be echoing back.
+
+    Derived rather than drawn at random, which is what lets the server recognise its own:
+    a value planted in the cookie by somebody else satisfies the double submit — the header
+    can simply repeat it — but it will not equal what this family is supposed to carry.
+
+    Tied to the family rather than to the token, so renewing the session does not change it,
+    and tied to the family rather than to the account, so it is not one constant per person
+    for as long as that person exists.
+    """
+    signed = hmac.new(
+        settings.secret_key.get_secret_value().encode(), family_id.bytes, hashlib.sha256
+    )
+    return signed.hexdigest()
 
 
 def hash_token(token: str) -> str:

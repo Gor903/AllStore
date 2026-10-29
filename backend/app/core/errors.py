@@ -54,6 +54,28 @@ class PasswordChangeRequiredError(PermissionDeniedError):
     code = "password_change_required"
 
 
+class AccountNotActiveError(PermissionDeniedError):
+    """Signed in with something perfectly valid, by an account that may not act.
+
+    Lives here rather than beside either of the services that raise it: `services/auth.py`
+    answers it at sign-in and `services/sessions.py` answers it to a session that was revoked
+    when the account was barred, and the person must be told the same thing either way.
+    """
+
+    code = "account_not_active"
+
+
+class VerificationRequiredError(PermissionDeniedError):
+    """Signed in long enough ago that the platform wants the password again.
+
+    A distinct code because, like `password_change_required`, the client has something to do
+    about it: show a box asking for the password, not an apology. The actions behind it are
+    the ones nobody should be able to take by sitting down at an unattended screen.
+    """
+
+    code = "verification_required"
+
+
 class ConflictError(AppError):
     code = "conflict"
     status_code = status.HTTP_409_CONFLICT

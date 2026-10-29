@@ -18,7 +18,7 @@ from app.models import (
     ProductAvailability,
     ProductImage,
     PublicationStatus,
-    RefreshToken,
+    Session,
     Store,
     StoreStatus,
     User,
@@ -232,16 +232,18 @@ async def test_deleting_a_business_removes_its_store(session: AsyncSession) -> N
     assert stores.scalars().all() == []
 
 
-async def test_deleting_a_user_removes_business_and_tokens(session: AsyncSession) -> None:
+async def test_deleting_a_user_removes_business_and_sessions(session: AsyncSession) -> None:
     user = make_user(role=UserRole.SELLER)
     session.add(user)
     await session.flush()
     session.add(Business(owner_user_id=user.id, legal_name="A", display_name="A"))
     session.add(
-        RefreshToken(
+        Session(
             user_id=user.id,
+            family_id=uuid.uuid4(),
             token_hash=uuid.uuid4().hex,
-            expires_at=text("now() + interval '30 days'"),
+            idle_expires_at=text("now() + interval '30 days'"),
+            absolute_expires_at=text("now() + interval '180 days'"),
         )
     )
     await session.flush()
@@ -249,7 +251,7 @@ async def test_deleting_a_user_removes_business_and_tokens(session: AsyncSession
     await session.execute(text("DELETE FROM users WHERE id = :id"), {"id": user.id})
 
     businesses = await session.execute(select(Business).where(Business.owner_user_id == user.id))
-    tokens = await session.execute(select(RefreshToken).where(RefreshToken.user_id == user.id))
+    tokens = await session.execute(select(Session).where(Session.user_id == user.id))
     assert businesses.scalars().all() == []
     assert tokens.scalars().all() == []
 

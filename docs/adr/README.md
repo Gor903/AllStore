@@ -9,7 +9,7 @@
 
 | # | Решение | Нужно к этапу | Статус |
 | - | ------- | ------------- | ------ |
-| 1 | [Авторизация](0001-authentication.md) | 2 | accepted |
+| 1 | [Авторизация](0001-authentication.md) | 2 | superseded by 18 |
 | 2 | [Хранение паролей](0002-password-storage.md) | 2 | accepted |
 | 3 | Стратегия кэширования публичных страниц | 6 | открыт |
 | 4 | [Типы frontend из OpenAPI](0004-api-types-generation.md) | 2 | accepted |
@@ -25,3 +25,4 @@
 | 15 | [Иерархия ролей и модерация](0015-roles-and-moderation.md) | 18 | accepted |
 | 16 | [Админка: жизненный цикл, видимость, состояние](0016-admin-panel-and-visibility.md) | 19 | accepted |
 | 17 | [Модератора заводит администратор, приглашений нет](0017-moderators-appointed-directly.md) | 19 | accepted |
+| 18 | [Серверные сессии и привязка к устройству](0018-server-side-sessions.md) | рефактор auth | accepted |

@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.models import RefreshToken, User, UserStatus
+from app.models import Session, User, UserStatus
 from tests.integration.conftest import BUYER_PAYLOAD, csrf_headers, login, register_buyer
 
 pytestmark = pytest.mark.integration
@@ -50,7 +50,7 @@ async def test_login_succeeds_with_correct_password(api_client: AsyncClient) -> 
 
     assert response.status_code == 200
     assert response.json()["email"] == EMAIL
-    assert api_client.cookies[get_settings().access_cookie]
+    assert api_client.cookies[get_settings().session_cookie]
 
 
 async def test_login_is_case_insensitive_in_email(api_client: AsyncClient) -> None:
@@ -96,7 +96,7 @@ async def test_logout_revokes_the_refresh_token(
     response = await api_client.post("/api/v1/auth/logout", headers=csrf_headers(api_client))
 
     assert response.status_code == 204
-    tokens = (await session.execute(select(RefreshToken))).scalars().all()
+    tokens = (await session.execute(select(Session))).scalars().all()
     assert all(token.revoked_at is not None for token in tokens)
 
 
@@ -106,8 +106,7 @@ async def test_logout_clears_cookies(api_client: AsyncClient) -> None:
 
     await api_client.post("/api/v1/auth/logout", headers=csrf_headers(api_client))
 
-    assert settings.access_cookie not in api_client.cookies
-    assert settings.refresh_cookie not in api_client.cookies
+    assert settings.session_cookie not in api_client.cookies
 
 
 async def test_logout_without_csrf_header_is_refused(api_client: AsyncClient) -> None:

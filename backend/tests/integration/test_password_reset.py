@@ -5,7 +5,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import PasswordResetToken, RefreshToken, User
+from app.models import PasswordResetToken, Session, User
 from app.services import auth as auth_service
 from tests.integration.conftest import login, register_buyer
 
@@ -109,7 +109,7 @@ async def test_reset_revokes_existing_sessions(
         json={"token": sent_tokens[0][1], "password": NEW_PASSWORD},
     )
 
-    tokens = (await session.execute(select(RefreshToken))).scalars().all()
+    tokens = (await session.execute(select(Session))).scalars().all()
     assert tokens
     assert all(token.revoked_at is not None for token in tokens)
 
