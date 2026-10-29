@@ -142,7 +142,7 @@ async def start_linking(user: CurrentUser, settings: SettingsDep) -> RedirectRes
     return await _leave(settings, user.role.value, linking=True)
 
 
-@router.get("/callback")
+@router.get("/callback", dependencies=[Depends(limit_login)])
 async def callback(
     request: Request,
     viewer: OptionalUser,

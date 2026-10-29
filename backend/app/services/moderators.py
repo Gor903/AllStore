@@ -12,6 +12,7 @@ be handed over in a chat message without the role being handed over with it.
 """
 
 import uuid
+from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -45,6 +46,7 @@ async def create(session: AsyncSession, admin: User, email: str, password: str) 
             role=UserRole.MODERATOR,
             # handed over, therefore temporary — see the module docstring
             must_change_password=True,
+            password_handed_over_at=datetime.now(UTC),
         ),
     )
     await audit.record(session, admin, "moderator.created", ENTITY, moderator.id, email=normalized)
@@ -65,6 +67,7 @@ async def reset_password(
     moderator = await moderator_record.find_moderator(session, user_id)
     moderator.password_hash = await hash_password_in_thread(password)
     moderator.must_change_password = True
+    moderator.password_handed_over_at = datetime.now(UTC)
     await session.flush()
     await audit.record(session, admin, "moderator.password_reset", ENTITY, moderator.id)
     return moderator

@@ -18,6 +18,8 @@ x-backend-environment: &backend-environment
   # prefixes differ — but emptying the tally should not also throw away the letters waiting
   # to be sent, and `FLUSHDB` does not read comments.
   CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/1}
+  # a password typed on somebody's command line stops working after this many hours
+  HANDED_OVER_PASSWORD_TTL_HOURS: ${HANDED_OVER_PASSWORD_TTL_HOURS:-72}
   # the first administrator: unset leaves the platform without one until bootstrap is run
   ADMIN_EMAIL: ${ADMIN_EMAIL:-}
   ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}

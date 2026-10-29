@@ -70,6 +70,11 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     must_change_password: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=text("false"), nullable=False
     )
+    # When it was handed over, so that it can stop working. A temporary password with no
+    # expiry is a permanent one that nobody got round to replacing — and the whole reason it
+    # is marked temporary is that somebody else has seen it. Meaningless unless the flag
+    # above is set, and cleared with it.
+    password_handed_over_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     business: Mapped["Business | None"] = relationship(
         back_populates="owner", cascade="all, delete-orphan"
