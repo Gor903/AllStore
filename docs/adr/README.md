@@ -10,7 +10,7 @@
 | # | Решение | Нужно к этапу | Статус |
 | - | ------- | ------------- | ------ |
 | 1 | [Авторизация](0001-authentication.md) | 2 | superseded by 18 |
-| 2 | [Хранение паролей](0002-password-storage.md) | 2 | accepted |
+| 2 | [Хранение паролей](0002-password-storage.md) | 2 | accepted, параметры уточнены [ADR 25](0025-argon2-cost-measured.md) |
 | 3 | Стратегия кэширования публичных страниц | 6 | открыт |
 | 4 | [Типы frontend из OpenAPI](0004-api-types-generation.md) | 2 | accepted |
 | 5 | Провайдер email-уведомлений | 8 | открыт, временно обойдён [ADR 19](0019-transactional-mail.md) |
@@ -32,3 +32,4 @@
 | 22 | [Фоновая работа: Celery, почта через очередь](0022-background-work-on-celery.md) | рефактор auth | accepted |
 | 23 | [Второй фактор для staff: TOTP](0023-staff-second-factor.md) | рефактор auth | accepted |
 | 24 | [Сигналы риска: заложены и выключены](0024-risk-signals.md) | рефактор auth | accepted |
+| 25 | [argon2: 64 MiB, взятые из замера](0025-argon2-cost-measured.md) | рефактор auth | accepted, уточняет 2 |
