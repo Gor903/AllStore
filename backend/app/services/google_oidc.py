@@ -68,6 +68,16 @@ class AddressBelongsToAPasswordAccount(ConflictError):
     code = "link_from_settings"
 
 
+class StaffMustUseTheirOwnAddress(ConflictError):
+    """A moderator or an administrator attaching a Google account on another address."""
+
+    code = "staff_address_mismatch"
+
+
+# Roles whose Google account has to be the one on the account's own address.
+STAFF = (UserRole.ADMIN, UserRole.MODERATOR)
+
+
 @dataclass(frozen=True)
 class Handshake:
     """What the browser is sent away with, and what has to come back with it."""
@@ -250,7 +260,21 @@ async def sign_in(session: AsyncSession, assertion: Assertion, role: UserRole) -
 
 
 async def link(session: AsyncSession, user: User, assertion: Assertion) -> UserIdentity:
-    """Attaches a Google account to one that already exists, from inside its own session."""
+    """Attaches a Google account to one that already exists, from inside its own session.
+
+    A moderator or an administrator may attach only a Google account on the same address as
+    the one they administer with. Everybody else may attach any of theirs.
+
+    The difference is not about trusting the person — they are signed in and have just proved
+    their password. It is about what an administrator's account is: a seat with a name on it
+    that somebody else will one day have to audit, and a second door into it through a
+    personal mailbox the platform knows nothing about is a door nobody can account for. For a
+    buyer the same freedom is simply convenience, and convenience is the point of the feature.
+    """
+    if user.role in STAFF and user.email != assertion.email:
+        raise StaffMustUseTheirOwnAddress(
+            "Привязать можно только аккаунт Google на том же адресе, что и у этого аккаунта"
+        )
     taken = await identities.get(session, IdentityProvider.GOOGLE, assertion.subject)
     if taken is not None:
         if taken.user_id == user.id:

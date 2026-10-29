@@ -400,6 +400,92 @@ async def _handshake_for_linking(client: AsyncClient) -> str:
     return httpx.URL(leaving.headers["location"]).params["state"]
 
 
+async def test_staff_may_only_attach_their_own_address(
+    client: AsyncClient, google: Any, session: AsyncSession
+) -> None:
+    """An administrator's account is a seat somebody will one day have to audit, and a second
+    door into it through a personal mailbox the platform knows nothing about is a door nobody
+    can account for."""
+    from tests.integration.conftest import act_as, seed_staff
+
+    moderator = await seed_staff(session, UserRole.MODERATOR)
+    await act_as(client, moderator)
+    await client.post("/api/v1/auth/verify", json={"password": "staff-password-1"})
+    state = await _handshake_for_linking(client)
+    # Google says this person owns person@gmail.com, which is not the moderator's address
+    google(nonce=_nonce(client))
+
+    refused = await client.get(
+        CALLBACK, params={"code": "a", "state": state}, follow_redirects=False
+    )
+
+    assert refused.status_code == 409
+    assert refused.json()["error"]["code"] == "staff_address_mismatch"
+    assert (await session.execute(select(UserIdentity))).scalars().all() == []
+
+
+async def test_staff_may_attach_the_matching_one(
+    client: AsyncClient, google: Any, session: AsyncSession
+) -> None:
+    from tests.integration.conftest import act_as, seed_staff
+
+    moderator = await seed_staff(session, UserRole.MODERATOR)
+    await act_as(client, moderator)
+    await client.post("/api/v1/auth/verify", json={"password": "staff-password-1"})
+    state = await _handshake_for_linking(client)
+    google(nonce=_nonce(client), email=moderator.email)
+
+    linked = await client.get(
+        CALLBACK, params={"code": "a", "state": state}, follow_redirects=False
+    )
+
+    assert linked.status_code == 303
+    assert len((await session.execute(select(UserIdentity))).scalars().all()) == 1
+
+
+async def test_a_buyer_may_attach_any_of_theirs(
+    client: AsyncClient, google: Any, session: AsyncSession
+) -> None:
+    """The same freedom is simply convenience here, and convenience is the point."""
+    await register_buyer(client, email="buyer-elsewhere@example.com")
+    await client.post("/api/v1/auth/verify", json={"password": "buyer-password-1"})
+    state = await _handshake_for_linking(client)
+    google(nonce=_nonce(client))
+
+    linked = await client.get(
+        CALLBACK, params={"code": "a", "state": state}, follow_redirects=False
+    )
+
+    assert linked.status_code == 303
+    assert len((await session.execute(select(UserIdentity))).scalars().all()) == 1
+
+
+async def test_staff_who_linked_it_can_sign_in_with_it_and_still_needs_a_code(
+    client: AsyncClient, google: Any, session: AsyncSession
+) -> None:
+    """The whole point of the second factor is that neither door skips it."""
+    from tests.integration.conftest import act_as, seed_staff
+
+    moderator = await seed_staff(session, UserRole.MODERATOR)
+    await act_as(client, moderator)
+    await client.post("/api/v1/auth/verify", json={"password": "staff-password-1"})
+    state = await _handshake_for_linking(client)
+    google(nonce=_nonce(client), email=moderator.email)
+    await client.get(CALLBACK, params={"code": "a", "state": state}, follow_redirects=False)
+    client.cookies.clear()
+
+    state = await _handshake(client)
+    google(nonce=_nonce(client), email=moderator.email)
+    paused = await client.get(
+        CALLBACK, params={"code": "b", "state": state}, follow_redirects=False
+    )
+
+    # a redirect to the sign-in screen asking for the code, not a session
+    assert paused.status_code == 303
+    assert "totp=1" in paused.headers["location"]
+    assert get_settings().session_cookie not in client.cookies
+
+
 async def test_an_identity_belonging_to_somebody_else_is_not_there(
     client: AsyncClient, google: Any
 ) -> None:
@@ -412,3 +498,30 @@ async def test_an_identity_belonging_to_somebody_else_is_not_there(
     )
 
     assert refused.status_code == 403
+
+
+async def test_the_settings_screen_is_told_whether_google_is_offered(
+    client: AsyncClient, google: Any
+) -> None:
+    """A screen that could not tell "you have none" from "we cannot ask" would show a button
+    leading straight to a refusal."""
+    await register_buyer(client)
+
+    answered = await client.get("/api/v1/auth/google/identities")
+
+    assert answered.json() == {"configured": True, "items": []}
+
+
+async def test_and_told_when_it_is_not(session: AsyncSession) -> None:
+    app = create_app()
+
+    async def _use_test_session() -> AsyncSession:
+        return session
+
+    app.dependency_overrides[get_session] = _use_test_session
+    async with AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as bare:
+        await register_buyer(bare)
+
+        answered = await bare.get("/api/v1/auth/google/identities")
+
+    assert answered.json() == {"configured": False, "items": []}

@@ -110,6 +110,21 @@ export async function getSecondFactor(): Promise<SecondFactorStatus | null> {
   return backendGet<SecondFactorStatus>("/auth/totp");
 }
 
+export type GoogleIdentity = { id: string; provider: string; email_at_link: string };
+export type GoogleIdentities = { configured: boolean; items: GoogleIdentity[] };
+
+/**
+ * What this account can be signed in with besides its password, and whether the question is
+ * open at all.
+ *
+ * `configured` is answered by the server rather than guessed from an empty list: with no
+ * client credentials the platform does not offer Google, and a screen that could not tell
+ * the two apart would show a button leading to a refusal.
+ */
+export async function getGoogleIdentities(): Promise<GoogleIdentities | null> {
+  return backendGet<GoogleIdentities>("/auth/google/identities");
+}
+
 /** The devices this account is signed in on. Everyone has at least one: the one asking. */
 
 export async function getMyDevices(): Promise<DeviceList | null> {
