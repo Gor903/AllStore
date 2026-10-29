@@ -103,6 +103,72 @@ def registration_attempt_letter(settings: Settings, email: str) -> Letter:
     )
 
 
+def new_device_letter(
+    settings: Settings, email: str, user_agent: str | None, ip: str | None
+) -> Letter:
+    """Tells somebody their account was opened somewhere new.
+
+    The letter nobody asks for and the one that catches a stolen password: the thief has the
+    credentials and the account, and the only thing they do not have is the inbox. What they
+    cannot prevent is this arriving in it.
+
+    Deliberately not sent on every sign-in. A letter for each of somebody's own daily logins
+    is a letter they stop reading, and then the one that mattered goes unread too.
+    """
+    where = ", ".join(part for part in (user_agent, ip) if part) or "неизвестное устройство"
+    return Letter(
+        to=email,
+        subject="Новый вход в аккаунт — AllStore.am",
+        body=(
+            f"В ваш аккаунт на AllStore.am вошли с нового устройства:\n{where}\n\n"
+            f"Если это были вы — ничего делать не нужно.\n\n"
+            "Если нет — завершите чужие сессии и смените пароль:\n"
+            f"{settings.public_url}/devices\n"
+            f"{settings.public_url}/password/forgot\n"
+        ),
+    )
+
+
+def password_changed_letter(settings: Settings, email: str) -> Letter:
+    """Somebody who did not change it is the only person this concerns, and the only way they
+    find out in time."""
+    return Letter(
+        to=email,
+        subject="Пароль изменён — AllStore.am",
+        body=(
+            "Пароль вашего аккаунта на AllStore.am был изменён, все сессии завершены.\n\n"
+            "Если это были не вы — восстановите доступ немедленно:\n"
+            f"{settings.public_url}/password/forgot\n"
+        ),
+    )
+
+
+def google_link_letter(settings: Settings, email: str, *, attached: bool) -> Letter:
+    """A way into the account was added, or taken away.
+
+    Both directions are worth a letter and for opposite reasons. An attachment nobody asked
+    for means somebody else can now open the account without knowing the password — the one
+    change an intruder makes that leaves the password working, so the owner notices nothing.
+    A detachment nobody asked for is how an owner is locked out of their own way in.
+    """
+    what = (
+        "К вашему аккаунту на AllStore.am привязан вход через Google."
+        if attached
+        else "От вашего аккаунта на AllStore.am отвязан вход через Google."
+    )
+    return Letter(
+        to=email,
+        subject="Способы входа изменились — AllStore.am",
+        body=(
+            f"{what}\n\n"
+            "Если это были вы — ничего делать не нужно.\n\n"
+            "Если нет — смените пароль и завершите чужие сессии:\n"
+            f"{settings.public_url}/password/forgot\n"
+            f"{settings.public_url}/devices\n"
+        ),
+    )
+
+
 async def deliver(settings: Settings, letter: Letter) -> None:
     """Called from a background task, after the answer has gone out.
 
@@ -110,9 +176,11 @@ async def deliver(settings: Settings, letter: Letter) -> None:
     goes through this module, so there is one place to look when somebody asks what the
     platform sends and one place to add a log, a queue or a suppression list later.
     """
-    if not settings.smtp_host and settings.is_local:
-        # the stand has no mail server and does not need one; the token is the only way to
-        # walk the reset path locally, and the environment check is what keeps it local
+    if settings.is_local:
+        # The stand's log is its inbox. The confirmation and reset links are read from there —
+        # by a person walking the path and by the end-to-end run alike — and that stays true
+        # once a real transport is configured: pointing the stand at somebody's mailbox must
+        # not take away its only way of reading its own letters. The environment check is what
+        # keeps a link that is a credential out of a production log.
         logger.info("letter to %s: %s", letter.to, letter.body)
-        return
     await send(settings, letter)

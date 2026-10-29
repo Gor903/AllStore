@@ -77,9 +77,12 @@ services:
       # Empty host keeps the stand without a mail server: letters go to the log, which is
       # where the reset link is read from locally. Fill these in .env to send for real.
       SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_STARTTLS: ${SMTP_STARTTLS:-true}
       MAIL_FROM: ${MAIL_FROM:-noreply@allstore.am}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-AllStore.am}
       SITE_URL: ${SITE_URL:-http://localhost:${HTTP_PORT:-8080}}
       # empty means the platform does not offer signing in with Google at all
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}

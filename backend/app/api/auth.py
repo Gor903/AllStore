@@ -7,6 +7,8 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Request, Response, stat
 from app.core.client_ip import client_ip
 from app.core.config import Settings
 from app.core.cookies import clear_session_cookies, set_session_cookies
+from app.core.errors import AppError
+from app.core.logging import get_logger
 from app.deps.auth import (
     CurrentSession,
     CurrentUser,
@@ -26,6 +28,7 @@ from app.deps.rate_limit import (
     limit_reset_request,
 )
 from app.models import User
+from app.repositories import sessions as sessions_repo
 from app.schemas.auth import (
     BuyerRegisterRequest,
     EmailChangeRequest,
@@ -44,6 +47,8 @@ from app.services import auth as auth_service
 from app.services import sessions as session_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+logger = get_logger(__name__)
 
 # what these entries are about: the account itself, not anything it owns
 ENTITY = "user"
@@ -145,6 +150,7 @@ async def login(
     payload: LoginRequest,
     response: Response,
     request: Request,
+    background: BackgroundTasks,
     settings: SettingsDep,
     session: SessionDep,
 ) -> UserRead:
@@ -155,15 +161,42 @@ async def login(
     waiting = await delay_for_account(request, payload.normalized_email)
     if waiting > 0:
         await asyncio.sleep(waiting)
-    user = await auth_service.authenticate(
-        session, payload.normalized_email, payload.password.get_secret_value()
-    )
+    try:
+        user = await auth_service.authenticate(
+            session, payload.normalized_email, payload.password.get_secret_value()
+        )
+    except AppError as refusal:
+        # Logged, deliberately not written to the journal. The journal is the record of
+        # deliberate acts by people the platform can name, and it is never pruned; a row per
+        # failed guess would let an anonymous caller fill it at the limiter's pace and bury
+        # the moderation record underneath. A log line costs nothing, has a retention policy,
+        # and is what a "burst of failed sign-ins" alert would be built on anyway. The
+        # successful half is not logged here because it is already recorded properly, in
+        # `sessions` — with the address, the device, the method and the time.
+        logger.warning(
+            "sign-in refused for %s from %s: %s",
+            payload.normalized_email,
+            client_ip(request, settings),
+            refusal.code,
+        )
+        raise
     # they proved the account is theirs, so the guesses that came before them stop counting
     await forget_account_delay(request, payload.normalized_email)
-    issued = await session_service.open_session(
-        session, settings, user, **_context(request, settings)
-    )
+    # asked before the new session exists, so it means "was it already open somewhere"
+    opened_elsewhere = await sessions_repo.has_live_family(session, user.id)
+    context = _context(request, settings)
+    issued = await session_service.open_session(session, settings, user, **context)
     await session.commit()
+    if opened_elsewhere:
+        # only when the account was already open somewhere: a letter for every one of
+        # somebody's own daily logins is a letter they stop reading
+        background.add_task(
+            notifications.deliver,
+            settings,
+            notifications.new_device_letter(
+                settings, user.email, context["user_agent"], context["ip"]
+            ),
+        )
     set_session_cookies(response, settings, issued)
     return UserRead.model_validate(user)
 
@@ -323,6 +356,7 @@ async def change_password(
     payload: PasswordChangeRequest,
     # the one route an account owing a change must reach, and the reason SignedInUser exists
     user: SignedInUser,
+    background: BackgroundTasks,
     response: Response,
     settings: SettingsDep,
     session: SessionDep,
@@ -338,6 +372,9 @@ async def change_password(
     )
     await audit.record(session, user, "user.password_changed", ENTITY, user.id)
     await session.commit()
+    background.add_task(
+        notifications.deliver, settings, notifications.password_changed_letter(settings, user.email)
+    )
     # every session ended with the change, so the cookies in hand are stale
     clear_session_cookies(response, settings)
     return MessageResponse(message="Пароль изменён, войдите заново")

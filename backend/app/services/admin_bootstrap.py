@@ -27,7 +27,12 @@ from app.core.config import Settings
 from app.core.security import hash_password
 from app.models import User, UserRole, UserStatus
 from app.repositories import account_blocks as blocks_repo
+from app.repositories import sessions as sessions_repo
 from app.repositories import users as users_repo
+from app.services import audit
+from app.services.sessions import CREDENTIALS_CHANGED
+
+ENTITY = "user"
 
 # any constant will do, as long as every bootstrap uses the same one: this is a name for the
 # queue, not a value anybody reads
@@ -81,9 +86,10 @@ async def bootstrap(
         # is its own and stays that way
         existing.role = UserRole.ADMIN
         await _reactivate(session, existing)
+        await _write_it_down(session, existing, "user.admin_promoted")
         return Result(Outcome.PROMOTED, normalized)
 
-    await users_repo.add(
+    created = await users_repo.add(
         session,
         User(
             email=normalized,
@@ -94,7 +100,25 @@ async def bootstrap(
             must_change_password=True,
         ),
     )
+    await _write_it_down(session, created, "user.admin_bootstrapped")
     return Result(Outcome.CREATED, normalized)
+
+
+async def _write_it_down(session: AsyncSession, admin: User, action: str) -> None:
+    """Leaves the journal entry that nobody else can leave.
+
+    Every other way of becoming an administrator is somebody appointing somebody, and the
+    journal names them both. This one answers to whoever holds the server, so there is no
+    actor to name — and that is exactly why it has to be written down. An administrator who
+    appears with no entry at all is indistinguishable from one who was always there; an
+    actorless entry says the authority came from outside the interface, and when.
+
+    The entry is flushed, not committed: both callers commit, and the record must land in the
+    same transaction as the appointment or it would be a record of something that may not have
+    happened.
+    """
+    await audit.record(session, None, action, ENTITY, admin.id, email=admin.email)
+    await session.flush()
 
 
 async def _keep_or_restore(
@@ -108,6 +132,11 @@ async def _keep_or_restore(
     # same reasoning as a fresh bootstrap: whoever holds the server now knows this password
     admin.must_change_password = True
     await _reactivate(session, admin)
+    # The reason anybody runs this is that the account may not be theirs any more, so leaving
+    # whoever is already signed in signed in would answer the wrong half of the problem: the
+    # password would be new and the intruder would still be inside.
+    await sessions_repo.revoke_all_for_user(session, admin.id, CREDENTIALS_CHANGED)
+    await _write_it_down(session, admin, "user.admin_password_reset")
     return Result(Outcome.PASSWORD_RESET, admin.email)
 
 

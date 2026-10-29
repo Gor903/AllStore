@@ -71,7 +71,14 @@ class Live:
 class Replayed:
     """A token came back after it had been retired, so every session of that device was
     revoked. Returned rather than raised because the revocation is a write and the commit
-    belongs to the endpoint — the same lesson as `rotate_refresh_token` before it."""
+    belongs to the endpoint — the same lesson as `rotate_refresh_token` before it.
+
+    Carries who it happened to, so the journal entry names the account rather than leaving
+    an administrator to work it out from a revoked row.
+    """
+
+    user_id: uuid.UUID
+    family_id: uuid.UUID
 
 
 def _issued(settings: Settings, family_id: uuid.UUID, token: str) -> IssuedSession:
@@ -160,7 +167,7 @@ async def _answer_for_a_retired_token(
         # a tab that was a moment late; the jar it shares already holds the replacement
         return Live(session=row)
     await repo.revoke_family(db, row.family_id, REPLAYED)
-    return Replayed()
+    return Replayed(user_id=row.user_id, family_id=row.family_id)
 
 
 async def peek(db: DbSession, settings: Settings, raw_token: str) -> Session | None:

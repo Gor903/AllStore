@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.core.config import get_settings
 from app.core.security import hash_password, verify_password
-from app.models import AccountBlock, User, UserRole, UserStatus
+from app.models import AccountBlock, AuditLog, User, UserRole, UserStatus
 from app.services.admin_bootstrap import (
     BootstrapNotConfiguredError,
     Outcome,
@@ -128,6 +128,7 @@ async def test_startup_creates_the_administrator_the_environment_names(
             assert len(await admins(session)) == 1
         finally:
             await session.execute(delete(User).where(User.email == email))
+            await _forget_what_was_written_down(session)
             await session.commit()
 
 
@@ -253,7 +254,18 @@ async def _bootstrap_committed(engine: AsyncEngine, email: str) -> Outcome:
 async def _forget_administrators(engine: AsyncEngine) -> None:
     async with AsyncSession(engine) as session:
         await session.execute(delete(User).where(User.role == UserRole.ADMIN))
+        await _forget_what_was_written_down(session)
         await session.commit()
+
+
+async def _forget_what_was_written_down(session: AsyncSession) -> None:
+    """The journal does not go away with the account it is about, which is the point of it.
+
+    Deleting the administrator is not enough here: `entity_id` is a plain column and the actor
+    of a bootstrap entry is nobody, so nothing cascades and the entry survives its subject — as
+    it should everywhere except in a test that committed one on purpose.
+    """
+    await session.execute(delete(AuditLog).where(AuditLog.action.startswith("user.admin_")))
 
 
 async def test_two_bootstraps_at_once_leave_one_administrator(db_engine: AsyncEngine) -> None:

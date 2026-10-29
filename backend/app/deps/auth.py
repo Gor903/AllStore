@@ -21,6 +21,7 @@ from app.core.security import csrf_token_for
 from app.db.session import get_session
 from app.deps.settings import settings_dep
 from app.models import Session, User, UserRole
+from app.services import audit
 from app.services import auth as auth_service
 from app.services import sessions as session_service
 
@@ -42,6 +43,12 @@ async def get_session_row(
         raise AuthenticationError("Требуется вход")
     outcome = await session_service.touch(db, settings, token, ip=client_ip(request, settings))
     if isinstance(outcome, session_service.Replayed):
+        # Written with no actor: the token was presented by a party the platform cannot name,
+        # and putting the owner in that column would say they did it. The entity is the
+        # account it happened to, which is who an administrator would be looking for.
+        await audit.record(
+            db, None, "session.replayed", "user", outcome.user_id, device=str(outcome.family_id)
+        )
         # `touch` has revoked the family; committing it is this line's job and nobody else's.
         # The route never runs, so the commit it would have done never happens — which is
         # exactly how the old refresh rotation threw its own answer to a theft away.

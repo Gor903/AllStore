@@ -322,6 +322,42 @@ async def test_the_last_way_in_cannot_be_detached(
     assert refused.status_code == 409
 
 
+async def test_attaching_and_detaching_a_way_in_is_reported_to_the_owner(
+    client: AsyncClient, google: Any, monkeypatch: pytest.MonkeyPatch, session: AsyncSession
+) -> None:
+    """An attachment nobody asked for is the one change an intruder makes that leaves the
+    password working — so the owner notices nothing unless they are told."""
+    from app.services import notifications
+
+    caught: list[Any] = []
+
+    async def fake_deliver(settings: object, letter: Any) -> None:
+        caught.append(letter)
+
+    monkeypatch.setattr(notifications, "deliver", fake_deliver)
+    await register_buyer(client, email="owner@example.com")
+    caught.clear()  # registration writes its own letter, and this test is not about that one
+    state = await _handshake_for_linking(client)
+    google(nonce=_nonce(client))
+    await client.get(CALLBACK, params={"code": "a", "state": state}, follow_redirects=False)
+    identity = (await session.execute(select(UserIdentity))).scalars().one()
+
+    await client.delete(
+        f"/api/v1/auth/google/identities/{identity.id}", headers=csrf_headers(client)
+    )
+
+    assert [letter.to for letter in caught] == ["owner@example.com", "owner@example.com"]
+    assert "привязан" in caught[0].body
+    assert "отвязан" in caught[1].body
+
+
+async def _handshake_for_linking(client: AsyncClient) -> str:
+    """The same journey as `_handshake`, started from inside an account that already exists."""
+    leaving = await client.get("/api/v1/auth/google/link", follow_redirects=False)
+    assert leaving.status_code == 307
+    return httpx.URL(leaving.headers["location"]).params["state"]
+
+
 async def test_an_identity_belonging_to_somebody_else_is_not_there(
     client: AsyncClient, google: Any
 ) -> None:

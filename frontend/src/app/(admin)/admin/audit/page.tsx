@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { AdminNav } from "@/components/admin/AdminNav";
 import { Pagination } from "@/components/catalog/Pagination";
+import { actionLabel, actorLabel, described, SUBJECTS } from "@/lib/audit-labels";
 import { parseCatalogQuery, toSearchParams } from "@/lib/catalog-query";
 import { ADMIN_PAGE_SIZE, getAuditLogs, requireRole } from "@/lib/dal";
 
@@ -12,67 +13,6 @@ export const metadata: Metadata = {
   title: "Журнал действий",
   robots: { index: false, follow: false },
 };
-
-/** Every action the backend writes down, in the words an administrator reads it in. */
-const ACTION: Record<string, string> = {
-  "user.role_changed": "сменил роль",
-  "user.admin_transferred": "передал администрирование",
-  "user.password_changed": "сменил себе пароль",
-  "user.email_changed": "сменил себе логин",
-  "user.blocked": "заблокировал",
-  "user.unblocked": "разблокировал",
-  "moderator.invited": "пригласил модератора",
-  "moderator.invite_revoked": "отозвал приглашение",
-  "moderator.invite_accepted": "принял приглашение модератора",
-  "business.approved": "допустил продавца",
-  "business.rejected": "отклонил заявку продавца",
-  "business.resubmitted": "подал заявку снова",
-  "business.suspended": "приостановил магазин",
-  "business.blocked": "заблокировал магазин",
-  "business.restored": "восстановил магазин",
-  "product.approved": "одобрил товар",
-  "product.rejected": "отклонил товар",
-  "product.hidden": "снял товар с публикации",
-  "product.published": "вернул товар в каталог",
-  "store.customer_blocked": "закрыл магазин покупателю",
-  "store.customer_unblocked": "вернул покупателю доступ в магазин",
-  "report.upheld": "признал жалобу обоснованной",
-  "report.dismissed": "отклонил жалобу",
-  "category.created": "завёл категорию",
-  "category.renamed": "переименовал категорию",
-  "category.hidden": "скрыл категорию",
-  "category.shown": "вернул категорию",
-};
-
-/** Prefix matching, so a subject keeps working as new actions about it are added. */
-const SUBJECTS = [
-  { value: "", label: "Любое действие" },
-  { value: "user.", label: "Аккаунты" },
-  { value: "moderator.", label: "Модераторы" },
-  { value: "business.", label: "Продавцы" },
-  { value: "product.", label: "Товары" },
-  { value: "store.", label: "Магазины" },
-  { value: "report.", label: "Жалобы" },
-  { value: "category.", label: "Категории" },
-];
-
-const DETAIL: Record<string, string> = {
-  from: "было",
-  to: "стало",
-  reason: "причина",
-  name: "название",
-  slug: "адрес",
-  email: "адрес",
-  buyer: "покупатель",
-  subject: "предмет",
-  closed: "закрыто жалоб",
-};
-
-function described(details: Record<string, unknown>): string {
-  return Object.entries(details)
-    .map(([key, value]) => `${DETAIL[key] ?? key}: ${String(value)}`)
-    .join(", ");
-}
 
 export default async function AuditLogPage({ searchParams }: PageProps<"/admin/audit">) {
   await requireRole("admin");
@@ -142,8 +82,8 @@ export default async function AuditLogPage({ searchParams }: PageProps<"/admin/a
             {page.items.map((entry) => (
               <li key={entry.id} className="flex flex-col gap-1 p-4">
                 <p className="text-sm">
-                  <span className="font-medium">{entry.actor_email ?? "аккаунт удалён"}</span>{" "}
-                  {ACTION[entry.action] ?? entry.action}
+                  <span className="font-medium">{actorLabel(entry.action, entry.actor_email)}</span>{" "}
+                  {actionLabel(entry.action)}
                 </p>
                 {Object.keys(entry.details).length === 0 ? null : (
                   <p className="text-sm text-ink-muted">{described(entry.details)}</p>

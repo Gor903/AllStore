@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import hash_password, verify_password
-from app.models import User, UserRole
+from app.models import AuditLog, User, UserRole
 from app.services.auth import password_of
 
 pytestmark = pytest.mark.integration
@@ -87,3 +87,37 @@ async def test_a_second_run_changes_nothing(session: AsyncSession) -> None:
 
     assert "ничего не менялось" in outcome
     assert verify_password(PASSWORD, password_of(await found(session, email)))
+
+
+async def test_every_grant_leaves_a_record_with_nobody_in_the_actor(
+    session: AsyncSession,
+) -> None:
+    """Authority handed out from a server shell answers to whoever holds the shell, so there
+    is no actor to name — and that is precisely why it has to be written down. A moderator who
+    appears with no entry is indistinguishable from one who was always there."""
+    email = an_email()
+
+    await apply(session, email, PASSWORD, UserRole.MODERATOR)
+    await apply(session, email, PASSWORD, UserRole.SELLER)
+    await apply(session, email, PASSWORD, UserRole.SELLER, reset_password=True)
+
+    written = (await session.execute(select(AuditLog).order_by(AuditLog.created_at))).scalars()
+    entries = list(written)
+    assert [entry.action for entry in entries] == [
+        "user.role_granted",
+        "user.role_granted",
+        "user.password_granted",
+    ]
+    assert all(entry.actor_user_id is None for entry in entries)
+    assert entries[1].details["from"] == "moderator"
+
+
+async def test_a_run_that_changes_nothing_writes_nothing(session: AsyncSession) -> None:
+    """It is safe to re-run, and a journal of re-runs is not a journal."""
+    email = an_email()
+    await apply(session, email, PASSWORD, UserRole.MODERATOR)
+
+    await apply(session, email, PASSWORD, UserRole.MODERATOR)
+
+    written = (await session.execute(select(AuditLog))).scalars().all()
+    assert len(written) == 1

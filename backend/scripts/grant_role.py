@@ -42,6 +42,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine  # noqa: E4
 from app.core.config import get_settings  # noqa: E402
 from app.core.security import hash_password  # noqa: E402
 from app.models import User, UserRole  # noqa: E402
+from app.services import audit  # noqa: E402
+
+ENTITY = "user"
 
 
 async def apply(
@@ -53,34 +56,50 @@ async def apply(
     reset_password: bool = False,
 ) -> str:
     """Creates the account or moves an existing one into the role. Returns what to tell the
-    operator; the caller owns the session and the commit."""
+    operator; the caller owns the session and the commit.
+
+    Every outcome that changes something leaves a journal entry with no actor, for the reason
+    given in `admin_bootstrap`: authority granted from a server shell answers to whoever holds
+    the shell, and a moderator who appears with no record at all is indistinguishable from one
+    who was always there.
+    """
     found = await session.execute(select(User).where(User.email == email))
     user = found.scalar_one_or_none()
     if user is None:
-        session.add(
-            User(
-                email=email,
-                password_hash=hash_password(password),
-                role=role,
-                # the password was typed on somebody else's command line, so it gets the
-                # account in once and no further — same rule as an administrator bootstrapped
-                # from the environment
-                must_change_password=True,
-            )
+        created = User(
+            email=email,
+            password_hash=hash_password(password),
+            role=role,
+            # the password was typed on somebody else's command line, so it gets the
+            # account in once and no further — same rule as an administrator bootstrapped
+            # from the environment
+            must_change_password=True,
         )
+        session.add(created)
+        await session.flush()
+        await _write_it_down(session, created, "user.role_granted")
         return f"{email}: {role.value} (создан, пароль временный)"
     if reset_password:
         user.role = role
         user.password_hash = hash_password(password)
         # handed over again, so it expires again
         user.must_change_password = True
+        await _write_it_down(session, user, "user.password_granted")
         return f"{email}: {role.value} (пароль заменён, временный)"
     if user.role is role:
+        # nothing happened, so there is nothing to write down
         return f"{email}: уже {role.value}, ничего не менялось"
     was = user.role.value
     user.role = role
     # not touched: this account chose its own password long before anybody granted it a role
+    await _write_it_down(session, user, "user.role_granted", **{"from": was})
     return f"{email}: {role.value} (был {was})"
+
+
+async def _write_it_down(session: AsyncSession, user: User, action: str, **details: str) -> None:
+    await audit.record(
+        session, None, action, ENTITY, user.id, email=user.email, to=user.role.value, **details
+    )
 
 
 async def grant(email: str, password: str, role: UserRole, *, reset_password: bool) -> str:
