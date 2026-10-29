@@ -2326,6 +2326,21 @@ export interface components {
             status: "ok";
         };
         /**
+         * IdentityList
+         * @description What this account can be signed in with besides its password — and whether the
+         *     question is even open.
+         *
+         *     `configured` is here rather than inferred from an empty list, because the two mean
+         *     different things and a screen that confused them would offer a button leading to a
+         *     refusal: with no client credentials the platform does not offer Google at all.
+         */
+        IdentityList: {
+            /** Configured */
+            configured: boolean;
+            /** Items */
+            items: components["schemas"]["IdentityRead"][];
+        };
+        /**
          * IdentityRead
          * @description Another way into an account, as its owner sees it.
          */
@@ -3937,7 +3952,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["IdentityRead"][];
+                    "application/json": components["schemas"]["IdentityList"];
                 };
             };
         };

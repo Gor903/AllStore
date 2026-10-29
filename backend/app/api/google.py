@@ -38,7 +38,7 @@ from app.deps.auth import (
 from app.deps.rate_limit import limit_login
 from app.models import UserRole
 from app.repositories import identities
-from app.schemas.session import IdentityRead
+from app.schemas.session import IdentityList, IdentityRead
 from app.services import audit, google_oidc, notifications, totp
 from app.services import sessions as session_service
 
@@ -222,11 +222,16 @@ async def callback(
     return landing
 
 
-@router.get("/identities", response_model=list[IdentityRead])
-async def list_identities(user: CurrentUser, session: SessionDep) -> list[IdentityRead]:
+@router.get("/identities", response_model=IdentityList)
+async def list_identities(
+    user: CurrentUser, settings: SettingsDep, session: SessionDep
+) -> IdentityList:
     """What this account can be signed in with besides its password."""
     rows = await identities.for_user(session, user.id)
-    return [IdentityRead.model_validate(row) for row in rows]
+    return IdentityList(
+        configured=google_oidc.is_offered(settings),
+        items=[IdentityRead.model_validate(row) for row in rows],
+    )
 
 
 @router.delete(
