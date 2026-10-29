@@ -402,8 +402,57 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Change Email */
+        /**
+         * Change Email
+         * @description Asks the new address to answer. Nothing moves until it does.
+         *
+         *     This used to change the login on the spot, which meant a typo in the new address locked
+         *     the owner out of their own account: the password was right and the login was a place
+         *     nobody could read. The session is deliberately left alone — it ends when the move actually
+         *     happens, not when somebody merely asks for one.
+         */
         post: operations["change_email_api_v1_auth_email_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/email/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm Email
+         * @description Spends the link. Needs no session of its own: the token is the proof, and the person
+         *     opening it may well be on a device that was never signed in.
+         */
+        post: operations["confirm_email_api_v1_auth_email_confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/email/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request Email Verification
+         * @description Sends the confirmation letter again, for the address the account already has.
+         */
+        post: operations["request_email_verification_api_v1_auth_email_verify_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1994,6 +2043,15 @@ export interface components {
              */
             email: string;
         };
+        /**
+         * EmailConfirmRequest
+         * @description The token from the link, and nothing else: whoever opens it may be on a device that
+         *     was never signed in, which is the ordinary case for a letter.
+         */
+        EmailConfirmRequest: {
+            /** Token */
+            token: string;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -3454,6 +3512,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_email_api_v1_auth_email_confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmailConfirmRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    request_email_verification_api_v1_auth_email_verify_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageResponse"];
                 };
             };
         };

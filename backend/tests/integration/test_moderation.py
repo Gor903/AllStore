@@ -31,7 +31,7 @@ async def a_product_awaiting_review(
     client: AsyncClient, session: AsyncSession, **fields: Any
 ) -> str:
     """Leaves the client logged in as the seller who owns it."""
-    await register_seller(client, email=f"seller-{uuid.uuid4().hex}@example.com")
+    await register_seller(client, session, email=f"seller-{uuid.uuid4().hex}@example.com")
     category = await seeded_category(session)
     return str((await create_product(client, category.id, **fields)).json()["id"])
 
@@ -77,7 +77,7 @@ async def test_the_queue_says_who_and_what_stands_behind_a_product(
     api_client: AsyncClient, session: AsyncSession
 ) -> None:
     """A moderator cannot judge a category and a shop that arrive as identifiers."""
-    await register_seller(api_client, email=f"seller-{uuid.uuid4().hex}@example.com")
+    await register_seller(api_client, session, email=f"seller-{uuid.uuid4().hex}@example.com")
     category = await seeded_category(session)
     await api_client.post(
         "/api/v1/stores", json={"subdomain": "cups"}, headers=csrf_headers(api_client)
@@ -199,7 +199,7 @@ async def test_a_rejected_product_returns_to_the_queue_after_a_fix(
 ) -> None:
     """Fixing it is the whole answer: the edit files the proposal, and there is nothing left
     to press afterwards."""
-    await register_seller(api_client)
+    await register_seller(api_client, session)
     category = await seeded_category(session)
     product_id = str((await create_product(api_client, category.id)).json()["id"])
     seller_cookies = dict(api_client.cookies)
@@ -230,7 +230,7 @@ async def test_a_rejected_product_returns_to_the_queue_after_a_fix(
 async def test_a_product_already_in_the_queue_is_not_resubmitted(
     api_client: AsyncClient, session: AsyncSession
 ) -> None:
-    await register_seller(api_client)
+    await register_seller(api_client, session)
     category = await seeded_category(session)
     product_id = (await create_product(api_client, category.id)).json()["id"]
 

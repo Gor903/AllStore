@@ -29,9 +29,13 @@ def action_url(business_id: str, action: str) -> str:
     return f"{QUEUE_URL}/{business_id}/{action}"
 
 
-async def a_seller_awaiting_admission(client: AsyncClient, subdomain: str | None = None) -> str:
+async def a_seller_awaiting_admission(
+    client: AsyncClient, session: AsyncSession, subdomain: str | None = None
+) -> str:
     """Registers a seller, optionally with a storefront. Leaves the client logged in as them."""
-    registered = await register_seller(client, email=f"seller-{uuid.uuid4().hex}@example.com")
+    registered = await register_seller(
+        client, session, email=f"seller-{uuid.uuid4().hex}@example.com"
+    )
     if subdomain is not None:
         created = await client.post(
             STORES_URL, json={"subdomain": subdomain}, headers=csrf_headers(client)
@@ -62,8 +66,8 @@ async def storefront(client: AsyncClient, subdomain: str) -> Response:
 async def test_the_queue_holds_sellers_awaiting_admission(
     api_client: AsyncClient, session: AsyncSession
 ) -> None:
-    first = await a_seller_awaiting_admission(api_client)
-    second = await a_seller_awaiting_admission(api_client)
+    first = await a_seller_awaiting_admission(api_client, session)
+    second = await a_seller_awaiting_admission(api_client, session)
     # now() is the start of the transaction, so the wait is set apart by hand
     await session.execute(
         text("UPDATE businesses SET created_at = now() - interval '1 hour' WHERE id = :id"),
@@ -82,7 +86,7 @@ async def test_the_queue_holds_sellers_awaiting_admission(
 async def test_the_queue_carries_the_storefront_address(
     api_client: AsyncClient, session: AsyncSession
 ) -> None:
-    await a_seller_awaiting_admission(api_client, subdomain="cups")
+    await a_seller_awaiting_admission(api_client, session, subdomain="cups")
     await become_moderator(api_client, session)
 
     item = (await api_client.get(QUEUE_URL)).json()["items"][0]
@@ -95,7 +99,7 @@ async def test_admission_puts_the_storefront_on_the_air(
     api_client: AsyncClient, session: AsyncSession
 ) -> None:
     """The point of the whole task: until this happens the subdomain answers 404."""
-    business_id = await a_seller_awaiting_admission(api_client, subdomain="cups")
+    business_id = await a_seller_awaiting_admission(api_client, session, subdomain="cups")
     assert (await storefront(api_client, "cups")).status_code == 404
     moderator = await become_moderator(api_client, session)
 
@@ -115,7 +119,7 @@ async def test_admission_puts_the_storefront_on_the_air(
 async def test_a_seller_without_a_storefront_is_admitted_all_the_same(
     api_client: AsyncClient, session: AsyncSession
 ) -> None:
-    business_id = await a_seller_awaiting_admission(api_client)
+    business_id = await a_seller_awaiting_admission(api_client, session)
     await become_moderator(api_client, session)
 
     approved = await act(api_client, business_id, "approve")
@@ -129,7 +133,7 @@ async def test_a_storefront_created_after_admission_is_live_at_once(
     api_client: AsyncClient, session: AsyncSession
 ) -> None:
     """Otherwise it would sit in draft waiting for a moderation event that never comes."""
-    business_id = await a_seller_awaiting_admission(api_client)
+    business_id = await a_seller_awaiting_admission(api_client, session)
     seller_cookies = dict(api_client.cookies)
     await become_moderator(api_client, session)
     assert (await act(api_client, business_id, "approve")).status_code == 200
@@ -147,7 +151,7 @@ async def test_a_storefront_created_after_admission_is_live_at_once(
 async def test_a_seller_is_admitted_only_once(
     api_client: AsyncClient, session: AsyncSession
 ) -> None:
-    business_id = await a_seller_awaiting_admission(api_client)
+    business_id = await a_seller_awaiting_admission(api_client, session)
     await become_moderator(api_client, session)
     assert (await act(api_client, business_id, "approve")).status_code == 200
 
@@ -160,7 +164,7 @@ async def test_a_seller_is_admitted_only_once(
 async def test_suspension_takes_the_storefront_off_the_air(
     api_client: AsyncClient, session: AsyncSession
 ) -> None:
-    business_id = await a_seller_awaiting_admission(api_client, subdomain="cups")
+    business_id = await a_seller_awaiting_admission(api_client, session, subdomain="cups")
     await become_moderator(api_client, session)
     await act(api_client, business_id, "approve")
 
@@ -175,7 +179,7 @@ async def test_suspension_takes_the_storefront_off_the_air(
 async def test_a_blocked_seller_disappears_from_the_public_side(
     api_client: AsyncClient, session: AsyncSession
 ) -> None:
-    business_id = await a_seller_awaiting_admission(api_client, subdomain="cups")
+    business_id = await a_seller_awaiting_admission(api_client, session, subdomain="cups")
     await become_moderator(api_client, session)
     await act(api_client, business_id, "approve")
 
@@ -188,7 +192,7 @@ async def test_a_blocked_seller_disappears_from_the_public_side(
 
 async def test_a_ban_can_be_taken_back(api_client: AsyncClient, session: AsyncSession) -> None:
     """A ban is a status, not a deletion."""
-    business_id = await a_seller_awaiting_admission(api_client, subdomain="cups")
+    business_id = await a_seller_awaiting_admission(api_client, session, subdomain="cups")
     await become_moderator(api_client, session)
     await act(api_client, business_id, "approve")
     await act(api_client, business_id, "block", reason=REASON)
@@ -210,7 +214,7 @@ async def test_a_ban_can_be_taken_back(api_client: AsyncClient, session: AsyncSe
 async def test_a_seller_is_not_taken_off_the_air_without_a_reason(
     api_client: AsyncClient, session: AsyncSession, action: str, body: dict[str, Any]
 ) -> None:
-    business_id = await a_seller_awaiting_admission(api_client)
+    business_id = await a_seller_awaiting_admission(api_client, session)
     await become_moderator(api_client, session)
     await act(api_client, business_id, "approve")
 
@@ -225,7 +229,7 @@ async def test_a_seller_is_not_taken_off_the_air_without_a_reason(
 async def test_an_applicant_is_not_suspended_before_being_admitted(
     api_client: AsyncClient, session: AsyncSession
 ) -> None:
-    business_id = await a_seller_awaiting_admission(api_client)
+    business_id = await a_seller_awaiting_admission(api_client, session)
     await become_moderator(api_client, session)
 
     response = await act(api_client, business_id, "suspend", reason=REASON)
@@ -236,7 +240,7 @@ async def test_an_applicant_is_not_suspended_before_being_admitted(
 async def test_a_blocked_seller_is_not_blocked_twice(
     api_client: AsyncClient, session: AsyncSession
 ) -> None:
-    business_id = await a_seller_awaiting_admission(api_client)
+    business_id = await a_seller_awaiting_admission(api_client, session)
     await become_moderator(api_client, session)
     await act(api_client, business_id, "block", reason=REASON)
 
@@ -248,7 +252,7 @@ async def test_a_blocked_seller_is_not_blocked_twice(
 async def test_there_is_nothing_to_restore_in_an_active_seller(
     api_client: AsyncClient, session: AsyncSession
 ) -> None:
-    business_id = await a_seller_awaiting_admission(api_client)
+    business_id = await a_seller_awaiting_admission(api_client, session)
     await become_moderator(api_client, session)
     await act(api_client, business_id, "approve")
 
@@ -260,7 +264,7 @@ async def test_there_is_nothing_to_restore_in_an_active_seller(
 async def test_an_admitted_seller_leaves_the_queue(
     api_client: AsyncClient, session: AsyncSession
 ) -> None:
-    business_id = await a_seller_awaiting_admission(api_client)
+    business_id = await a_seller_awaiting_admission(api_client, session)
     await become_moderator(api_client, session)
     await act(api_client, business_id, "approve")
 
@@ -278,8 +282,10 @@ async def test_an_unknown_business_is_not_found(
     assert response.json()["error"]["code"] == "business_not_found"
 
 
-async def test_a_seller_cannot_admit_themselves(api_client: AsyncClient) -> None:
-    business_id = await a_seller_awaiting_admission(api_client)
+async def test_a_seller_cannot_admit_themselves(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    business_id = await a_seller_awaiting_admission(api_client, session)
 
     response = await act(api_client, business_id, "approve")
 
@@ -300,7 +306,7 @@ async def test_an_anonymous_visitor_cannot_see_the_queue(api_client: AsyncClient
 async def test_a_decision_without_the_csrf_header_is_forbidden(
     api_client: AsyncClient, session: AsyncSession
 ) -> None:
-    business_id = await a_seller_awaiting_admission(api_client)
+    business_id = await a_seller_awaiting_admission(api_client, session)
     await become_moderator(api_client, session)
 
     response = await api_client.post(action_url(business_id, "approve"))
@@ -324,7 +330,7 @@ async def my_business(client: AsyncClient) -> dict[str, Any]:
 async def test_an_applicant_is_refused_with_a_reason(
     api_client: AsyncClient, session: AsyncSession
 ) -> None:
-    business_id = await a_seller_awaiting_admission(api_client, "refused")
+    business_id = await a_seller_awaiting_admission(api_client, session, "refused")
     seller = dict(api_client.cookies)
     await become_moderator(api_client, session)
 
@@ -340,7 +346,7 @@ async def test_a_refusal_without_a_reason_is_itself_refused(
     api_client: AsyncClient, session: AsyncSession
 ) -> None:
     """A refusal the applicant cannot act on is not a refusal."""
-    business_id = await a_seller_awaiting_admission(api_client)
+    business_id = await a_seller_awaiting_admission(api_client, session)
     await become_moderator(api_client, session)
 
     assert (await act(api_client, business_id, "reject", reason="   ")).status_code == 422
@@ -349,7 +355,7 @@ async def test_a_refusal_without_a_reason_is_itself_refused(
 async def test_a_refused_shop_is_not_on_the_air(
     api_client: AsyncClient, session: AsyncSession
 ) -> None:
-    business_id = await a_seller_awaiting_admission(api_client, "notonair")
+    business_id = await a_seller_awaiting_admission(api_client, session, "notonair")
     await become_moderator(api_client, session)
 
     await act(api_client, business_id, "reject", reason=REASON)
@@ -360,7 +366,7 @@ async def test_a_refused_shop_is_not_on_the_air(
 
 async def test_only_an_applicant_is_refused(api_client: AsyncClient, session: AsyncSession) -> None:
     """An admitted shop is suspended or barred; those are verdicts with their own words."""
-    business_id = await a_seller_awaiting_admission(api_client, "alreadyin")
+    business_id = await a_seller_awaiting_admission(api_client, session, "alreadyin")
     await become_moderator(api_client, session)
     await act(api_client, business_id, "approve")
 
@@ -373,7 +379,7 @@ async def test_only_an_applicant_is_refused(api_client: AsyncClient, session: As
 async def test_the_applicant_answers_the_refusal_and_waits_again(
     api_client: AsyncClient, session: AsyncSession
 ) -> None:
-    business_id = await a_seller_awaiting_admission(api_client, "answers")
+    business_id = await a_seller_awaiting_admission(api_client, session, "answers")
     seller = dict(api_client.cookies)
     await become_moderator(api_client, session)
     await act(api_client, business_id, "reject", reason=REASON)
@@ -388,7 +394,7 @@ async def test_the_applicant_answers_the_refusal_and_waits_again(
 async def test_answering_a_refusal_keeps_every_verdict(
     api_client: AsyncClient, session: AsyncSession
 ) -> None:
-    business_id = await a_seller_awaiting_admission(api_client)
+    business_id = await a_seller_awaiting_admission(api_client, session)
     seller = dict(api_client.cookies)
     await become_moderator(api_client, session)
     await act(api_client, business_id, "reject", reason=REASON)
@@ -408,7 +414,7 @@ async def test_a_resubmitted_applicant_comes_back_to_the_queue_with_their_histor
     api_client: AsyncClient, session: AsyncSession
 ) -> None:
     """Somebody refused once and now applying again is not the same case as a fresh applicant."""
-    business_id = await a_seller_awaiting_admission(api_client)
+    business_id = await a_seller_awaiting_admission(api_client, session)
     seller = dict(api_client.cookies)
     moderator_cookies = None
     await become_moderator(api_client, session)
@@ -428,7 +434,7 @@ async def test_a_resubmitted_applicant_comes_back_to_the_queue_with_their_histor
 async def test_nothing_but_a_refusal_can_be_answered(
     api_client: AsyncClient, session: AsyncSession
 ) -> None:
-    business_id = await a_seller_awaiting_admission(api_client)
+    business_id = await a_seller_awaiting_admission(api_client, session)
     seller = dict(api_client.cookies)
     await become_moderator(api_client, session)
     await act(api_client, business_id, "approve")
@@ -444,7 +450,7 @@ async def test_an_applicant_may_fill_the_shelves_while_waiting(
 ) -> None:
     """Nothing is public until a moderator says so, and a seller who cannot prepare anything
     has nothing to be admitted for."""
-    await a_seller_awaiting_admission(api_client, "prepares")
+    await a_seller_awaiting_admission(api_client, session, "prepares")
     category = await seeded_category(session)
 
     created = await create_product(api_client, category.id)
@@ -464,7 +470,7 @@ async def test_a_shop_under_a_verdict_does_not_queue_new_goods(
     api_client: AsyncClient, session: AsyncSession, action: str, body: dict[str, Any]
 ) -> None:
     """Otherwise the verdict is something to outlast rather than to answer."""
-    business_id = await a_seller_awaiting_admission(api_client, f"verdict{action}")
+    business_id = await a_seller_awaiting_admission(api_client, session, f"verdict{action}")
     seller = dict(api_client.cookies)
     category = await seeded_category(session)
     await become_moderator(api_client, session)
@@ -482,7 +488,7 @@ async def test_a_shop_under_a_verdict_does_not_queue_new_goods(
 async def test_a_shop_under_a_verdict_does_not_resubmit_old_goods_either(
     api_client: AsyncClient, session: AsyncSession
 ) -> None:
-    business_id = await a_seller_awaiting_admission(api_client, "nosubmit")
+    business_id = await a_seller_awaiting_admission(api_client, session, "nosubmit")
     seller = dict(api_client.cookies)
     category = await seeded_category(session)
     product_id = (await create_product(api_client, category.id)).json()["id"]
@@ -500,7 +506,7 @@ async def test_a_shop_under_a_verdict_does_not_resubmit_old_goods_either(
 async def test_a_refused_applicant_cannot_open_a_storefront(
     api_client: AsyncClient, session: AsyncSession
 ) -> None:
-    business_id = await a_seller_awaiting_admission(api_client)
+    business_id = await a_seller_awaiting_admission(api_client, session)
     seller = dict(api_client.cookies)
     await become_moderator(api_client, session)
     await act(api_client, business_id, "reject", reason=REASON)
@@ -516,7 +522,7 @@ async def test_a_refused_applicant_cannot_open_a_storefront(
 async def test_every_verdict_on_a_shop_reaches_the_journal(
     api_client: AsyncClient, session: AsyncSession
 ) -> None:
-    business_id = await a_seller_awaiting_admission(api_client, "journal")
+    business_id = await a_seller_awaiting_admission(api_client, session, "journal")
     seller = dict(api_client.cookies)
     await become_moderator(api_client, session)
     await act(api_client, business_id, "reject", reason=REASON)

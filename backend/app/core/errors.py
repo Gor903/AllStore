@@ -76,6 +76,17 @@ class VerificationRequiredError(PermissionDeniedError):
     code = "verification_required"
 
 
+class EmailNotVerifiedError(PermissionDeniedError):
+    """Signed in, allowed in principle, and not opening a shop until the address answers.
+
+    The gate is deliberately narrow — see deps/auth.require_verified_email. A distinct code
+    because the client has something to do about it, and the thing to do is to ask for the
+    letter again.
+    """
+
+    code = "email_not_verified"
+
+
 class ConflictError(AppError):
     code = "conflict"
     status_code = status.HTTP_409_CONFLICT

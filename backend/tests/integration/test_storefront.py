@@ -186,7 +186,7 @@ async def test_a_forged_host_does_not_reach_a_foreign_dashboard(
 ) -> None:
     """AC 3.3: the seller's own data is resolved from the session, never from the Host."""
     foreign = await seed_store(session, "foreign-shop")
-    await register_seller(api_client)
+    await register_seller(api_client, session)
     created = await api_client.post(
         "/api/v1/stores", json={"subdomain": "my-shop"}, headers=csrf_headers(api_client)
     )

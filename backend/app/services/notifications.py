@@ -35,6 +35,54 @@ def password_reset_letter(settings: Settings, email: str, token: str) -> Letter:
     )
 
 
+def email_confirmation_letter(
+    settings: Settings, email: str, token: str, *, moving: bool
+) -> Letter:
+    """Asks an address to answer for itself.
+
+    The wording differs between confirming what an account registered with and confirming a
+    new address it wants to move to, because what the reader should do if they did not ask
+    for it differs: in the first case ignore it, in the second somebody may be trying to take
+    an account over and the owner of the old address is being told so separately.
+    """
+    link = f"{settings.public_url}/email/confirm?token={token}"
+    hours = settings.email_verification_ttl_hours
+    reason = (
+        "Кто-то указал этот адрес как новый для аккаунта на AllStore.am."
+        if moving
+        else "Подтвердите адрес, указанный при регистрации на AllStore.am."
+    )
+    tail = (
+        "Если это были не вы — не переходите по ссылке и смените пароль на старом адресе."
+        if moving
+        else "Если вы не регистрировались — просто не переходите по ссылке."
+    )
+    return Letter(
+        to=email,
+        subject="Подтверждение адреса — AllStore.am",
+        body=f"{reason}\n\nЧтобы подтвердить:\n{link}\n\nСсылка действует {hours} ч.\n\n{tail}\n",
+    )
+
+
+def email_change_notice_letter(settings: Settings, old_email: str, new_email: str) -> Letter:
+    """Tells the address being left behind that it is being left behind.
+
+    This is the letter that matters most and the one nobody asks for. Somebody who has taken
+    an account over will change the address; the only person who can notice is whoever still
+    reads the old one, and they can only notice if they are told.
+    """
+    return Letter(
+        to=old_email,
+        subject="Запрошена смена адреса — AllStore.am",
+        body=(
+            f"Для вашего аккаунта на AllStore.am запрошена смена адреса на {new_email}.\n\n"
+            "Пока новый адрес не подтверждён, вход по старому продолжает работать.\n\n"
+            "Если это были не вы — немедленно смените пароль: "
+            f"{settings.public_url}/password/forgot\n"
+        ),
+    )
+
+
 async def deliver(settings: Settings, letter: Letter) -> None:
     """Called from a background task, after the answer has gone out.
 
