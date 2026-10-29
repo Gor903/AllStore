@@ -152,14 +152,14 @@ async def login(
     # does not exist waits exactly as long as one that does, so the wait says nothing about
     # which. The limiter above counts the address the request came from; this one counts the
     # account being guessed at, and slows rather than refuses — see GraduatedDelay.
-    waiting = delay_for_account(request, payload.normalized_email)
+    waiting = await delay_for_account(request, payload.normalized_email)
     if waiting > 0:
         await asyncio.sleep(waiting)
     user = await auth_service.authenticate(
         session, payload.normalized_email, payload.password.get_secret_value()
     )
     # they proved the account is theirs, so the guesses that came before them stop counting
-    forget_account_delay(request, payload.normalized_email)
+    await forget_account_delay(request, payload.normalized_email)
     issued = await session_service.open_session(
         session, settings, user, **_context(request, settings)
     )

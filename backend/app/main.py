@@ -74,7 +74,7 @@ def create_app() -> FastAPI:
 
     # per application, so each worker keeps its own tally and a test gets a fresh set with
     # its app instead of inheriting the previous test's — see app/core/rate_limit.py
-    app.state.limiters = build_limiters()
+    app.state.limiters = build_limiters(settings)
 
     register_exception_handlers(app)
     app.include_router(health_router)

@@ -35,6 +35,17 @@ services:
       timeout: 5s
       retries: 20
 
+  # one tally for the platform instead of one per worker — see app/core/rate_limit.py.
+  # Not published: nothing outside the compose network has business talking to it.
+  redis:
+    image: redis:8-alpine
+    command: redis-server --save "" --appendonly no
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   backend:
     build:
       context: ../backend
@@ -54,6 +65,7 @@ services:
       # visitor arrives from nginx's address and shares one allowance — see core/client_ip.py
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-172.16.0.0/12}
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-allstore}:${POSTGRES_PASSWORD:-allstore}@postgres:5432/${POSTGRES_DB:-allstore}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       # the first administrator: unset leaves the platform without one until bootstrap is run
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
@@ -80,6 +92,8 @@ services:
       postgres:
         condition: service_healthy
       minio:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test:
