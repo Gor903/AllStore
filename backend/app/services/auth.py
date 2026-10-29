@@ -55,6 +55,27 @@ class IssuedTokens:
     csrf_token: str
 
 
+@dataclass(frozen=True)
+class Rotated:
+    """The session continued: the caller holds a new token and the old one is retired."""
+
+    user: User
+    tokens: IssuedTokens
+
+
+@dataclass(frozen=True)
+class ReuseDetected:
+    """An already rotated token came back, so every session of that account was revoked.
+
+    Returned rather than raised, and that is the whole reason this function answers with a
+    value instead of simply throwing. Revoking the family is a write, the commit belongs to
+    the endpoint, and an exception unwinds the session before the endpoint can reach it —
+    which left the platform refusing the replay and keeping the stolen family alive. The
+    refusal is still the endpoint's to raise, in the same words as every other one: a replay
+    must not be able to tell itself apart from a token that never existed.
+    """
+
+
 @lru_cache
 def _dummy_hash() -> str:
     """Verified against when the email is unknown, so timing does not reveal existing accounts."""
@@ -145,14 +166,14 @@ async def issue_tokens(
 
 async def rotate_refresh_token(
     session: AsyncSession, settings: Settings, raw_refresh: str, user_agent: str | None = None
-) -> tuple[User, IssuedTokens]:
+) -> Rotated | ReuseDetected:
     stored = await auth_tokens.get_refresh_token(session, hash_token(raw_refresh))
     if stored is None:
         raise InvalidRefreshTokenError("Сессия недействительна, войдите заново")
     if stored.revoked_at is not None:
         # the token was already rotated: someone is replaying a stolen copy
         await auth_tokens.revoke_all_for_user(session, stored.user_id)
-        raise InvalidRefreshTokenError("Сессия недействительна, войдите заново")
+        return ReuseDetected()
     if stored.expires_at <= datetime.now(UTC):
         raise InvalidRefreshTokenError("Сессия истекла, войдите заново")
 
@@ -166,7 +187,7 @@ async def rotate_refresh_token(
     await auth_tokens.revoke_refresh_token(
         session, stored, replaced_by_id=replacement.id if replacement else None
     )
-    return user, issued
+    return Rotated(user=user, tokens=issued)
 
 
 async def revoke_refresh_token(session: AsyncSession, raw_refresh: str) -> None:

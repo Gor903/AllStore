@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 
 from app.core.errors import NotFoundError
-from app.deps.auth import CurrentUser, SessionDep, require_csrf, require_role
+from app.deps.auth import SessionDep, SignedInUser, require_csrf, require_role
 from app.models import User, UserRole
 from app.repositories import users as users_repo
 from app.schemas.auth import BusinessRead, UserRead
@@ -15,7 +15,8 @@ SellerUser = Annotated[User, Depends(require_role(UserRole.SELLER))]
 
 
 @router.get("/users/me", response_model=UserRead)
-async def read_me(user: CurrentUser) -> UserRead:
+async def read_me(user: SignedInUser) -> UserRead:
+    """Reachable while a password is still owed: this is how the client finds out it owes one."""
     return UserRead.model_validate(user)
 
 

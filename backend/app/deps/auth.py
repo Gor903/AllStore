@@ -23,12 +23,8 @@ SessionDep = Annotated[AsyncSession, Depends(get_session)]
 SettingsDep = Annotated[Settings, Depends(settings_dep)]
 
 
-# What an account owing a password change may still reach: the change itself, the way out,
-# and the question "who am I" the client asks to find out it owes one.
-ALLOWED_WHILE_PASSWORD_IS_OWED = ("/auth/password", "/auth/logout", "/users/me")
-
-
-async def get_current_user(request: Request, settings: SettingsDep, session: SessionDep) -> User:
+async def get_signed_in_user(request: Request, settings: SettingsDep, session: SessionDep) -> User:
+    """Who is signed in, without asking whether the password is theirs."""
     token = request.cookies.get(settings.access_cookie_name)
     if not token:
         raise AuthenticationError("Требуется вход")
@@ -37,26 +33,29 @@ async def get_current_user(request: Request, settings: SettingsDep, session: Ses
     except InvalidAccessToken as exc:
         raise AuthenticationError("Сессия недействительна, войдите заново") from exc
     # the status is re-read on every request: blocking an account must take effect at once
-    user = await auth_service.get_active_user(session, payload.user_id)
-    _ensure_password_is_their_own(request, user)
+    return await auth_service.get_active_user(session, payload.user_id)
+
+
+async def get_current_user(user: Annotated[User, Depends(get_signed_in_user)]) -> User:
+    """The ordinary door, and the one a route gets by saying nothing.
+
+    An account whose password was handed to it by somebody else gets no further than the
+    screen that replaces it. The rule used to be a list of paths matched by suffix, which
+    went wrong in both directions: a new route ending in `/users/me` was let through without
+    anybody deciding that, and the list said `/auth/logout`, which never passed this way at
+    all. Now a route opts out by asking for `SignedInUser` instead — so a route that says
+    nothing is closed, and the mistake somebody makes is a locked door rather than an open one.
+    """
+    if user.must_change_password:
+        raise PasswordChangeRequiredError("Сначала задайте свой пароль")
     return user
 
 
-def _ensure_password_is_their_own(request: Request, user: User) -> None:
-    """Checked here because here is the one place every authorized route passes through.
-
-    A list of routes to protect would go stale the first time somebody added one; a list of
-    routes to let through is short, and forgetting to extend it locks a door rather than
-    leaving one open.
-    """
-    if not user.must_change_password:
-        return
-    if request.url.path.endswith(ALLOWED_WHILE_PASSWORD_IS_OWED):
-        return
-    raise PasswordChangeRequiredError("Сначала задайте свой пароль")
-
-
 CurrentUser = Annotated[User, Depends(get_current_user)]
+
+# Signed in, and deliberately not asked whether the password is their own. Exactly two routes
+# want this: the change itself, and the "who am I" the client asks to find out it owes one.
+SignedInUser = Annotated[User, Depends(get_signed_in_user)]
 
 
 async def get_optional_user(

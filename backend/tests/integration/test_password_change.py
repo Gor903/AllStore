@@ -44,6 +44,38 @@ async def test_an_owed_password_blocks_the_rest_of_the_site(
     assert response.json()["error"]["code"] == "password_change_required"
 
 
+async def test_a_route_that_asks_for_nothing_is_closed(session: AsyncSession) -> None:
+    """The allowance is asked for by type, so forgetting to ask locks a door.
+
+    It used to be a suffix match on the path, and this route is the shape that defeated it:
+    it ends in `/users/me`, which was on the allowed list, without being that route or having
+    anybody decide it should be let through.
+    """
+    from httpx import ASGITransport
+
+    from app.db.session import get_session
+    from app.deps.auth import CurrentUser
+    from app.main import create_app
+
+    app = create_app()
+
+    @app.get("/api/v1/decoy/users/me")
+    async def decoy(user: CurrentUser) -> dict[str, str]:
+        return {"email": user.email}
+
+    async def _use_test_session() -> AsyncSession:
+        return session
+
+    app.dependency_overrides[get_session] = _use_test_session
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        await owing_a_change(client, session)
+
+        response = await client.get("/api/v1/decoy/users/me")
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "password_change_required"
+
+
 async def test_the_owner_can_still_ask_who_they_are(
     api_client: AsyncClient, session: AsyncSession
 ) -> None:

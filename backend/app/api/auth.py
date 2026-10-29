@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Request, Response, status
 
 from app.core.cookies import clear_auth_cookies, set_auth_cookies
 from app.core.errors import AuthenticationError
-from app.deps.auth import CurrentUser, SessionDep, SettingsDep, require_csrf
+from app.deps.auth import CurrentUser, SessionDep, SettingsDep, SignedInUser, require_csrf
 from app.schemas.auth import (
     BuyerRegisterRequest,
     EmailChangeRequest,
@@ -86,12 +86,17 @@ async def refresh(
     raw_refresh = request.cookies.get(settings.refresh_cookie_name)
     if not raw_refresh:
         raise AuthenticationError("Сессия недействительна, войдите заново")
-    user, tokens = await auth_service.rotate_refresh_token(
+    outcome = await auth_service.rotate_refresh_token(
         session, settings, raw_refresh, request.headers.get("user-agent")
     )
+    # committed before the branch, because both outcomes wrote something worth keeping: a
+    # rotation on one side, the revocation of a stolen family on the other. Refusing first
+    # and committing second is exactly what lost the revocation — see ReuseDetected
     await session.commit()
-    set_auth_cookies(response, settings, tokens)
-    return UserRead.model_validate(user)
+    if isinstance(outcome, auth_service.ReuseDetected):
+        raise auth_service.InvalidRefreshTokenError("Сессия недействительна, войдите заново")
+    set_auth_cookies(response, settings, outcome.tokens)
+    return UserRead.model_validate(outcome.user)
 
 
 @router.post(
@@ -128,7 +133,8 @@ async def change_email(
 @router.post("/password", response_model=MessageResponse, dependencies=[Depends(require_csrf)])
 async def change_password(
     payload: PasswordChangeRequest,
-    user: CurrentUser,
+    # the one route an account owing a change must reach, and the reason SignedInUser exists
+    user: SignedInUser,
     response: Response,
     settings: SettingsDep,
     session: SessionDep,
