@@ -22,6 +22,7 @@ import argparse
 import asyncio
 import os
 import sys
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 # the defaults of the compose stack, so the script runs with no shell setup
@@ -43,9 +44,22 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine  # noqa: E4
 from app.core.config import get_settings  # noqa: E402
 from app.core.security import hash_password  # noqa: E402
 from app.models import User, UserRole  # noqa: E402
-from app.services import audit, totp  # noqa: E402
+from app.services import audit, notifications, totp  # noqa: E402
 
 ENTITY = "user"
+
+# Roles whose arrival is worth writing to the address about — see notifications.
+STAFF = (UserRole.ADMIN, UserRole.MODERATOR)
+
+
+@dataclass(frozen=True)
+class Granted:
+    """What happened, for the operator to read and for the caller to decide what to send."""
+
+    message: str
+    # Only a created account is written to. A role granted to somebody who already had an
+    # account is news they can see for themselves, and nobody took their address in vain.
+    created: bool = False
 
 
 async def apply(
@@ -55,9 +69,9 @@ async def apply(
     role: UserRole,
     *,
     reset_password: bool = False,
-) -> str:
+) -> Granted:
     """Creates the account or moves an existing one into the role. Returns what to tell the
-    operator; the caller owns the session and the commit.
+    operator; the caller owns the session, the commit and the letter.
 
     Every outcome that changes something leaves a journal entry with no actor, for the reason
     given in `admin_bootstrap`: authority granted from a server shell answers to whoever holds
@@ -80,7 +94,7 @@ async def apply(
         session.add(created)
         await session.flush()
         await _write_it_down(session, created, "user.role_granted")
-        return f"{email}: {role.value} (создан, пароль временный)"
+        return Granted(f"{email}: {role.value} (создан, пароль временный)", created=True)
     if reset_password:
         user.role = role
         user.password_hash = hash_password(password)
@@ -92,15 +106,15 @@ async def apply(
         if await totp.revoke(session, user.id):
             await _write_it_down(session, user, "user.totp_revoked")
         await _write_it_down(session, user, "user.password_granted")
-        return f"{email}: {role.value} (пароль заменён, временный)"
+        return Granted(f"{email}: {role.value} (пароль заменён, временный)")
     if user.role is role:
         # nothing happened, so there is nothing to write down
-        return f"{email}: уже {role.value}, ничего не менялось"
+        return Granted(f"{email}: уже {role.value}, ничего не менялось")
     was = user.role.value
     user.role = role
     # not touched: this account chose its own password long before anybody granted it a role
     await _write_it_down(session, user, "user.role_granted", **{"from": was})
-    return f"{email}: {role.value} (был {was})"
+    return Granted(f"{email}: {role.value} (был {was})")
 
 
 async def _write_it_down(session: AsyncSession, user: User, action: str, **details: str) -> None:
@@ -110,12 +124,21 @@ async def _write_it_down(session: AsyncSession, user: User, action: str, **detai
 
 
 async def grant(email: str, password: str, role: UserRole, *, reset_password: bool) -> str:
-    engine = create_async_engine(str(get_settings().database_url))
+    settings = get_settings()
+    engine = create_async_engine(str(settings.database_url))
     try:
         async with AsyncSession(engine) as session:
             outcome = await apply(session, email, password, role, reset_password=reset_password)
             await session.commit()
-            return outcome
+        if outcome.created and role in STAFF:
+            # after the commit: a letter about an account that was rolled back is a lie
+            notifications.deliver(
+                settings,
+                notifications.staff_account_letter(
+                    settings, email, administrator=role is UserRole.ADMIN
+                ),
+            )
+        return outcome.message
     finally:
         await engine.dispose()
 

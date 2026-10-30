@@ -27,9 +27,11 @@
 | 17 | [Модератора заводит администратор, приглашений нет](0017-moderators-appointed-directly.md) | 19 | accepted |
 | 18 | [Серверные сессии и привязка к устройству](0018-server-side-sessions.md) | рефактор auth | accepted |
 | 19 | [Транзакционная почта: временно личный Gmail](0019-transactional-mail.md) | рефактор auth | accepted |
-| 20 | [Вход через Google: идентичность по sub](0020-google-sign-in.md) | рефактор auth | accepted |
+| 20 | [Вход через Google: идентичность по sub](0020-google-sign-in.md) | рефактор auth | superseded by 26 |
 | 21 | [Журнал безопасности и уведомления](0021-security-journal-and-notices.md) | рефактор auth | accepted |
 | 22 | [Фоновая работа: Celery, почта через очередь](0022-background-work-on-celery.md) | рефактор auth | accepted |
 | 23 | [Второй фактор для staff: TOTP](0023-staff-second-factor.md) | рефактор auth | accepted |
 | 24 | [Сигналы риска: заложены и выключены](0024-risk-signals.md) | рефактор auth | accepted |
 | 25 | [argon2: 64 MiB, взятые из замера](0025-argon2-cost-measured.md) | рефактор auth | accepted, уточняет 2 |
+| 26 | [Вход через Google убран](0026-google-sign-in-removed.md) | рефактор auth | accepted, отменяет 20 |
+| 27 | [Письмо заведённому staff-аккаунту](0027-staff-account-letter.md) | рефактор auth | accepted, дополняет 17 |

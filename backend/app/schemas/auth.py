@@ -43,12 +43,11 @@ class SellerRegisterRequest(BuyerRegisterRequest, BusinessDetails):
 
 
 class BusinessOnboardingRequest(BusinessDetails):
-    """The half asked later, when the first half came from Google.
+    """The half asked later, when the account came before the shop.
 
-    Google tells us an address and a name and nothing a shop needs, so a seller who arrived
-    that way has an account and no business — and until this is answered, nothing to sell
-    from. The phone is here rather than on the account form for the same reason: nobody ever
-    asked them for it.
+    A seller granted the role by `scripts.grant_role` has an account and no business — and
+    until this is answered, nothing to sell from. The phone is here rather than on the account
+    form for the same reason: nobody ever asked them for it.
     """
 
     phone: Phone | None = None

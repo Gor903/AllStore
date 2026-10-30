@@ -24,8 +24,8 @@ export default async function OnboardingPage() {
     <main className="mx-auto flex max-w-sm flex-col justify-center gap-6 px-6 py-12">
       <h1 className="text-2xl font-semibold">Расскажите о магазине</h1>
       <p className="text-sm text-ink-muted">
-        Вход через Google сообщил нам только адрес. Чтобы открыть магазин, нужны ещё два поля —
-        после этого заявка уйдёт модератору.
+        У вашего аккаунта ещё нет магазина. Чтобы открыть его, нужны ещё два поля — после этого
+        заявка уйдёт модератору.
       </p>
       <BusinessOnboardingForm />
     </main>

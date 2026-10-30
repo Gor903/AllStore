@@ -12,9 +12,10 @@ from httpx import AsyncClient, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.mail import Letter
 from app.core.security import verify_password
 from app.models import AuditLog, User, UserRole
-from app.services.auth import password_of
+from app.services import notifications
 from tests.integration.conftest import (
     act_as,
     answer_second_factor,
@@ -42,6 +43,17 @@ async def create(client: AsyncClient, email: str, password: str = HANDED_OVER) -
     )
 
 
+@pytest.fixture
+def letters(monkeypatch: pytest.MonkeyPatch) -> list[Letter]:
+    caught: list[Letter] = []
+
+    def fake_deliver(settings: object, letter: Letter) -> None:
+        caught.append(letter)
+
+    monkeypatch.setattr(notifications, "deliver", fake_deliver)
+    return caught
+
+
 async def test_the_administrator_appoints_a_moderator(
     api_client: AsyncClient, session: AsyncSession
 ) -> None:
@@ -65,6 +77,46 @@ async def test_the_address_is_normalized(api_client: AsyncClient, session: Async
     response = await create(api_client, f"  {email.upper()}  ")
 
     assert response.json()["email"] == email
+
+
+async def test_the_address_is_told_a_staff_account_was_opened_on_it(
+    api_client: AsyncClient, session: AsyncSession, letters: list[Letter]
+) -> None:
+    """The one reader who asked for nothing. Somebody else typed their address, and this is
+    how they find out while the handed-over password is still unspent."""
+    await act_as(api_client, await seed_staff(session, UserRole.ADMIN))
+    email = an_email()
+
+    await create(api_client, email)
+
+    assert [letter.to for letter in letters] == [email]
+    assert "модератора" in letters[0].body
+
+
+async def test_the_handed_over_password_is_not_in_the_letter(
+    api_client: AsyncClient, session: AsyncSession, letters: list[Letter]
+) -> None:
+    """A letter carrying it would make one readable mailbox enough to moderate with."""
+    await act_as(api_client, await seed_staff(session, UserRole.ADMIN))
+
+    await create(api_client, an_email())
+
+    assert HANDED_OVER not in letters[0].body
+
+
+async def test_a_refused_appointment_writes_to_nobody(
+    api_client: AsyncClient, session: AsyncSession, letters: list[Letter]
+) -> None:
+    """The address belongs to somebody already, and they are not becoming a moderator — a
+    letter saying they were would be a letter about something that did not happen."""
+    await register_buyer(api_client)
+    await act_as(api_client, await seed_staff(session, UserRole.ADMIN))
+
+    refused = await create(api_client, "buyer@example.com")
+
+    assert refused.status_code == 409
+    # the registration above wrote to them, and that is the only letter they should have
+    assert [letter.subject for letter in letters] == ["Подтверждение адреса — AllStore.am"]
 
 
 async def test_a_taken_address_is_refused(api_client: AsyncClient, session: AsyncSession) -> None:
@@ -170,7 +222,7 @@ async def test_a_lost_password_is_replaced_by_the_administrator(
     assert response.status_code == 200
     user = (await session.execute(select(User).where(User.email == email))).scalars().one()
     await session.refresh(user)
-    assert verify_password("second-handover-1", password_of(user))
+    assert verify_password("second-handover-1", user.password_hash)
     # handed over again, so it expires again
     assert user.must_change_password is True
 

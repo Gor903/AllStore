@@ -208,6 +208,11 @@ export interface paths {
          *
          *     That password is known to the administrator, so it is not yet the moderator's: it gets
          *     them in once and the platform stays shut to them until they replace it.
+         *
+         *     The letter goes after the commit and carries no password. Its reader is the one person
+         *     who did not ask for any of this: it is how somebody finds out that a seat with authority
+         *     over other people was opened on their address, while the handed-over password is still
+         *     unspent and something can be done about it.
          */
         post: operations["create_moderator_api_v1_admin_moderators_post"];
         delete?: never;
@@ -453,112 +458,6 @@ export interface paths {
          * @description Sends the confirmation letter again, for the address the account already has.
          */
         post: operations["request_email_verification_api_v1_auth_email_verify_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/google/callback": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Callback
-         * @description Where Google sends the browser back. Everything is checked before anything is believed.
-         */
-        get: operations["callback_api_v1_auth_google_callback_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/google/identities": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Identities
-         * @description What this account can be signed in with besides its password.
-         */
-        get: operations["list_identities_api_v1_auth_google_identities_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/google/identities/{identity_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Unlink
-         * @description Detaches a provider — unless it is the only way in this account has left.
-         *
-         *     An account with no password and no identity is an account nobody can open, including its
-         *     owner, and there is no screen that undoes that.
-         */
-        delete: operations["unlink_api_v1_auth_google_identities__identity_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/google/link": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Start Linking
-         * @description The same journey, from inside an account that already exists.
-         *
-         *     Behind a step-up: attaching another way in is as grave as changing the password, and an
-         *     unattended screen must not be enough to add one.
-         */
-        get: operations["start_linking_api_v1_auth_google_link_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/google/start": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Start
-         * @description Sends the browser to Google, having written down what has to come back.
-         */
-        get: operations["start_api_v1_auth_google_start_get"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1635,12 +1534,12 @@ export interface paths {
         put?: never;
         /**
          * Open My Business
-         * @description For the seller who arrived through Google and therefore has no business yet.
+         * @description For a seller account that exists without a business — one granted by `scripts.grant_role`.
          *
-         *     A password registration creates both at once and never reaches this; the route exists
-         *     because the other way in cannot. It is deliberately not restricted to Google accounts —
-         *     what matters is whether a business exists, and the unique index answers that better than
-         *     a check on how somebody signed up.
+         *     Registering on the public form creates both at once and never reaches this; the route
+         *     exists because the other ways of becoming a seller cannot. What decides is whether a
+         *     business exists, and the unique index answers that better than a check on how the account
+         *     came about.
          */
         post: operations["open_my_business_api_v1_users_me_business_post"];
         delete?: never;
@@ -1919,12 +1818,11 @@ export interface components {
         };
         /**
          * BusinessOnboardingRequest
-         * @description The half asked later, when the first half came from Google.
+         * @description The half asked later, when the account came before the shop.
          *
-         *     Google tells us an address and a name and nothing a shop needs, so a seller who arrived
-         *     that way has an account and no business — and until this is answered, nothing to sell
-         *     from. The phone is here rather than on the account form for the same reason: nobody ever
-         *     asked them for it.
+         *     A seller granted the role by `scripts.grant_role` has an account and no business — and
+         *     until this is answered, nothing to sell from. The phone is here rather than on the account
+         *     form for the same reason: nobody ever asked them for it.
          */
         BusinessOnboardingRequest: {
             /** Display Name */
@@ -2324,43 +2222,6 @@ export interface components {
              * @constant
              */
             status: "ok";
-        };
-        /**
-         * IdentityList
-         * @description What this account can be signed in with besides its password — and whether the
-         *     question is even open.
-         *
-         *     `configured` is here rather than inferred from an empty list, because the two mean
-         *     different things and a screen that confused them would offer a button leading to a
-         *     refusal: with no client credentials the platform does not offer Google at all.
-         */
-        IdentityList: {
-            /** Configured */
-            configured: boolean;
-            /** Items */
-            items: components["schemas"]["IdentityRead"][];
-        };
-        /**
-         * IdentityRead
-         * @description Another way into an account, as its owner sees it.
-         */
-        IdentityRead: {
-            /** Email At Link */
-            email_at_link: string;
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Last Login At */
-            last_login_at: string | null;
-            /**
-             * Linked At
-             * Format: date-time
-             */
-            linked_at: string;
-            /** Provider */
-            provider: string;
         };
         /**
          * IncidentKind
@@ -3901,138 +3762,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MessageResponse"];
-                };
-            };
-        };
-    };
-    callback_api_v1_auth_google_callback_get: {
-        parameters: {
-            query: {
-                code: string;
-                state: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_identities_api_v1_auth_google_identities_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IdentityList"];
-                };
-            };
-        };
-    };
-    unlink_api_v1_auth_google_identities__identity_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                identity_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    start_linking_api_v1_auth_google_link_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    start_api_v1_auth_google_start_get: {
-        parameters: {
-            query?: {
-                role?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

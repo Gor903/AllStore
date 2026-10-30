@@ -10,10 +10,10 @@ import type { FormError } from "@/lib/errors";
 /**
  * The questions a shop cannot exist without, asked of a seller who was never asked them.
  *
- * Registering with a password asks for all of this on the way in. Google asks for none of it
- * and cannot — it knows an address, and a shop needs a legal name and a name to trade under.
- * Without this screen such an account is a seller with nothing to sell from and no way to fix
- * that.
+ * Registering on the public form asks for all of this on the way in. A role granted by
+ * `scripts.grant_role` asks for none of it and cannot — it knows an address, and a shop needs
+ * a legal name and a name to trade under. Without this screen such an account is a seller
+ * with nothing to sell from and no way to fix that.
  */
 export function BusinessOnboardingForm() {
   const router = useRouter();

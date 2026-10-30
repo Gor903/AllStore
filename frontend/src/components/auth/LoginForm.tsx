@@ -27,13 +27,10 @@ function destinationFor(user: User, next: string | null): string {
  * The server decides which: a correct password for an account with a second factor opens no
  * session and answers `totp_required`, leaving a short-lived note in a cookie. The code goes
  * to a different route, which is what finally opens the session.
- *
- * `paused` also arrives set from the server, through `?totp=1` — that is how the Google
- * callback hands over, having nowhere to put a JSON refusal a browser can read.
  */
-export function LoginForm({ next, paused = false }: { next: string | null; paused?: boolean }) {
+export function LoginForm({ next }: { next: string | null }) {
   const router = useRouter();
-  const [awaitingCode, setAwaitingCode] = useState(paused);
+  const [awaitingCode, setAwaitingCode] = useState(false);
   const [error, setError] = useState<FormError | null>(null);
   const [pending, setPending] = useState(false);
 

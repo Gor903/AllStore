@@ -11,7 +11,6 @@ from app.core.errors import (
     AuthenticationError,
     BreachedPasswordError,
     ConflictError,
-    NoPasswordSetError,
 )
 from app.core.mail import Letter
 from app.core.security import (
@@ -156,10 +155,7 @@ async def authenticate(
     session: AsyncSession, settings: Settings, email: str, password: str
 ) -> User:
     user = await users.get_by_email(session, email.strip().lower())
-    if user is None or user.password_hash is None:
-        # An account with no password is one that signs in with a provider. It gets the same
-        # answer and the same cost as an address nobody has: saying "that one has no password"
-        # would tell a stranger how this person signs in.
+    if user is None:
         await verify_password_in_thread(password, _dummy_hash())
         raise InvalidCredentialsError("Неверный email или пароль")
     if not await verify_password_in_thread(password, user.password_hash):
@@ -250,7 +246,7 @@ async def change_email(
     Returns the address left behind: the journal records what it was, and after the write
     nobody can tell any more.
     """
-    if not await verify_password_in_thread(current_password, password_of(user)):
+    if not await verify_password_in_thread(current_password, user.password_hash):
         raise InvalidCredentialsError("Текущий пароль неверен")
     normalized = new_email.strip().lower()
     if normalized == user.email:
@@ -276,7 +272,7 @@ async def change_password(
     came out of a deploy variable. Without it, an unattended session would be enough to take
     the account over permanently.
     """
-    if not await verify_password_in_thread(current_password, password_of(user)):
+    if not await verify_password_in_thread(current_password, user.password_hash):
         raise InvalidCredentialsError("Текущий пароль неверен")
     user.password_hash = await hash_password_in_thread(new_password)
     user.must_change_password = False
@@ -285,28 +281,13 @@ async def change_password(
     await sessions_repo.revoke_all_for_user(session, user.id, CREDENTIALS_CHANGED)
 
 
-def password_of(user: User) -> str:
-    """The stored hash, or a refusal that says what to do instead.
-
-    An account opened with Google has no password and never had one. Asking it to prove one
-    is a dead end unless the answer points somewhere: the reset flow, which works for exactly
-    these accounts because the provider already confirmed the address.
-    """
-    if user.password_hash is None:
-        raise NoPasswordSetError(
-            "У этого аккаунта нет пароля — он входит через Google. "
-            "Чтобы задать пароль, воспользуйтесь восстановлением."
-        )
-    return user.password_hash
-
-
 async def verify_password_of(user: User, password: str) -> None:
     """Shared by every place that asks somebody to prove the password they already gave.
 
     One function so the refusal is worded identically wherever it comes from — a message that
     differs by route is a message that says which route you reached.
     """
-    if not await verify_password_in_thread(password, password_of(user)):
+    if not await verify_password_in_thread(password, user.password_hash):
         raise InvalidCredentialsError("Текущий пароль неверен")
 
 

@@ -11,7 +11,6 @@ from app.api.auth import router as auth_router
 from app.api.catalog import router as catalog_router
 from app.api.contacts import router as contacts_router
 from app.api.customer_blocks import router as customer_blocks_router
-from app.api.google import router as google_router
 from app.api.health import router as health_router
 from app.api.incidents import router as incidents_router
 from app.api.moderation import router as moderation_router
@@ -86,7 +85,6 @@ def create_app() -> FastAPI:
     register_exception_handlers(app)
     app.include_router(health_router)
     app.include_router(auth_router, prefix=settings.api_prefix)
-    app.include_router(google_router, prefix=settings.api_prefix)
     app.include_router(totp_router, prefix=settings.api_prefix)
     app.include_router(sessions_router, prefix=settings.api_prefix)
     app.include_router(users_router, prefix=settings.api_prefix)

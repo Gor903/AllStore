@@ -4,8 +4,8 @@ A correct password no longer opens a session for an account that has an authenti
 leaves a short-lived signed note saying who got that far, and the session is opened by
 `/auth/login/totp` when the code arrives.
 
-Lives here rather than beside the routes because three of them need it: the password sign-in
-raises it, the Google callback raises it, and the route that finishes the job reads it.
+Lives here rather than beside the routes because the sign-in that raises it and the route
+that finishes the job are two different ones.
 
 **Signed**, because a cookie the caller can write is a cookie the caller can use to claim they
 are halfway into somebody else's account. **Short-lived**, because this note plus a stolen
@@ -14,7 +14,7 @@ which is also what protects the route that reads it: a cross-site POST does not 
 a forged request arrives with nobody waiting.
 """
 
-from fastapi import Request, Response
+from fastapi import Request
 
 from app.core.config import Settings
 from app.core.cookies import cookie_header
@@ -46,30 +46,12 @@ class SecondFactorRequired(AuthenticationError):
 
 
 def pause(settings: Settings, user: User) -> SecondFactorRequired:
-    """Built by the sign-in paths — password and Google alike — and raised by them."""
+    """Built by the sign-in path and raised by it."""
     return SecondFactorRequired(
         "Введите код из приложения-аутентификатора",
         cookie_header(
             COOKIE, seal(settings, {"user": str(user.id)}), settings, max_age=TTL_SECONDS
         ),
-    )
-
-
-def remember(response: Response, settings: Settings, user: User) -> None:
-    """The same note, written on a response that is going out anyway.
-
-    For the Google path, which answers a browser that has just come back from an external
-    site: it must land on a page, not on a JSON refusal, so the pause is a redirect to the
-    sign-in screen with this cookie attached rather than an error carrying one.
-    """
-    response.set_cookie(
-        COOKIE,
-        seal(settings, {"user": str(user.id)}),
-        max_age=TTL_SECONDS,
-        httponly=True,
-        secure=not settings.is_local,
-        samesite="lax",
-        path="/",
     )
 
 

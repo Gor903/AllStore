@@ -36,7 +36,11 @@ for _key, _value in _DEFAULTS.items():
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine  # noqa: E402
 
 from app.core.config import get_settings  # noqa: E402
-from app.services.admin_bootstrap import BootstrapNotConfiguredError, bootstrap  # noqa: E402
+from app.services.admin_bootstrap import (  # noqa: E402
+    BootstrapNotConfiguredError,
+    bootstrap,
+    write_to_a_new_administrator,
+)
 
 
 async def run(*, reset_password: bool) -> str:
@@ -52,7 +56,8 @@ async def run(*, reset_password: bool) -> str:
                 reset_password=reset_password,
             )
             await session.commit()
-            return result.message
+        write_to_a_new_administrator(settings, result)
+        return result.message
     finally:
         await engine.dispose()
 

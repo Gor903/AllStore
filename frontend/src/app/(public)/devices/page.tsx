@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
 
 import { DeviceList } from "@/components/auth/DeviceList";
-import { GoogleAccounts } from "@/components/auth/GoogleAccounts";
 import { SecondFactor } from "@/components/auth/SecondFactor";
-import { getGoogleIdentities, getMyDevices, getSecondFactor, requireUser } from "@/lib/dal";
+import { getMyDevices, getSecondFactor, requireUser } from "@/lib/dal";
 
 export const dynamic = "force-dynamic";
 
@@ -19,12 +18,8 @@ export const metadata: Metadata = {
  */
 export default async function DevicesPage() {
   // the one page a staff account still owing a second factor has to reach
-  const user = await requireUser({ owingASecondFactor: true });
-  const [devices, secondFactor, google] = await Promise.all([
-    getMyDevices(),
-    getSecondFactor(),
-    getGoogleIdentities(),
-  ]);
+  await requireUser({ owingASecondFactor: true });
+  const [devices, secondFactor] = await Promise.all([getMyDevices(), getSecondFactor()]);
 
   return (
     <main className="mx-auto flex max-w-2xl flex-col gap-6 px-6 py-10">
@@ -34,12 +29,6 @@ export default async function DevicesPage() {
         остальных устройствах и смените пароль: смена пароля тоже завершает все сессии.
       </p>
       {secondFactor === null ? null : <SecondFactor status={secondFactor} />}
-      <GoogleAccounts
-        identities={google?.items ?? []}
-        configured={google?.configured ?? false}
-        staff={user.role === "admin" || user.role === "moderator"}
-        email={user.email}
-      />
       {devices === null ? (
         <p className="text-sm text-danger">Список устройств сейчас недоступен.</p>
       ) : (

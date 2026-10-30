@@ -17,15 +17,16 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.core.config import get_settings
+from app.core.mail import Letter
 from app.core.security import hash_password, verify_password
 from app.models import AccountBlock, AuditLog, User, UserRole, UserStatus
+from app.services import notifications
 from app.services.admin_bootstrap import (
     BootstrapNotConfiguredError,
     Outcome,
     bootstrap,
     bootstrap_on_startup,
 )
-from app.services.auth import password_of
 
 pytestmark = pytest.mark.integration
 
@@ -81,8 +82,8 @@ async def test_a_second_run_does_not_rewrite_the_password(session: AsyncSession)
     await bootstrap(session, email, OTHER_PASSWORD)
 
     admin = (await admins(session))[0]
-    assert verify_password(PASSWORD, password_of(admin))
-    assert not verify_password(OTHER_PASSWORD, password_of(admin))
+    assert verify_password(PASSWORD, admin.password_hash)
+    assert not verify_password(OTHER_PASSWORD, admin.password_hash)
 
 
 async def test_a_second_run_under_another_address_changes_nothing(
@@ -110,13 +111,15 @@ async def test_startup_without_configuration_does_nothing_and_says_nothing(
 
 
 async def test_startup_creates_the_administrator_the_environment_names(
-    db_engine: AsyncEngine,
+    db_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Committed on purpose — the application does commit — so this one cleans up after itself."""
     email = an_email()
     settings = get_settings().model_copy(
         update={"admin_email": email, "admin_password": SecretStr(PASSWORD)}
     )
+    letters: list[Letter] = []
+    monkeypatch.setattr(notifications, "deliver", lambda _settings, letter: letters.append(letter))
     async with AsyncSession(db_engine) as session:
         try:
             first = await bootstrap_on_startup(session, settings)
@@ -126,6 +129,9 @@ async def test_startup_creates_the_administrator_the_environment_names(
             assert "создан" in str(first)
             assert "ничего не менялось" in str(second)
             assert len(await admins(session)) == 1
+            # the restart writes to nobody: the address was told once, when it was taken
+            assert [letter.to for letter in letters] == [email]
+            assert PASSWORD not in letters[0].body
         finally:
             await session.execute(delete(User).where(User.email == email))
             await _forget_what_was_written_down(session)
@@ -155,7 +161,7 @@ async def test_an_existing_account_is_promoted_and_keeps_its_password(
     assert result.outcome is Outcome.PROMOTED
     admin = (await admins(session))[0]
     assert admin.email == email
-    assert verify_password(PASSWORD, password_of(admin))
+    assert verify_password(PASSWORD, admin.password_hash)
     # nobody handed them this password: it is the one they registered with
     assert admin.must_change_password is False
 
@@ -192,7 +198,7 @@ async def test_the_password_is_replaced_only_when_asked_for(session: AsyncSessio
 
     assert result.outcome is Outcome.PASSWORD_RESET
     admin = (await admins(session))[0]
-    assert verify_password(OTHER_PASSWORD, password_of(admin))
+    assert verify_password(OTHER_PASSWORD, admin.password_hash)
     # recovery hands out a password the same way the first run does, so it expires the same way
     assert admin.must_change_password is True
 

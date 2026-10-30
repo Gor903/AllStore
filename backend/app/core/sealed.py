@@ -1,9 +1,8 @@
 """Short-lived state the server writes and reads back, carried by the browser.
 
-Two things use this, and they have the same shape: a handful of values that matter for one
-round trip, belong to one browser, and would be a table to expire and sweep if they lived on
-our side. The Google handshake is one; the half-finished sign-in waiting for a second factor
-is the other.
+The half-finished sign-in waiting for a second factor uses this: a handful of values that
+matter for one round trip, belong to one browser, and would be a table to expire and sweep if
+they lived on our side.
 
 **Signed, because a cookie the caller can write is a cookie the caller can use to answer our
 own challenge.** Unsigned, a visitor could simply write down which account they are halfway
