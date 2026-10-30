@@ -29,7 +29,7 @@ from app.models import User, UserRole, UserStatus
 from app.repositories import account_blocks as blocks_repo
 from app.repositories import sessions as sessions_repo
 from app.repositories import users as users_repo
-from app.services import audit, totp
+from app.services import audit, notifications, totp
 from app.services.sessions import CREDENTIALS_CHANGED
 
 ENTITY = "user"
@@ -179,4 +179,22 @@ async def bootstrap_on_startup(session: AsyncSession, settings: Settings) -> str
         session, settings.admin_email, settings.admin_password.get_secret_value()
     )
     await session.commit()
+    write_to_a_new_administrator(settings, result)
     return result.message
+
+
+def write_to_a_new_administrator(settings: Settings, result: Result) -> None:
+    """Tells the address that the platform's administrator seat was opened on it.
+
+    Only on `CREATED`. A promoted account already belonged to its owner, and an unchanged or
+    reset one is not news about an address being taken — it is news about a password, which
+    whoever ran this is handing over themselves.
+
+    Call it after the commit, for the reason `notifications.deliver` gives: on a startup that
+    then fails to commit, this would be a letter about an administrator who does not exist.
+    """
+    if result.outcome is not Outcome.CREATED:
+        return
+    notifications.deliver(
+        settings, notifications.staff_account_letter(settings, result.email, administrator=True)
+    )

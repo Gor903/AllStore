@@ -32,9 +32,9 @@ export default async function DashboardPage() {
   const [business, store, products, contacts] = seller
     ? await Promise.all([getMyBusiness(), getMyStore(), getMyProducts(), getMyContacts()])
     : [null, null, null, null];
-  // A seller arriving through Google has an account and no business, because Google knows an
-  // address and a shop needs a legal name. Without this the cabinet simply omits the shop
-  // section and the person is left on a page with nothing to do and nowhere to go.
+  // A seller whose role was granted rather than registered has an account and no business.
+  // Without this the cabinet simply omits the shop section and the person is left on a page
+  // with nothing to do and nowhere to go.
   if (seller && business === null) {
     redirect("/onboarding");
   }

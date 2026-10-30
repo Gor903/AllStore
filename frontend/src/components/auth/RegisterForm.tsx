@@ -3,7 +3,6 @@
 import { useState, type FormEvent } from "react";
 
 import { Field } from "@/components/auth/Field";
-import { GoogleButton } from "@/components/auth/GoogleButton";
 import { apiPost } from "@/lib/browser-api";
 import type { FormError } from "@/lib/errors";
 
@@ -128,14 +127,6 @@ export function RegisterForm() {
           {pending ? "Создаём аккаунт…" : "Зарегистрироваться"}
         </button>
       </form>
-
-      <div className="flex items-center gap-3 text-xs text-ink-muted">
-        <span className="h-px flex-1 bg-ink-muted/20" />
-        или
-        <span className="h-px flex-1 bg-ink-muted/20" />
-      </div>
-      {/* inside the form component because the role it carries is the tab above it */}
-      <GoogleButton role={account} />
     </>
   );
 }

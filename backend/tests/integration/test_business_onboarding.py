@@ -1,9 +1,9 @@
 """The way out of a seller account that has nothing to sell from.
 
-Registering with a password asks for the shop's details on the way in, so that path never
-comes here. Signing in with Google cannot ask: it knows an address and a display name, and a
-business needs a legal name and a name to trade under — both NOT NULL on the table. Such an
-account used to land in a cabinet with the shop section simply missing and no way forward.
+Registering on the public form asks for the shop's details on the way in, so that path never
+comes here. `scripts.grant_role` cannot ask: it knows an address and a role, and a business
+needs a legal name and a name to trade under — both NOT NULL on the table. Such an account
+lands in a cabinet with the shop section simply missing and no way forward.
 """
 
 import uuid
@@ -25,9 +25,9 @@ DETAILS = {"legal_name": "ИП Петров", "display_name": "Лавка Пет
 
 
 async def a_seller_without_a_business(client: AsyncClient, session: AsyncSession) -> User:
-    """Exactly the state Google leaves behind: the account exists, the shop does not."""
+    """Exactly the state a granted role leaves behind: the account exists, the shop does not."""
     user = User(
-        email=f"google-seller-{uuid.uuid4().hex}@example.com",
+        email=f"granted-seller-{uuid.uuid4().hex}@example.com",
         password_hash=hash_password(PASSWORD),
         role=UserRole.SELLER,
     )
@@ -110,8 +110,8 @@ async def test_a_stranger_does_not_get_one_either(api_client: AsyncClient) -> No
 async def test_the_phone_is_recorded_because_nobody_ever_asked_for_it(
     api_client: AsyncClient, session: AsyncSession
 ) -> None:
-    """A shop a moderator cannot telephone is a shop a moderator cannot check, and the Google
-    path never asked."""
+    """A shop a moderator cannot telephone is a shop a moderator cannot check, and this path
+    never asked."""
     seller = await a_seller_without_a_business(api_client, session)
 
     await api_client.post(

@@ -5,7 +5,13 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, status
 
 from app.core.errors import NotFoundError
-from app.deps.auth import SessionDep, require_csrf, require_fresh_verification, require_role
+from app.deps.auth import (
+    SessionDep,
+    SettingsDep,
+    require_csrf,
+    require_fresh_verification,
+    require_role,
+)
 from app.deps.rate_limit import limit_staff_actions
 from app.models import User, UserRole, UserStatus
 from app.repositories import users as users_repo
@@ -33,6 +39,7 @@ from app.services import (
     audit,
     moderator_record,
     moderators,
+    notifications,
     permissions,
     system_health,
 )
@@ -165,17 +172,29 @@ async def list_moderators(
     dependencies=[Depends(require_csrf), Depends(limit_staff_actions), STEP_UP],
 )
 async def create_moderator(
-    payload: ModeratorCreateRequest, admin: AdminUser, session: SessionDep
+    payload: ModeratorCreateRequest,
+    admin: AdminUser,
+    settings: SettingsDep,
+    session: SessionDep,
 ) -> UserRead:
     """Makes the account and hands over a password the administrator chose.
 
     That password is known to the administrator, so it is not yet the moderator's: it gets
     them in once and the platform stays shut to them until they replace it.
+
+    The letter goes after the commit and carries no password. Its reader is the one person
+    who did not ask for any of this: it is how somebody finds out that a seat with authority
+    over other people was opened on their address, while the handed-over password is still
+    unspent and something can be done about it.
     """
     moderator = await moderators.create(
         session, admin, payload.normalized_email, payload.password.get_secret_value()
     )
     await session.commit()
+    notifications.deliver(
+        settings,
+        notifications.staff_account_letter(settings, moderator.email, administrator=False),
+    )
     return UserRead.model_validate(moderator)
 
 

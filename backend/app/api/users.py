@@ -38,12 +38,12 @@ async def read_my_business(user: SellerUser, session: SessionDep) -> BusinessRea
 async def open_my_business(
     user: SellerUser, payload: BusinessOnboardingRequest, session: SessionDep
 ) -> BusinessRead:
-    """For the seller who arrived through Google and therefore has no business yet.
+    """For a seller account that exists without a business — one granted by `scripts.grant_role`.
 
-    A password registration creates both at once and never reaches this; the route exists
-    because the other way in cannot. It is deliberately not restricted to Google accounts —
-    what matters is whether a business exists, and the unique index answers that better than
-    a check on how somebody signed up.
+    Registering on the public form creates both at once and never reaches this; the route
+    exists because the other ways of becoming a seller cannot. What decides is whether a
+    business exists, and the unique index answers that better than a check on how the account
+    came about.
     """
     business = await businesses.open_for(session, user, payload)
     await session.commit()

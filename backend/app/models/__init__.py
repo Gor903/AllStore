@@ -9,7 +9,6 @@ from app.models.contact import PHONE_PLATFORMS, ContactPlatform, SocialLink
 from app.models.customer_block import BusinessCustomerBlock
 from app.models.email_verification import EmailVerification
 from app.models.embedding import EMBEDDING_DIMENSIONS, ProductEmbedding
-from app.models.identity import IdentityProvider, UserIdentity
 from app.models.moderation import (
     BusinessDecision,
     BusinessModerationReview,
@@ -45,7 +44,6 @@ __all__ = [
     "CategoryStatus",
     "ContactPlatform",
     "EmailVerification",
-    "IdentityProvider",
     "ModerationDecision",
     "ModerationReview",
     "ModerationStatus",
@@ -66,7 +64,6 @@ __all__ = [
     "TotpCredential",
     "TotpRecoveryCode",
     "User",
-    "UserIdentity",
     "UserRole",
     "UserStatus",
 ]

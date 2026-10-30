@@ -99,16 +99,6 @@ class EmailNotVerifiedError(PermissionDeniedError):
     code = "email_not_verified"
 
 
-class NoPasswordSetError(PermissionDeniedError):
-    """An account that has never had a password is being asked to prove one.
-
-    It signs in with a provider. The way to get a password is the reset flow, which works
-    because such an account always has a confirmed address — the provider confirmed it.
-    """
-
-    code = "no_password_set"
-
-
 class ConflictError(AppError):
     code = "conflict"
     status_code = status.HTTP_409_CONFLICT

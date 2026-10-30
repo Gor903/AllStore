@@ -50,30 +50,3 @@ class DeviceKeyRequest(BaseModel):
     """
 
     public_key: str = Field(min_length=1, max_length=2048)
-
-
-class IdentityList(BaseModel):
-    """What this account can be signed in with besides its password — and whether the
-    question is even open.
-
-    `configured` is here rather than inferred from an empty list, because the two mean
-    different things and a screen that confused them would offer a button leading to a
-    refusal: with no client credentials the platform does not offer Google at all.
-    """
-
-    configured: bool
-    items: list["IdentityRead"]
-
-
-class IdentityRead(BaseModel):
-    """Another way into an account, as its owner sees it."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    id: uuid.UUID
-    provider: str
-    # the address the provider asserted when this was linked — shown so somebody can tell
-    # which of their Google accounts this is, and matched on by nothing
-    email_at_link: str
-    linked_at: datetime
-    last_login_at: datetime | None

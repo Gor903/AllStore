@@ -23,7 +23,6 @@ export default async function RegisterPage() {
       <p className="text-sm text-ink-muted">
         Магазин продавца проходит проверку модератором до публикации.
       </p>
-      {/* the Google button lives inside the form: the role it carries is the tab selected there */}
       <RegisterForm />
       <p className="text-sm text-ink-muted">
         Уже есть аккаунт?{" "}

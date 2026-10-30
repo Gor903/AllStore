@@ -13,9 +13,9 @@ from app.core.config import Settings, get_settings
 from app.core.mail import Letter
 from app.services.notifications import (
     deliver,
-    google_link_letter,
     new_device_letter,
     password_reset_letter,
+    staff_account_letter,
 )
 
 TOKEN = "reset-token-value"
@@ -65,15 +65,27 @@ def test_a_device_that_said_nothing_about_itself_is_still_reported() -> None:
     assert "неизвестное устройство" in letter.body
 
 
-@pytest.mark.parametrize("attached", [True, False])
-def test_both_directions_of_a_google_link_are_reported(attached: bool) -> None:
-    """Attaching lets somebody in without the password; detaching locks the owner out of the
-    way in they had. Neither is something to find out about later."""
-    letter = google_link_letter(_settings(), "buyer@x.com", attached=attached)
+@pytest.mark.parametrize(
+    ("administrator", "expected"), [(True, "администратора"), (False, "модератора")]
+)
+def test_a_new_staff_account_is_announced_to_its_address(
+    administrator: bool, expected: str
+) -> None:
+    """The reader did not ask for anything, so the letter has to say which seat was opened
+    on their address and what to do if they were not expecting it."""
+    letter = staff_account_letter(_settings(), "staff@x.com", administrator=administrator)
 
-    assert ("привязан" in letter.body) is attached
-    assert ("отвязан" in letter.body) is not attached
-    assert "/password/forgot" in letter.body
+    assert letter.to == "staff@x.com"
+    assert expected in letter.body
+    assert "сообщите администратору" in letter.body
+
+
+def test_the_handed_over_password_never_travels_by_letter() -> None:
+    """A letter carrying it would turn one readable mailbox into a staff seat — which is the
+    thing the temporary password exists to prevent."""
+    letter = staff_account_letter(_settings(), "staff@x.com", administrator=False)
+
+    assert "в письме его нет" in letter.body
 
 
 def test_a_stand_with_no_mail_server_logs_the_letter(

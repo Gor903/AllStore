@@ -66,14 +66,6 @@ describe("signing in with a second factor", () => {
     expect(JSON.parse(String(second[1].body))).toEqual({ code: "123456" });
   });
 
-  it("starts at the code when the server already paused the sign-in", () => {
-    // the Google callback lands here, having nowhere to put a refusal a browser can read
-    render(<LoginForm next={null} paused />);
-
-    expect(screen.getByLabelText("Код")).toBeInTheDocument();
-    expect(screen.queryByLabelText("Пароль")).toBeNull();
-  });
-
   it("says a wrong code was wrong and stays on the code", async () => {
     const fetchMock = vi.fn<(url: string, init: RequestInit) => Promise<Response>>();
     fetchMock

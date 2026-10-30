@@ -234,28 +234,29 @@ def recovery_code_letter(settings: Settings, email: str) -> Letter:
     )
 
 
-def google_link_letter(settings: Settings, email: str, *, attached: bool) -> Letter:
-    """A way into the account was added, or taken away.
+def staff_account_letter(settings: Settings, email: str, *, administrator: bool) -> Letter:
+    """Tells somebody an account with powers over other people was opened on their address.
 
-    Both directions are worth a letter and for opposite reasons. An attachment nobody asked
-    for means somebody else can now open the account without knowing the password — the one
-    change an intruder makes that leaves the password working, so the owner notices nothing.
-    A detachment nobody asked for is how an owner is locked out of their own way in.
+    The first letter whose reader did not ask for anything: a moderator account is made by
+    somebody else, on an address its owner may not have offered. If it was not offered, this
+    is the only thing that says so while the password is still unused — and an unused handed-
+    over password is the whole window in which anything can be done about it.
+
+    The password is not here and must not be. It is chosen by the administrator and handed
+    over by whatever means they already use; a letter carrying it would turn one leaked
+    mailbox into a staff seat, which is exactly what `must_change_password` exists to prevent.
     """
-    what = (
-        "К вашему аккаунту на AllStore.am привязан вход через Google."
-        if attached
-        else "От вашего аккаунта на AllStore.am отвязан вход через Google."
-    )
+    role = "администратора" if administrator else "модератора"
     return Letter(
         to=email,
-        subject="Способы входа изменились — AllStore.am",
+        subject="Для вас создан аккаунт — AllStore.am",
         body=(
-            f"{what}\n\n"
-            "Если это были вы — ничего делать не нужно.\n\n"
-            "Если нет — смените пароль и завершите чужие сессии:\n"
-            f"{settings.public_url}/password/forgot\n"
-            f"{settings.public_url}/devices\n"
+            f"На этот адрес создан аккаунт {role} на AllStore.am.\n\n"
+            "Временный пароль передаст тот, кто его создал — в письме его нет. "
+            f"Войдите и сразу задайте свой:\n{settings.public_url}/login\n\n"
+            "До смены пароля площадка для этого аккаунта закрыта.\n\n"
+            "Если вы ничего такого не ждали — сообщите администратору площадки: аккаунт с "
+            "такими полномочиями заведён на ваш адрес, и знать об этом должны вы оба.\n"
         ),
     )
 

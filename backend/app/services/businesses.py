@@ -1,9 +1,9 @@
 """Opening a business for a seller who has an account and nothing to sell from.
 
-Registration with a password asks for everything at once, so it never needs this. Google does
-not: it tells us an address and a name, and a shop needs neither of those — it needs a legal
-name and a name to trade under, and both are NOT NULL on the table. So a seller who arrived
-through Google has an account with no business, and this is the one way out of that.
+Registering on the public form asks for everything at once, so it never needs this. The one
+path that can leave a seller without a business is `scripts.grant_role`, which knows an
+address and a role and nothing a shop needs: a legal name and a name to trade under, both
+NOT NULL on the table. This is the way out of that state.
 """
 
 from sqlalchemy.exc import IntegrityError
@@ -32,9 +32,9 @@ async def open_for(
     poison the transaction the phone is written in.
     """
     if details.phone is not None and user.phone is None:
-        # Nobody asked them for it on the way in through Google, and a shop that cannot be
-        # telephoned is a shop a moderator cannot check. An existing number is left alone:
-        # changing it is a different act, with a different screen.
+        # Nobody asked them for it on the way in, and a shop that cannot be telephoned is a
+        # shop a moderator cannot check. An existing number is left alone: changing it is a
+        # different act, with a different screen.
         user.phone = details.phone
     try:
         async with session.begin_nested():
