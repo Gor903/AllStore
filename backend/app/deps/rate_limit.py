@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from fastapi import Request
 from redis.asyncio import Redis
 
-from app.core.client_ip import client_ip
+from app.core.client_ip import allowance_key, client_ip
 from app.core.config import Settings
 from app.core.errors import TooManyRequestsError
 from app.core.rate_limit import (
@@ -169,6 +169,11 @@ def limiters_of(request: Request) -> Limiters:
     return limiters
 
 
+def _caller(request: Request, settings: Settings) -> str:
+    """Who the allowance is spent by — grouped, see core/client_ip.allowance_key."""
+    return allowance_key(client_ip(request, settings))
+
+
 async def _enforce(window: Allowance, key: str) -> None:
     decision = await window.check(key)
     if not decision.allowed:
@@ -176,23 +181,23 @@ async def _enforce(window: Allowance, key: str) -> None:
 
 
 async def limit_login(request: Request, settings: SettingsDep) -> None:
-    await _enforce(limiters_of(request).login_by_address, client_ip(request, settings))
+    await _enforce(limiters_of(request).login_by_address, _caller(request, settings))
 
 
 async def limit_registration(request: Request, settings: SettingsDep) -> None:
-    await _enforce(limiters_of(request).registration, client_ip(request, settings))
+    await _enforce(limiters_of(request).registration, _caller(request, settings))
 
 
 async def limit_reset_request(request: Request, settings: SettingsDep) -> None:
-    await _enforce(limiters_of(request).reset_request, client_ip(request, settings))
+    await _enforce(limiters_of(request).reset_request, _caller(request, settings))
 
 
 async def limit_reset_confirm(request: Request, settings: SettingsDep) -> None:
-    await _enforce(limiters_of(request).reset_confirm, client_ip(request, settings))
+    await _enforce(limiters_of(request).reset_confirm, _caller(request, settings))
 
 
 async def limit_refresh(request: Request, settings: SettingsDep) -> None:
-    await _enforce(limiters_of(request).refresh, client_ip(request, settings))
+    await _enforce(limiters_of(request).refresh, _caller(request, settings))
 
 
 async def limit_credential_change(request: Request, user: SignedInUser) -> None:
@@ -225,4 +230,4 @@ async def limit_second_factor(request: Request, settings: SettingsDep) -> None:
     owner out of their own second factor by spending the allowance. The address bears the
     cost instead — the same reasoning as the sign-in limit above.
     """
-    await _enforce(limiters_of(request).second_factor, client_ip(request, settings))
+    await _enforce(limiters_of(request).second_factor, _caller(request, settings))

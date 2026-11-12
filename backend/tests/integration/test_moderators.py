@@ -12,10 +12,11 @@ from httpx import AsyncClient, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.mail import Letter
 from app.core.security import verify_password
-from app.models import AuditLog, User, UserRole
-from app.services import notifications
+from app.models import AuditLog, Session, User, UserRole
+from app.services import notifications, sessions
 from tests.integration.conftest import (
     act_as,
     answer_second_factor,
@@ -225,6 +226,34 @@ async def test_a_lost_password_is_replaced_by_the_administrator(
     assert verify_password("second-handover-1", user.password_hash)
     # handed over again, so it expires again
     assert user.must_change_password is True
+
+
+async def test_the_replaced_password_ends_the_sessions_that_held_the_old_one(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    """The usual reason to reach this screen is that somebody else may be holding one. A
+    session left alive would keep that somebody signed in under the password being replaced —
+    the same rule every other credential change already follows."""
+    await act_as(api_client, await seed_staff(session, UserRole.ADMIN))
+    email = an_email()
+    created = (await create(api_client, email)).json()
+    moderator = (await session.execute(select(User).where(User.email == email))).scalars().one()
+    await sessions.open_session(session, get_settings(), moderator)
+    await session.commit()
+
+    await api_client.post(
+        f"{MODERATORS}/{created['id']}/password",
+        json={"password": "second-handover-1"},
+        headers=csrf_headers(api_client),
+    )
+
+    rows = (
+        (await session.execute(select(Session).where(Session.user_id == moderator.id)))
+        .scalars()
+        .all()
+    )
+    assert rows
+    assert all(row.revoked_at is not None for row in rows)
 
 
 async def test_a_reset_aimed_at_somebody_who_is_not_a_moderator_finds_nobody(

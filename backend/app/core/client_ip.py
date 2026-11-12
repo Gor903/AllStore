@@ -49,6 +49,27 @@ def _vouched_for(address: str, networks: tuple[Network, ...]) -> bool:
     return any(host in network for network in networks)
 
 
+def allowance_key(address: str) -> str:
+    """What an allowance is counted against: the /64 for IPv6, the address itself for IPv4.
+
+    One IPv6 customer is routinely handed a whole /64, so an allowance kept per address is no
+    allowance at all — the next guess simply comes from the next address, and there are
+    eighteen quintillion of them. v4 is counted whole, because there one address really is
+    what one caller has.
+
+    Separate from `client_ip` on purpose. The journal, the letters about a new device and the
+    geo lookup all want the address somebody actually came from; only the tally wants them
+    grouped, and a group written into the journal would be a record of nobody.
+    """
+    try:
+        host = ipaddress.ip_address(address)
+    except ValueError:
+        return address
+    if isinstance(host, ipaddress.IPv4Address):
+        return address
+    return str(ipaddress.ip_network(f"{address}/64", strict=False))
+
+
 def client_ip(request: Request, settings: Settings) -> str:
     """The furthest address along the chain that a trusted proxy vouched for.
 
