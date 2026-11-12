@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
 import { Field } from "@/components/auth/Field";
+import { useStepUp } from "@/components/auth/useStepUp";
 import { apiPost } from "@/lib/browser-api";
 import type { FormError } from "@/lib/errors";
 import type { User } from "@/lib/api";
@@ -18,6 +19,7 @@ import type { User } from "@/lib/api";
  */
 export function AppointModerator() {
   const router = useRouter();
+  const { attempt, prompt } = useStepUp();
   const [appointed, setAppointed] = useState<string | null>(null);
   const [error, setError] = useState<FormError | null>(null);
   const [pending, setPending] = useState(false);
@@ -29,10 +31,8 @@ export function AppointModerator() {
     setAppointed(null);
     const form = event.currentTarget;
     const data = new FormData(form);
-    const result = await apiPost<User>("/admin/moderators", {
-      email: data.get("email"),
-      password: data.get("password"),
-    });
+    const body = { email: data.get("email"), password: data.get("password") };
+    const result = await attempt(() => apiPost<User>("/admin/moderators", body));
     setPending(false);
     if (!result.ok) {
       setError(result.error);
@@ -84,6 +84,8 @@ export function AppointModerator() {
           </p>
         ) : null}
       </form>
+
+      {prompt}
 
       {appointed === null ? null : (
         <p role="status" className="rounded-lg border border-brand/40 bg-brand/5 p-3 text-sm">

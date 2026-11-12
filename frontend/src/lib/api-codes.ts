@@ -13,3 +13,6 @@ export const SECOND_FACTOR_REQUIRED_CODE = "totp_required";
 
 /** Staff with no authenticator yet: nothing opens until one is set up. */
 export const SECOND_FACTOR_SETUP_CODE = "totp_setup_required";
+
+/** Signed in too long ago for this particular action — see the backend's deps/auth.py. */
+export const VERIFICATION_REQUIRED_CODE = "verification_required";

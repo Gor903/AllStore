@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { useStepUp } from "@/components/auth/useStepUp";
 import { apiPost } from "@/lib/browser-api";
 
 type TransferAdminProps = {
@@ -20,6 +21,7 @@ type TransferAdminProps = {
  */
 export function TransferAdmin({ userId, email }: TransferAdminProps) {
   const router = useRouter();
+  const { attempt, prompt } = useStepUp();
   const [asking, setAsking] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -27,7 +29,7 @@ export function TransferAdmin({ userId, email }: TransferAdminProps) {
   async function onConfirm() {
     setBusy(true);
     setMessage(null);
-    const result = await apiPost(`/admin/users/${userId}/transfer-admin`, {});
+    const result = await attempt(() => apiPost(`/admin/users/${userId}/transfer-admin`, {}));
     setBusy(false);
     if (!result.ok) {
       setMessage(result.error.message);
@@ -76,6 +78,8 @@ export function TransferAdmin({ userId, email }: TransferAdminProps) {
           </div>
         </div>
       )}
+
+      {prompt}
 
       {message === null ? null : (
         <p role="alert" className="max-w-xs text-xs text-danger">
