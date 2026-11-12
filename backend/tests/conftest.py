@@ -24,6 +24,16 @@ _DEFAULTS = {
 for key, value in _DEFAULTS.items():
     os.environ.setdefault(key, value)
 
+# The shared tally belongs to the platform, not to a test run.
+#
+# CI sets REDIS_URL so that test_shared_rate_limit.py has something to talk to, and the
+# application must not read the same variable: every test would then spend from one allowance
+# of thirty sign-ins per five minutes, and this suite signs in hundreds of times in rather
+# less than five minutes. The whole suite goes red from the first test that runs out — which
+# says nothing about the code and takes an afternoon to recognise. The address is kept under
+# another name, and the one file that needs it reads that one.
+os.environ["SHARED_TALLY_URL"] = os.environ.pop("REDIS_URL", "")
+
 # Background work happens inline here, whatever the environment says.
 #
 # Not left to the fallback in app/worker.py, which turns eager mode on only when no broker is

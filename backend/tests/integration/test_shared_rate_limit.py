@@ -1,9 +1,11 @@
 """The tally that belongs to the platform rather than to one worker.
 
-Skipped when `REDIS_URL` says nothing, because there is then nothing to talk to. CI runs a
-Redis for exactly this file — a shared limiter that nobody tests is a limiter nobody knows
-the shape of, and the shape is the point: an in-process tally quietly doubles the allowance
-the moment a second worker appears.
+Skipped when there is no address to talk to. CI runs a Redis for exactly this file — a shared
+limiter that nobody tests is a limiter nobody knows the shape of, and the shape is the point:
+an in-process tally quietly doubles the allowance the moment a second worker appears.
+
+The address arrives as `SHARED_TALLY_URL` rather than `REDIS_URL`, because the application
+under test must not join this tally — see the note in `tests/conftest.py`.
 """
 
 import asyncio
@@ -18,13 +20,13 @@ from app.core.rate_limit import SharedDelay, SharedWindow
 
 pytestmark = pytest.mark.integration
 
-REDIS_URL = os.environ.get("REDIS_URL", "")
+REDIS_URL = os.environ.get("SHARED_TALLY_URL", "")
 
 
 @pytest.fixture
 async def redis() -> AsyncIterator[Redis]:
     if not REDIS_URL:
-        pytest.skip("REDIS_URL is unset, so there is no shared tally to test")
+        pytest.skip("no REDIS_URL was set, so there is no shared tally to test")
     client: Redis = Redis.from_url(REDIS_URL, decode_responses=True)
     try:
         yield client
