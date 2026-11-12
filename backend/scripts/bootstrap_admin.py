@@ -37,6 +37,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine  # noqa: E4
 
 from app.core.config import get_settings  # noqa: E402
 from app.services.admin_bootstrap import (  # noqa: E402
+    AddressBelongsToSomebodyError,
     BootstrapNotConfiguredError,
     bootstrap,
     write_to_a_new_administrator,
@@ -72,7 +73,7 @@ if __name__ == "__main__":
     arguments = parser.parse_args()
     try:
         outcome = asyncio.run(run(reset_password=arguments.reset_password))
-    except BootstrapNotConfiguredError as error:
+    except (AddressBelongsToSomebodyError, BootstrapNotConfiguredError) as error:
         # the project forbids print; a script that reports to a person still has to talk
         sys.stderr.write(f"{error}\n")
         raise SystemExit(2) from error

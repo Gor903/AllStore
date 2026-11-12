@@ -41,7 +41,6 @@ BOOTSTRAP_LOCK_KEY = 0x4A11_5702
 
 class Outcome(enum.StrEnum):
     CREATED = "created"
-    PROMOTED = "promoted"
     PASSWORD_RESET = "password_reset"  # noqa: S105 — an outcome name, not a credential
     UNCHANGED = "unchanged"
 
@@ -56,7 +55,6 @@ class Result:
         """What the operator reads. Never the password — not even the one just set."""
         return {
             Outcome.CREATED: f"{self.email}: администратор создан",
-            Outcome.PROMOTED: f"{self.email}: существующий аккаунт стал администратором",
             Outcome.PASSWORD_RESET: f"{self.email}: пароль администратора заменён",
             Outcome.UNCHANGED: f"{self.email}: администратор уже есть, ничего не менялось",
         }[self.outcome]
@@ -64,6 +62,20 @@ class Result:
 
 class BootstrapNotConfiguredError(RuntimeError):
     pass
+
+
+class AddressBelongsToSomebodyError(RuntimeError):
+    """The address already has an account, and that account belongs to the person using it.
+
+    Promoting it is what this used to do, quietly: somebody's shopping account became the
+    administrator because a deploy variable named it. The appointment screen has always
+    refused the same case (`services/moderators.py`), and the two paths disagreeing meant the
+    rule was about which door you came through rather than about whose account it is.
+
+    The way to make an administrator out of an existing account still exists, and it is the
+    one that asks: the account's owner signs in, and the current administrator hands the role
+    over. That path has both halves present and consenting; this one had neither.
+    """
 
 
 async def bootstrap(
@@ -82,12 +94,9 @@ async def bootstrap(
 
     existing = await users_repo.get_by_email(session, normalized)
     if existing is not None:
-        # an account that was a buyer yesterday becomes the administrator today; its password
-        # is its own and stays that way
-        existing.role = UserRole.ADMIN
-        await _reactivate(session, existing)
-        await _write_it_down(session, existing, "user.admin_promoted")
-        return Result(Outcome.PROMOTED, normalized)
+        raise AddressBelongsToSomebodyError(
+            f"{normalized} уже зарегистрирован — администратора заводят на свободный адрес"
+        )
 
     created = await users_repo.add(
         session,
@@ -172,12 +181,20 @@ async def bootstrap_on_startup(session: AsyncSession, settings: Settings) -> str
     unset ADMIN_EMAIL is not a misconfiguration — a stand or a test run has no administrator
     and wants none — so the absence is quiet and the application still starts. A database
     that refuses the write is a different matter and is left to propagate.
+
+    An ADMIN_EMAIL that belongs to somebody is a third case: a misconfiguration, but not one
+    worth refusing to start over. The platform would be unreachable because a buyer happens
+    to hold the address a deploy variable asks for, which helps nobody; it comes up without
+    an administrator and says so, exactly as it does when the variable is unset.
     """
     if not settings.admin_email or settings.admin_password is None:
         return None
-    result = await bootstrap(
-        session, settings.admin_email, settings.admin_password.get_secret_value()
-    )
+    try:
+        result = await bootstrap(
+            session, settings.admin_email, settings.admin_password.get_secret_value()
+        )
+    except AddressBelongsToSomebodyError as refusal:
+        return str(refusal)
     await session.commit()
     write_to_a_new_administrator(settings, result)
     return result.message
