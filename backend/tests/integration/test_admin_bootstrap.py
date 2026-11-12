@@ -22,6 +22,7 @@ from app.core.security import hash_password, verify_password
 from app.models import AccountBlock, AuditLog, User, UserRole, UserStatus
 from app.services import notifications
 from app.services.admin_bootstrap import (
+    AddressBelongsToSomebodyError,
     BootstrapNotConfiguredError,
     Outcome,
     bootstrap,
@@ -149,43 +150,56 @@ async def test_the_created_administrator_has_to_choose_their_own_password(
     assert (await admins(session))[0].must_change_password is True
 
 
-async def test_an_existing_account_is_promoted_and_keeps_its_password(
-    session: AsyncSession,
-) -> None:
+async def test_an_address_that_belongs_to_somebody_is_refused(session: AsyncSession) -> None:
+    """A deploy variable naming a buyer's address must not make them the administrator: the
+    owner of that account never agreed to run anything, and nobody asked them."""
     email = an_email()
     session.add(User(email=email, password_hash=hash_password(PASSWORD), role=UserRole.BUYER))
     await session.flush()
 
-    result = await bootstrap(session, email, OTHER_PASSWORD)
+    with pytest.raises(AddressBelongsToSomebodyError):
+        await bootstrap(session, email, OTHER_PASSWORD)
 
-    assert result.outcome is Outcome.PROMOTED
-    admin = (await admins(session))[0]
-    assert admin.email == email
-    assert verify_password(PASSWORD, admin.password_hash)
-    # nobody handed them this password: it is the one they registered with
-    assert admin.must_change_password is False
+    assert await admins(session) == []
+    buyer = (await session.execute(select(User).where(User.email == email))).scalars().one()
+    assert buyer.role is UserRole.BUYER
+    assert verify_password(PASSWORD, buyer.password_hash)
 
 
-async def test_promoting_a_barred_account_ends_the_ban_rather_than_hiding_it(
+async def test_a_taken_address_does_not_stop_the_platform_from_starting(
+    session: AsyncSession,
+) -> None:
+    """Said in the log and nowhere else. Refusing to start would leave the platform down
+    because a buyer holds the address a variable asks for, which helps nobody."""
+    email = an_email()
+    session.add(User(email=email, password_hash=hash_password(PASSWORD), role=UserRole.BUYER))
+    await session.flush()
+    settings = get_settings().model_copy(
+        update={"admin_email": email, "admin_password": SecretStr(OTHER_PASSWORD)}
+    )
+
+    message = await bootstrap_on_startup(session, settings)
+
+    assert message is not None
+    assert "уже зарегистрирован" in message
+    assert await admins(session) == []
+
+
+async def test_restoring_a_barred_administrator_ends_the_ban_rather_than_hiding_it(
     session: AsyncSession,
 ) -> None:
     """Clearing the status alone would leave a row saying the person is barred beside a
     column saying they are not."""
     email = an_email()
-    user = User(
-        email=email,
-        password_hash=hash_password(PASSWORD),
-        role=UserRole.BUYER,
-        status=UserStatus.BLOCKED,
-    )
-    session.add(user)
-    await session.flush()
-    session.add(AccountBlock(user_id=user.id, reason="Старая блокировка"))
-    await session.flush()
-
     await bootstrap(session, email, PASSWORD)
+    admin = (await admins(session))[0]
+    admin.status = UserStatus.BLOCKED
+    session.add(AccountBlock(user_id=admin.id, reason="Старая блокировка"))
+    await session.flush()
 
-    assert user.status is UserStatus.ACTIVE
+    await bootstrap(session, email, OTHER_PASSWORD, reset_password=True)
+
+    assert admin.status is UserStatus.ACTIVE
     block = (await session.execute(select(AccountBlock))).scalars().one()
     assert block.revoked_at is not None
 
