@@ -62,11 +62,26 @@ async def test_seller_registration_links_user_and_business(session: AsyncSession
 async def test_authenticate_returns_the_user(session: AsyncSession) -> None:
     await auth_service.register_buyer(session, buyer_request())
 
-    user = await auth_service.authenticate(
+    signed_in = await auth_service.authenticate(
         session, get_settings(), "svc-buyer@example.com", PASSWORD
     )
 
-    assert user.email == "svc-buyer@example.com"
+    assert signed_in.user.email == "svc-buyer@example.com"
+
+
+async def test_the_first_sign_in_says_so_and_the_second_does_not(session: AsyncSession) -> None:
+    """Only the first one is a moment at which a handed-over password can still be caught."""
+    await auth_service.register_buyer(session, buyer_request())
+
+    first = await auth_service.authenticate(
+        session, get_settings(), "svc-buyer@example.com", PASSWORD
+    )
+    second = await auth_service.authenticate(
+        session, get_settings(), "svc-buyer@example.com", PASSWORD
+    )
+
+    assert first.first_ever is True
+    assert second.first_ever is False
 
 
 async def test_authenticate_rejects_a_wrong_password(session: AsyncSession) -> None:

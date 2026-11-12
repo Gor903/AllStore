@@ -1,10 +1,12 @@
 """Appointing a moderator: the administrator makes the account, the moderator claims it.
 
-There is one way into the role and it starts with an administrator typing an address. The
-password they type is one they know, so the account is not yet anybody's until the moderator
-replaces it — that is what makes it safe to send in a chat message.
+There is one way into the role and it starts with an administrator typing an address — and
+nothing else. The password is generated and shown to them once; it is known to somebody other
+than its owner, so the account is not yet anybody's until the moderator replaces it, and that
+is what makes it safe to send in a chat message.
 """
 
+import re
 import uuid
 
 import pytest
@@ -30,7 +32,6 @@ from tests.integration.conftest import (
 pytestmark = pytest.mark.integration
 
 MODERATORS = "/api/v1/admin/moderators"
-HANDED_OVER = "handed-over-password-1"
 CHOSEN = "a-password-of-my-own-1"
 
 
@@ -38,10 +39,14 @@ def an_email() -> str:
     return f"moderator-{uuid.uuid4().hex}@example.com"
 
 
-async def create(client: AsyncClient, email: str, password: str = HANDED_OVER) -> Response:
-    return await client.post(
-        MODERATORS, json={"email": email, "password": password}, headers=csrf_headers(client)
-    )
+async def create(client: AsyncClient, email: str) -> Response:
+    return await client.post(MODERATORS, json={"email": email}, headers=csrf_headers(client))
+
+
+def handed_over(response: Response) -> str:
+    """The generated password, readable in this one answer and nowhere afterwards."""
+    password: str = response.json()["password"]
+    return password
 
 
 @pytest.fixture
@@ -64,7 +69,7 @@ async def test_the_administrator_appoints_a_moderator(
     response = await create(api_client, email)
 
     assert response.status_code == 201
-    body = response.json()
+    body = response.json()["user"]
     assert body["role"] == "moderator"
     assert body["email"] == email
     # handed over, therefore temporary
@@ -77,7 +82,7 @@ async def test_the_address_is_normalized(api_client: AsyncClient, session: Async
 
     response = await create(api_client, f"  {email.upper()}  ")
 
-    assert response.json()["email"] == email
+    assert response.json()["user"]["email"] == email
 
 
 async def test_the_address_is_told_a_staff_account_was_opened_on_it(
@@ -100,9 +105,9 @@ async def test_the_handed_over_password_is_not_in_the_letter(
     """A letter carrying it would make one readable mailbox enough to moderate with."""
     await act_as(api_client, await seed_staff(session, UserRole.ADMIN))
 
-    await create(api_client, an_email())
+    created = await create(api_client, an_email())
 
-    assert HANDED_OVER not in letters[0].body
+    assert handed_over(created) not in letters[0].body
 
 
 async def test_a_refused_appointment_writes_to_nobody(
@@ -135,10 +140,10 @@ async def test_the_new_moderator_gets_in_once_and_no_further(
 ) -> None:
     await act_as(api_client, await seed_staff(session, UserRole.ADMIN))
     email = an_email()
-    await create(api_client, email)
+    password = handed_over(await create(api_client, email))
 
     api_client.cookies.clear()
-    assert (await login(api_client, email, HANDED_OVER)).status_code == 200
+    assert (await login(api_client, email, password)).status_code == 200
     refused = await api_client.get("/api/v1/moderation/products")
 
     assert refused.status_code == 403
@@ -153,13 +158,13 @@ async def test_choosing_a_password_is_the_first_of_two_gates(
     against a password somebody else chose would be enrolling it for them."""
     await act_as(api_client, await seed_staff(session, UserRole.ADMIN))
     email = an_email()
-    await create(api_client, email)
+    password = handed_over(await create(api_client, email))
 
     api_client.cookies.clear()
-    await login(api_client, email, HANDED_OVER)
+    await login(api_client, email, password)
     await api_client.post(
         "/api/v1/auth/password",
-        json={"current_password": HANDED_OVER, "password": CHOSEN},
+        json={"current_password": password, "password": CHOSEN},
         headers=csrf_headers(api_client),
     )
     api_client.cookies.clear()
@@ -176,6 +181,61 @@ async def test_choosing_a_password_is_the_first_of_two_gates(
     await answer_second_factor(api_client, moderator)
 
     assert (await api_client.get("/api/v1/moderation/products")).status_code == 200
+
+
+async def test_a_reset_tells_the_moderator_and_carries_no_password(
+    api_client: AsyncClient, session: AsyncSession, letters: list[Letter]
+) -> None:
+    """Until this existed the old password simply stopped working, and its owner had no way
+    to tell a reset they asked for from one they did not."""
+    await act_as(api_client, await seed_staff(session, UserRole.ADMIN))
+    email = an_email()
+    appointed = (await create(api_client, email)).json()
+
+    response = await api_client.post(
+        f"{MODERATORS}/{appointed['user']['id']}/password", headers=csrf_headers(api_client)
+    )
+
+    reset_letter = letters[-1]
+    assert reset_letter.to == email
+    assert response.json()["password"] not in reset_letter.body
+    assert appointed["password"] not in reset_letter.body
+
+
+async def test_the_first_sign_in_is_told_to_both_people_who_knew_the_password(
+    api_client: AsyncClient, session: AsyncSession, letters: list[Letter]
+) -> None:
+    """The handed-over password travels by hand, and that journey is the one part nobody can
+    watch. A first sign-in its owner does not recognise is how being read on the way shows."""
+    admin = await seed_staff(session, UserRole.ADMIN)
+    await act_as(api_client, admin)
+    email = an_email()
+    password = handed_over(await create(api_client, email))
+    letters.clear()
+
+    api_client.cookies.clear()
+    await login(api_client, email, password)
+
+    assert {letter.to for letter in letters} == {email, admin.email}
+    assert all(password not in letter.body for letter in letters)
+
+
+async def test_the_second_sign_in_tells_nobody(
+    api_client: AsyncClient, session: AsyncSession, letters: list[Letter]
+) -> None:
+    """A letter on each of somebody's own sign-ins is a letter they stop reading, and then
+    the one that mattered goes unread too."""
+    await act_as(api_client, await seed_staff(session, UserRole.ADMIN))
+    email = an_email()
+    password = handed_over(await create(api_client, email))
+    api_client.cookies.clear()
+    await login(api_client, email, password)
+    letters.clear()
+
+    api_client.cookies.clear()
+    await login(api_client, email, password)
+
+    assert [letter.subject for letter in letters] == ["Новый вход в аккаунт — AllStore.am"]
 
 
 async def test_a_moderator_cannot_appoint_another(
@@ -212,18 +272,19 @@ async def test_a_lost_password_is_replaced_by_the_administrator(
     """No recovery link: the administrator already decides who moderates."""
     await act_as(api_client, await seed_staff(session, UserRole.ADMIN))
     email = an_email()
-    created = (await create(api_client, email)).json()
+    appointed = (await create(api_client, email)).json()
+    first = appointed["password"]
 
     response = await api_client.post(
-        f"{MODERATORS}/{created['id']}/password",
-        json={"password": "second-handover-1"},
-        headers=csrf_headers(api_client),
+        f"{MODERATORS}/{appointed['user']['id']}/password", headers=csrf_headers(api_client)
     )
 
     assert response.status_code == 200
+    replacement = response.json()["password"]
+    assert replacement != first
     user = (await session.execute(select(User).where(User.email == email))).scalars().one()
     await session.refresh(user)
-    assert verify_password("second-handover-1", user.password_hash)
+    assert verify_password(replacement, user.password_hash)
     # handed over again, so it expires again
     assert user.must_change_password is True
 
@@ -236,15 +297,13 @@ async def test_the_replaced_password_ends_the_sessions_that_held_the_old_one(
     the same rule every other credential change already follows."""
     await act_as(api_client, await seed_staff(session, UserRole.ADMIN))
     email = an_email()
-    created = (await create(api_client, email)).json()
+    created = (await create(api_client, email)).json()["user"]
     moderator = (await session.execute(select(User).where(User.email == email))).scalars().one()
     await sessions.open_session(session, get_settings(), moderator)
     await session.commit()
 
     await api_client.post(
-        f"{MODERATORS}/{created['id']}/password",
-        json={"password": "second-handover-1"},
-        headers=csrf_headers(api_client),
+        f"{MODERATORS}/{created['id']}/password", headers=csrf_headers(api_client)
     )
 
     rows = (
@@ -271,7 +330,32 @@ async def test_a_reset_aimed_at_somebody_who_is_not_a_moderator_finds_nobody(
     assert response.status_code == 404
 
 
-async def test_a_short_password_is_refused(api_client: AsyncClient, session: AsyncSession) -> None:
+async def test_a_password_cannot_be_dictated_to_the_platform(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    """Weak ones were the reason for generating; accepting one anyway would make the change
+    a suggestion. The schema forbids the field rather than ignoring it, so an administrator
+    who sends one is told, instead of quietly getting a password they did not get."""
     await act_as(api_client, await seed_staff(session, UserRole.ADMIN))
 
-    assert (await create(api_client, an_email(), "short")).status_code == 422
+    dictated = await api_client.post(
+        MODERATORS,
+        json={"email": an_email(), "password": "qwerty-123456"},
+        headers=csrf_headers(api_client),
+    )
+
+    assert dictated.status_code == 422
+
+
+async def test_no_two_appointments_hand_over_the_same_password(
+    api_client: AsyncClient, session: AsyncSession
+) -> None:
+    """One password used for every moderator is the other half of what generating fixes."""
+    await act_as(api_client, await seed_staff(session, UserRole.ADMIN))
+
+    first = handed_over(await create(api_client, an_email()))
+    second = handed_over(await create(api_client, an_email()))
+
+    assert first != second
+    # four groups of four, and nothing in it that has to be guessed at when read aloud
+    assert re.fullmatch(r"[a-z2-9]{4}(-[a-z2-9]{4}){3}", first)

@@ -101,7 +101,7 @@ async def test_appointing_a_moderator_starts_the_clock(
 
     await api_client.post(
         "/api/v1/admin/moderators",
-        json={"email": "fresh-moderator@example.com", "password": "handed-over-1"},
+        json={"email": "fresh-moderator@example.com"},
         headers=csrf_headers(api_client),
     )
 

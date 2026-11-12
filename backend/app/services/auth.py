@@ -1,4 +1,5 @@
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 
@@ -151,9 +152,22 @@ async def ensure_identifiers_free(session: AsyncSession, email: str, phone: str 
         raise ConflictError("Пользователь с таким телефоном уже зарегистрирован")
 
 
+@dataclass(frozen=True)
+class Authenticated:
+    """Who signed in, and whether the account had ever been opened before.
+
+    The second half matters only for staff. Their first password was handed to them by
+    somebody else and travelled by hand, and this is the one moment at which being read on
+    the way can still be noticed — after it, every sign-in looks like every other.
+    """
+
+    user: User
+    first_ever: bool
+
+
 async def authenticate(
     session: AsyncSession, settings: Settings, email: str, password: str
-) -> User:
+) -> Authenticated:
     user = await users.get_by_email(session, email.strip().lower())
     if user is None:
         await verify_password_in_thread(password, _dummy_hash())
@@ -164,10 +178,11 @@ async def authenticate(
         user.password_hash = await hash_password_in_thread(password)
     _ensure_active(user)
     _ensure_not_stale(user, settings)
+    first_ever = user.last_login_at is None
     # after the status check: a refused attempt is not a login, however correct the password
     user.last_login_at = datetime.now(UTC)
     await session.flush()
-    return user
+    return Authenticated(user, first_ever)
 
 
 def _ensure_active(user: User) -> None:

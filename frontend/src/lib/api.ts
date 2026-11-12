@@ -30,6 +30,7 @@ export type UserList = components["schemas"]["UserListResponse"];
 export type AdminCategory = components["schemas"]["AdminCategoryRead"];
 export type AuditLogList = components["schemas"]["AuditLogListResponse"];
 export type ModeratorRecord = components["schemas"]["ModeratorRecordRead"];
+export type HandedOver = components["schemas"]["HandedOverRead"];
 export type SystemState = components["schemas"]["SystemStateRead"];
 export type Activity = components["schemas"]["ActivityRead"];
 export type IncidentList = components["schemas"]["IncidentListResponse"];

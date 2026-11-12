@@ -47,6 +47,16 @@ def outranks(actor: UserRole, target: UserRole) -> bool:
     return RANK[actor] > RANK[target]
 
 
+def is_staff(role: UserRole) -> bool:
+    """The people who run the platform rather than use it.
+
+    Read off the same rank table as everything else, so "who is staff" cannot drift from
+    "who outranks whom". These are the accounts somebody else opens, and whose first password
+    somebody else therefore knows.
+    """
+    return RANK[role] > RANK[UserRole.SELLER]
+
+
 def may_block(actor: UserRole, target: UserRole) -> bool:
     """Blocking an account is an act of authority, so it needs a rank above the target's."""
     return outranks(actor, target)

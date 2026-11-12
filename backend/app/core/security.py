@@ -98,6 +98,30 @@ def generate_token() -> str:
     return secrets.token_urlsafe(32)
 
 
+# no 0/O and no 1/l/I: this one is read off one screen and typed into another, or spoken
+HANDED_OVER_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"
+HANDED_OVER_GROUPS = 4
+HANDED_OVER_GROUP_SIZE = 4
+
+
+def generate_handed_over_password() -> str:
+    """The temporary password for an account somebody else opens.
+
+    Generated rather than typed by the administrator. Typed, it is whatever one person thinks
+    of while creating the sixth moderator this month — and that is one weak password, or one
+    password used six times. Nobody chooses this one, so nobody can choose badly.
+
+    Grouped with hyphens because it is passed by hand: into a chat message, across a desk,
+    down a phone. Sixteen characters from an alphabet of thirty-one is about eighty bits,
+    which is far past guessing, and it expires in seventy-two hours regardless.
+    """
+    groups = (
+        "".join(secrets.choice(HANDED_OVER_ALPHABET) for _ in range(HANDED_OVER_GROUP_SIZE))
+        for _ in range(HANDED_OVER_GROUPS)
+    )
+    return "-".join(groups)
+
+
 def csrf_token_for(settings: Settings, family_id: uuid.UUID) -> str:
     """The CSRF value this device, and only this device, should be echoing back.
 

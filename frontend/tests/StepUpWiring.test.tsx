@@ -29,7 +29,13 @@ const REFUSAL = {
     code: "verification_required",
   },
 };
-const DONE = { ok: true, data: { id: USER_ID, email: "someone@example.com", role: "moderator" } };
+const DONE = {
+  ok: true,
+  data: {
+    user: { id: USER_ID, email: "someone@example.com", role: "moderator" },
+    password: "kf7p-2mxq-9vrt-ha3d",
+  },
+};
 
 /**
  * The four actions the server guards with `require_fresh_verification`. Each is reached a
@@ -43,7 +49,6 @@ const ACTIONS = [
     render: () => render(<AppointModerator />),
     act: async (user: ReturnType<typeof userEvent.setup>) => {
       await user.type(screen.getByLabelText("Email"), "new@example.com");
-      await user.type(screen.getByLabelText("Временный пароль"), "handed-over-password-1");
       await user.click(screen.getByRole("button", { name: "Завести" }));
     },
   },
@@ -53,8 +58,6 @@ const ACTIONS = [
     render: () => render(<ResetModeratorPassword userId={USER_ID} email="mod@example.com" />),
     act: async (user: ReturnType<typeof userEvent.setup>) => {
       await user.click(screen.getByRole("button", { name: "Выдать новый пароль" }));
-      await user.type(screen.getByPlaceholderText("Новый временный пароль"), "replacement-1");
-      await user.click(screen.getByRole("button", { name: "Выдать" }));
     },
   },
   {
