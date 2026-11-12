@@ -3,6 +3,9 @@
 E2E_MODERATOR_EMAIL ?= e2e-moderator@e2e.allstore.am
 E2E_MODERATOR_PASSWORD ?= e2e-password-1
 
+# прогон идёт на отдельной базе: дефолт DATABASE_URL смотрит на базу стенда, и тесты её травят
+TEST_DATABASE_URL ?= postgresql+asyncpg://allstore:allstore@localhost:5433/allstore_test
+
 up: ## поднять весь локальный стек
 	docker compose up --build -d
 
@@ -25,7 +28,7 @@ revision:
 	docker compose exec backend alembic revision --autogenerate -m "$(m)"
 
 backend-check:
-	cd backend && uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run pytest
+	cd backend && uv run ruff check . && uv run ruff format --check . && uv run mypy && DATABASE_URL="$(TEST_DATABASE_URL)" uv run pytest
 
 frontend-check:
 	cd frontend && npm run lint && npm run format:check && npm run typecheck && npm test
