@@ -17,12 +17,11 @@ vi.mock("@/lib/browser-api", () => ({
 }));
 
 const EMAIL = "new-moderator@example.com";
-const HANDED_OVER = "handed-over-password-1";
+const GENERATED = "kf7p-2mxq-9vrt-ha3d";
 
-async function fill(email: string, password: string) {
+async function appoint(email: string) {
   const user = userEvent.setup();
   await user.type(screen.getByLabelText("Email"), email);
-  await user.type(screen.getByLabelText("Временный пароль"), password);
   await user.click(screen.getByRole("button", { name: "Завести" }));
 }
 
@@ -30,50 +29,70 @@ beforeEach(() => {
   refresh.mockClear();
   apiPost.mockReset().mockResolvedValue({
     ok: true,
-    data: { id: "11111111-1111-1111-1111-111111111111", email: EMAIL, role: "moderator" },
+    data: {
+      user: { id: "11111111-1111-1111-1111-111111111111", email: EMAIL, role: "moderator" },
+      password: GENERATED,
+    },
   });
 });
 
 describe("заведение модератора", () => {
-  it("отправляет адрес и временный пароль", async () => {
+  it("отправляет один адрес и ничего больше", async () => {
     render(<AppointModerator />);
 
-    await fill(EMAIL, HANDED_OVER);
+    await appoint(EMAIL);
 
     await waitFor(() =>
-      expect(apiPost).toHaveBeenCalledWith("/admin/moderators", {
-        email: EMAIL,
-        password: HANDED_OVER,
-      }),
+      expect(apiPost).toHaveBeenCalledWith("/admin/moderators", { email: EMAIL }),
     );
   });
 
-  it("говорит, что передать человеку", async () => {
+  it("пароля в форме нет: его придумывает площадка", () => {
     render(<AppointModerator />);
 
-    await fill(EMAIL, HANDED_OVER);
+    expect(screen.queryByLabelText(/пароль/i)).not.toBeInTheDocument();
+  });
+
+  it("показывает выданный пароль, чтобы его можно было передать", async () => {
+    render(<AppointModerator />);
+
+    await appoint(EMAIL);
 
     const done = await screen.findByRole("status");
     expect(done).toHaveTextContent(EMAIL);
-    expect(done).toHaveTextContent(/Передайте ему адрес и пароль/);
+    expect(done).toHaveTextContent(GENERATED);
+    expect(done).toHaveTextContent(/показан он один раз/);
+  });
+
+  it("копирует пароль, а не адрес", async () => {
+    const user = userEvent.setup();
+    render(<AppointModerator />);
+    await appoint(EMAIL);
+    await screen.findByRole("status");
+
+    await user.click(screen.getByRole("button", { name: "Скопировать" }));
+
+    await waitFor(async () => expect(await navigator.clipboard.readText()).toBe(GENERATED));
   });
 
   it("занятый адрес показывает отказом сервера и список не обновляет", async () => {
     apiPost.mockResolvedValue({
       ok: false,
-      error: { message: "Аккаунт с таким адресом уже есть", fieldErrors: {} },
+      error: { message: "Аккаунт с таким адресом уже есть", fieldErrors: {}, code: "exists" },
     });
     render(<AppointModerator />);
 
-    await fill(EMAIL, HANDED_OVER);
+    await appoint(EMAIL);
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Аккаунт с таким адресом уже есть");
     expect(refresh).not.toHaveBeenCalled();
   });
 
-  it("предупреждает, что пароль одноразовый", () => {
+  it("предупреждает, что пароль одноразовый", async () => {
     render(<AppointModerator />);
 
-    expect(screen.getByText(/площадка для него закрыта/)).toBeInTheDocument();
+    await appoint(EMAIL);
+
+    expect(await screen.findByText(/площадка для него закрыта/)).toBeInTheDocument();
   });
 });

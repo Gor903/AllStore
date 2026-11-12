@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { AdminNav } from "@/components/admin/AdminNav";
 import { AppointModerator } from "@/components/admin/AppointModerator";
+import { ModeratorStatus } from "@/components/admin/ModeratorStatus";
 import { ResetModeratorPassword } from "@/components/admin/ResetModeratorPassword";
 import { Pagination } from "@/components/catalog/Pagination";
 import { AccountRows } from "@/components/moderation/AccountRows";
@@ -44,14 +45,19 @@ export default async function ModeratorsPage({ searchParams }: PageProps<"/admin
               items={page.items}
               viewerId={viewer.id}
               extra={(item) => (
-                <div className="flex flex-wrap items-start gap-2">
-                  <Link
-                    href={`/admin/moderators/${item.id}`}
-                    className="rounded-lg border border-ink-muted/30 px-3 py-1.5 text-sm font-medium"
-                  >
-                    Что решил
-                  </Link>
-                  <ResetModeratorPassword userId={item.id} email={item.email} />
+                <div className="flex flex-col gap-2">
+                  <div className="flex flex-wrap items-start gap-2">
+                    <Link
+                      href={`/admin/moderators/${item.id}`}
+                      className="rounded-lg border border-ink-muted/30 px-3 py-1.5 text-sm font-medium"
+                    >
+                      Что решил
+                    </Link>
+                    <ResetModeratorPassword userId={item.id} email={item.email} />
+                  </div>
+                  <p className="text-xs">
+                    <ModeratorStatus user={item} />
+                  </p>
                 </div>
               )}
             />

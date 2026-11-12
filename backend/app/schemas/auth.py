@@ -139,6 +139,9 @@ class UserRead(BaseModel):
     # the client needs this to send the owner to the right screen, not to decide anything:
     # the refusal itself comes from the server on every other route
     must_change_password: bool
+    # when somebody else's password was handed over, so the administrator's list can say
+    # whether a handover is still waiting to be used and how long it has been waiting
+    password_handed_over_at: datetime | None
     email_verified_at: datetime | None
     created_at: datetime
 

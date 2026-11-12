@@ -24,8 +24,8 @@ from app.schemas.admin import (
     AuditLogRead,
     CategoryCreateRequest,
     CategoryUpdateRequest,
+    HandedOverRead,
     ModeratorCreateRequest,
-    ModeratorPasswordRequest,
     ModeratorRecordRead,
     RoleChangeRequest,
     SystemStateRead,
@@ -167,7 +167,7 @@ async def list_moderators(
 
 @router.post(
     "/moderators",
-    response_model=UserRead,
+    response_model=HandedOverRead,
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_csrf), Depends(limit_staff_actions), STEP_UP],
 )
@@ -176,10 +176,11 @@ async def create_moderator(
     admin: AdminUser,
     settings: SettingsDep,
     session: SessionDep,
-) -> UserRead:
-    """Makes the account and hands over a password the administrator chose.
+) -> HandedOverRead:
+    """Makes the account and hands back the password that opens it once.
 
-    That password is known to the administrator, so it is not yet the moderator's: it gets
+    The password is generated rather than chosen, and this answer is the only place it is
+    readable. It is known to the administrator, so it is not yet the moderator's: it gets
     them in once and the platform stays shut to them until they replace it.
 
     The letter goes after the commit and carries no password. Its reader is the one person
@@ -187,34 +188,42 @@ async def create_moderator(
     over other people was opened on their address, while the handed-over password is still
     unspent and something can be done about it.
     """
-    moderator = await moderators.create(
-        session, admin, payload.normalized_email, payload.password.get_secret_value()
-    )
+    handed_over = await moderators.create(session, admin, payload.normalized_email)
     await session.commit()
     notifications.deliver(
         settings,
-        notifications.staff_account_letter(settings, moderator.email, administrator=False),
+        notifications.staff_account_letter(settings, handed_over.user.email, administrator=False),
     )
-    return UserRead.model_validate(moderator)
+    return HandedOverRead(
+        user=UserRead.model_validate(handed_over.user), password=handed_over.password
+    )
 
 
 @router.post(
     "/moderators/{user_id}/password",
-    response_model=UserRead,
+    response_model=HandedOverRead,
     dependencies=[Depends(require_csrf), Depends(limit_staff_actions), STEP_UP],
 )
 async def reset_moderator_password(
     user_id: uuid.UUID,
-    payload: ModeratorPasswordRequest,
     admin: AdminUser,
+    settings: SettingsDep,
     session: SessionDep,
-) -> UserRead:
-    """The way back in for a moderator who lost theirs. The replacement expires the same way."""
-    moderator = await moderators.reset_password(
-        session, admin, user_id, payload.password.get_secret_value()
-    )
+) -> HandedOverRead:
+    """The way back in for a moderator who lost theirs. The replacement expires the same way.
+
+    The letter says a password was replaced and does not carry the replacement: whoever asked
+    for this is handing that over themselves. Its reader is the one person who can tell the
+    difference between a reset they asked for and one they did not.
+    """
+    handed_over = await moderators.reset_password(session, admin, user_id)
     await session.commit()
-    return UserRead.model_validate(moderator)
+    notifications.deliver(
+        settings, notifications.staff_password_reset_letter(settings, handed_over.user.email)
+    )
+    return HandedOverRead(
+        user=UserRead.model_validate(handed_over.user), password=handed_over.password
+    )
 
 
 @router.get("/moderators/{user_id}", response_model=ModeratorRecordRead)

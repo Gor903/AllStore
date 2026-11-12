@@ -36,7 +36,7 @@ async def _stale(session: AsyncSession, user: User) -> None:
 async def _appoint(client: AsyncClient, email: str) -> int:
     response = await client.post(
         MODERATORS,
-        json={"email": email, "password": "a-handed-over-password-1"},
+        json={"email": email},
         headers=csrf_headers(client),
     )
     return response.status_code
@@ -62,7 +62,7 @@ async def test_a_claim_that_faded_is_refused(
 
     response = await api_client.post(
         MODERATORS,
-        json={"email": "stale@example.com", "password": "a-handed-over-password-1"},
+        json={"email": "stale@example.com"},
         headers=csrf_headers(api_client),
     )
 

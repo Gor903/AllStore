@@ -4,20 +4,25 @@ A moderator judges other people's shops and bars other people's accounts, so the
 something a form on the public site can grant. There is exactly one way in, and it starts
 with an administrator typing an address.
 
-The password the administrator types is known to the administrator, which means it is not yet
-anybody's: it gets the moderator in once, and the platform stays shut to them until they
-replace it. That is the same rule as an administrator bootstrapped from the environment and
-an account created by `scripts.grant_role`, and it is the whole reason the password here may
-be handed over in a chat message without the role being handed over with it.
+The administrator types the address and nothing else. The password is generated here, shown
+to them once, and kept nowhere afterwards — a password somebody invents while creating the
+sixth moderator this month is one weak password, or one password used six times.
+
+Either way it is known to somebody other than its owner, which means it is not yet anybody's:
+it gets the moderator in once, and the platform stays shut to them until they replace it.
+That is the same rule as an administrator bootstrapped from the environment and an account
+created by `scripts.grant_role`, and it is the whole reason this password may be handed over
+in a chat message without the role being handed over with it.
 """
 
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import ConflictError
-from app.core.security import hash_password_in_thread
+from app.core.security import generate_handed_over_password, hash_password_in_thread
 from app.models import User, UserRole
 from app.repositories import users as users_repo
 from app.services import audit, moderator_record, permissions, sessions
@@ -29,7 +34,20 @@ class AccountExistsError(ConflictError):
     code = "account_exists"
 
 
-async def create(session: AsyncSession, admin: User, email: str, password: str) -> User:
+@dataclass(frozen=True)
+class HandedOver:
+    """An account and the password that opens it once.
+
+    The password is here and nowhere else: not in the row, which holds a hash; not in the
+    journal, which records that this happened and not what was handed over; not in a letter.
+    The caller shows it to the administrator and forgets it.
+    """
+
+    user: User
+    password: str
+
+
+async def create(session: AsyncSession, admin: User, email: str) -> HandedOver:
     """Creates the moderator. The caller owns the commit."""
     permissions.ensure_may_appoint_moderator(admin)
     normalized = email.strip().lower()
@@ -38,6 +56,7 @@ async def create(session: AsyncSession, admin: User, email: str, password: str) 
         # the state of is an address they cannot act on
         raise AccountExistsError("Аккаунт с таким адресом уже есть")
 
+    password = generate_handed_over_password()
     moderator = await users_repo.add(
         session,
         User(
@@ -50,12 +69,10 @@ async def create(session: AsyncSession, admin: User, email: str, password: str) 
         ),
     )
     await audit.record(session, admin, "moderator.created", ENTITY, moderator.id, email=normalized)
-    return moderator
+    return HandedOver(moderator, password)
 
 
-async def reset_password(
-    session: AsyncSession, admin: User, user_id: uuid.UUID, password: str
-) -> User:
+async def reset_password(session: AsyncSession, admin: User, user_id: uuid.UUID) -> HandedOver:
     """A moderator who lost their password gets a new temporary one, not a recovery link.
 
     The administrator already decides who moderates; letting them restore access is no new
@@ -65,6 +82,7 @@ async def reset_password(
     # an account that is not a moderator has no password for this screen to reset, and
     # whether it exists at all is not this screen's business — see moderator_record
     moderator = await moderator_record.find_moderator(session, user_id)
+    password = generate_handed_over_password()
     moderator.password_hash = await hash_password_in_thread(password)
     moderator.must_change_password = True
     moderator.password_handed_over_at = datetime.now(UTC)
@@ -73,4 +91,4 @@ async def reset_password(
     await sessions.sign_out_everywhere(session, moderator.id, sessions.CREDENTIALS_CHANGED)
     await session.flush()
     await audit.record(session, admin, "moderator.password_reset", ENTITY, moderator.id)
-    return moderator
+    return HandedOver(moderator, password)

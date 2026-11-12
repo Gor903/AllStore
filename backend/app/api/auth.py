@@ -30,6 +30,7 @@ from app.deps.rate_limit import (
 )
 from app.models import User
 from app.repositories import sessions as sessions_repo
+from app.repositories import users as users_repo
 from app.schemas.auth import (
     BuyerRegisterRequest,
     EmailChangeRequest,
@@ -43,7 +44,7 @@ from app.schemas.auth import (
     UserRead,
     VerifyRequest,
 )
-from app.services import audit, device_keys, email_verification, notifications
+from app.services import audit, device_keys, email_verification, notifications, permissions
 from app.services import auth as auth_service
 from app.services import sessions as session_service
 from app.services import totp as totp_service
@@ -86,6 +87,34 @@ async def _register(
     letters = await email_verification.request(session, settings, user, user.email)
     await session.commit()
     notifications.deliver(settings, letters.confirm)
+
+
+async def _tell_both_halves_of_the_handover(
+    session: SessionDep, settings: Settings, user: User, context: dict[str, str | None]
+) -> None:
+    """A staff seat opened for the first time: both people who knew that password hear of it.
+
+    The owner, because a first sign-in they do not recognise is how a password read on the way
+    over announces itself — and the only moment it still can. The administrator, because they
+    are the one who can act on that answer: issue another password and end the session.
+
+    Called after the commit, like every other letter, and only for the first sign-in ever. A
+    letter on each of somebody's own daily sign-ins is a letter they stop reading.
+    """
+    notifications.deliver(
+        settings,
+        notifications.staff_first_sign_in_letter(
+            settings, user.email, context["user_agent"], context["ip"]
+        ),
+    )
+    administrator = await users_repo.get_admin(session)
+    # an administrator signing in for the first time is both halves at once, and one letter
+    # about themselves is enough
+    if administrator is not None and administrator.id != user.id:
+        notifications.deliver(
+            settings,
+            notifications.staff_claimed_notice(settings, administrator.email, user.email),
+        )
 
 
 def _context(request: Request, settings: Settings) -> dict[str, str | None]:
@@ -159,9 +188,10 @@ async def login(
     if waiting > 0:
         await asyncio.sleep(waiting)
     try:
-        user = await auth_service.authenticate(
+        signed_in = await auth_service.authenticate(
             session, settings, payload.normalized_email, payload.password.get_secret_value()
         )
+        user = signed_in.user
     except AppError as refusal:
         # Logged, deliberately not written to the journal. The journal is the record of
         # deliberate acts by people the platform can name, and it is never pruned; a row per
@@ -198,6 +228,8 @@ async def login(
                 settings, user.email, context["user_agent"], context["ip"]
             ),
         )
+    if signed_in.first_ever and permissions.is_staff(user.role):
+        await _tell_both_halves_of_the_handover(session, settings, user, context)
     set_session_cookies(response, settings, issued)
     return UserRead.model_validate(user)
 
