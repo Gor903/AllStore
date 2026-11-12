@@ -20,7 +20,7 @@ from app.core.errors import ConflictError
 from app.core.security import hash_password_in_thread
 from app.models import User, UserRole
 from app.repositories import users as users_repo
-from app.services import audit, moderator_record, permissions
+from app.services import audit, moderator_record, permissions, sessions
 
 ENTITY = "user"
 
@@ -68,6 +68,9 @@ async def reset_password(
     moderator.password_hash = await hash_password_in_thread(password)
     moderator.must_change_password = True
     moderator.password_handed_over_at = datetime.now(UTC)
+    # Same rule as every other credential change: the sessions holding the old one end. The
+    # reason this is reached at all is usually that somebody else may be holding one.
+    await sessions.sign_out_everywhere(session, moderator.id, sessions.CREDENTIALS_CHANGED)
     await session.flush()
     await audit.record(session, admin, "moderator.password_reset", ENTITY, moderator.id)
     return moderator

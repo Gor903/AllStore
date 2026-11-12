@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.security import hash_password
 from app.core.totp import code_for, generate_secret, step_at
-from app.core.vault import lock
+from app.core.vault import TOTP_SECRET, lock
 from app.models import Category, TotpCredential, User, UserRole
 
 PRODUCTS_URL = "/api/v1/products"
@@ -126,7 +126,7 @@ async def enrol_second_factor(session: AsyncSession, user: User) -> str:
     session.add(
         TotpCredential(
             user_id=user.id,
-            secret_encrypted=lock(get_settings(), secret),
+            secret_encrypted=lock(get_settings(), TOTP_SECRET, secret),
             confirmed_at=datetime.now(UTC),
         )
     )

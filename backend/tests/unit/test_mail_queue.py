@@ -15,11 +15,15 @@ from celery.exceptions import Retry
 
 from app.core.config import Settings, get_settings
 from app.core.mail import Letter
+from app.core.vault import QUEUED_LETTER, lock, unlock
 from app.services import notifications
+from app.tasks import mail as mail_task
 from app.tasks.mail import TRANSIENT, send_letter
 from app.worker import celery_app, enqueue, ping
 
 LETTER = Letter(to="buyer@x.com", subject="Тема", body="тело письма")
+# what the queue actually carries: the body travels sealed, see app/tasks/mail.py
+SEALED = lock(get_settings(), QUEUED_LETTER, LETTER.body)
 
 
 def _settings(**overrides: object) -> Settings:
@@ -50,7 +54,7 @@ def test_a_mail_server_having_a_bad_day_is_asked_again(monkeypatch: pytest.Monke
     monkeypatch.setattr("app.tasks.mail.deliver_now", refuse)
 
     with pytest.raises(Retry):
-        send_letter.apply(args=(LETTER.to, LETTER.subject, LETTER.body)).get()
+        send_letter.apply(args=(LETTER.to, LETTER.subject, SEALED)).get()
 
 
 def test_an_address_that_does_not_exist_is_not_asked_again(
@@ -64,10 +68,41 @@ def test_an_address_that_does_not_exist_is_not_asked_again(
     monkeypatch.setattr("app.tasks.mail.deliver_now", refuse)
 
     with caplog.at_level(logging.WARNING):
-        result = send_letter.apply(args=(LETTER.to, LETTER.subject, LETTER.body))
+        result = send_letter.apply(args=(LETTER.to, LETTER.subject, SEALED))
 
     assert result.successful()
     assert "not retrying" in caplog.text
+
+
+def test_the_queue_does_not_carry_the_link_in_the_clear(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Half of these letters carry the link that takes an account back. The table keeps only
+    a hash of that token; a task argument keeps whatever it was given, and whoever can list
+    the queue could spend it before its owner does."""
+    carried: list[object] = []
+
+    def capture(task: object, *args: object, **options: object) -> bool:
+        carried.extend(args)
+        return True
+
+    monkeypatch.setattr(mail_task, "enqueue", capture)
+    letter = Letter(to="buyer@x.com", subject="Тема", body="ссылка: /password/reset?t=raw-token")
+
+    mail_task.queue(letter)
+
+    assert "raw-token" not in " ".join(str(part) for part in carried)
+    assert unlock(get_settings(), QUEUED_LETTER, str(carried[2])) == letter.body
+
+
+def test_a_letter_that_cannot_be_unsealed_is_dropped_rather_than_retried(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The secret was rotated while this waited. Every further attempt reads the same
+    unreadable argument, so the log is the whole answer — as with a refused recipient."""
+    with caplog.at_level(logging.WARNING):
+        result = send_letter.apply(args=(LETTER.to, LETTER.subject, "not a sealed body"))
+
+    assert result.successful()
+    assert "could not be unsealed" in caplog.text
 
 
 def test_only_the_failures_worth_repeating_are_repeated() -> None:

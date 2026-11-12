@@ -30,7 +30,7 @@ from app.core.config import Settings
 from app.core.errors import ConflictError, PermissionDeniedError
 from app.core.security import hash_token
 from app.core.totp import generate_secret, matching_step, provisioning_uri
-from app.core.vault import lock, unlock
+from app.core.vault import TOTP_SECRET, lock, unlock
 from app.models import TotpCredential, TotpRecoveryCode, User, UserRole
 from app.repositories import totp as repo
 
@@ -96,7 +96,7 @@ async def begin(session: AsyncSession, settings: Settings, user: User) -> Enrolm
     secret = generate_secret()
     await repo.put(
         session,
-        TotpCredential(user_id=user.id, secret_encrypted=lock(settings, secret)),
+        TotpCredential(user_id=user.id, secret_encrypted=lock(settings, TOTP_SECRET, secret)),
     )
     return Enrolment(
         secret=secret, uri=provisioning_uri(secret, user.email, settings.mail_from_name)
@@ -166,7 +166,7 @@ async def revoke(session: AsyncSession, user_id: uuid.UUID) -> bool:
 
 
 def _spend_step(settings: Settings, credential: TotpCredential, code: str) -> None:
-    secret = unlock(settings, credential.secret_encrypted)
+    secret = unlock(settings, TOTP_SECRET, credential.secret_encrypted)
     if secret is None:
         # the key changed or the row was altered; either way this factor cannot be used again
         raise WrongCode("Код не подходит")

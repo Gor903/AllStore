@@ -14,6 +14,7 @@ import ssl
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.core.mail import Letter, deliver_now
+from app.core.vault import QUEUED_LETTER, lock, unlock
 from app.worker import celery_app, enqueue
 
 logger = get_logger(__name__)
@@ -39,13 +40,20 @@ TRANSIENT = (smtplib.SMTPServerDisconnected, smtplib.SMTPConnectError, ssl.SSLEr
     retry_jitter=True,
     max_retries=get_settings().mail_task_max_retries,
 )
-def send_letter(self: object, to: str, subject: str, body: str) -> None:
+def send_letter(self: object, to: str, subject: str, sealed_body: str) -> None:
     """Hands one letter to the transport.
 
     When the tries run out the failure is logged with its traceback by Celery, and that line
     is the record of a letter nobody got — there is no further place to escalate to.
     """
     settings = get_settings()
+    body = unlock(settings, QUEUED_LETTER, sealed_body)
+    if body is None:
+        # The signing secret changed while this waited, so the text cannot be had. Not retried:
+        # every further attempt reads the same unreadable argument. Whoever rotated the secret
+        # already knows the cost — see core/vault.py.
+        logger.warning("the letter to %s could not be unsealed; not retrying", to)
+        return
     try:
         deliver_now(settings, Letter(to=to, subject=subject, body=body))
     except smtplib.SMTPRecipientsRefused:
@@ -58,14 +66,21 @@ def send_letter(self: object, to: str, subject: str, body: str) -> None:
 def queue(letter: Letter) -> bool:
     """Puts one letter on the queue, and says whether it got there.
 
+    The body travels sealed. Half of these letters carry the link that takes an account back —
+    recovery, confirming an address — and a task argument is as readable as a database column
+    to anyone who can list the queue. The hash in the table is useless to them; the link is
+    not. Subject and recipient stay plain: the queue has to be legible enough to debug, and
+    neither of them is a credential.
+
     The expiry belongs here rather than at the call site: it is a property of the letter —
     all of these are worth sending now and none of them in two days — and spelling it out ten
     times would be ten places for it to drift.
     """
+    settings = get_settings()
     return enqueue(
         send_letter,
         letter.to,
         letter.subject,
-        letter.body,
-        expires=get_settings().mail_task_expires_seconds,
+        lock(settings, QUEUED_LETTER, letter.body),
+        expires=settings.mail_task_expires_seconds,
     )

@@ -6,7 +6,7 @@ of those is a copy of every second factor on the platform unless this works.
 """
 
 from app.core.config import Settings, get_settings
-from app.core.vault import lock, unlock
+from app.core.vault import QUEUED_LETTER, TOTP_SECRET, lock, unlock
 
 SECRET = "JBSWY3DPEHPK3PXP"
 
@@ -16,32 +16,38 @@ def _settings(**overrides: object) -> Settings:
 
 
 def test_what_goes_in_comes_back() -> None:
-    assert unlock(_settings(), lock(_settings(), SECRET)) == SECRET
+    assert unlock(_settings(), TOTP_SECRET, lock(_settings(), TOTP_SECRET, SECRET)) == SECRET
 
 
 def test_the_stored_form_does_not_contain_the_secret() -> None:
-    assert SECRET not in lock(_settings(), SECRET)
+    assert SECRET not in lock(_settings(), TOTP_SECRET, SECRET)
 
 
 def test_the_same_secret_stores_differently_every_time() -> None:
     """A fresh nonce each time, so two accounts with the same secret — or one account
     enrolling twice — do not have matching rows for anybody to notice."""
-    assert lock(_settings(), SECRET) != lock(_settings(), SECRET)
+    assert lock(_settings(), TOTP_SECRET, SECRET) != lock(_settings(), TOTP_SECRET, SECRET)
 
 
 def test_a_row_somebody_edited_is_refused_rather_than_decoded() -> None:
     """AES-GCM, so a changed byte is a failure and not a different secret."""
-    stored = lock(_settings(), SECRET)
+    stored = lock(_settings(), TOTP_SECRET, SECRET)
     tampered = stored[:-4] + ("AAAA" if not stored.endswith("AAAA") else "BBBB")
 
-    assert unlock(_settings(), tampered) is None
+    assert unlock(_settings(), TOTP_SECRET, tampered) is None
 
 
 def test_nonsense_is_refused_without_raising() -> None:
     """Callers treat `None` as "this factor cannot be used"; an exception here would come out
     of a sign-in as a 500."""
-    assert unlock(_settings(), "not base64 at all !!") is None
-    assert unlock(_settings(), "") is None
+    assert unlock(_settings(), TOTP_SECRET, "not base64 at all !!") is None
+    assert unlock(_settings(), TOTP_SECRET, "") is None
+
+
+def test_a_label_cannot_open_what_another_label_locked() -> None:
+    """The whole point of passing a purpose: a queue somebody can read must not also hand
+    them the key to every second factor on the platform."""
+    assert unlock(_settings(), QUEUED_LETTER, lock(_settings(), TOTP_SECRET, SECRET)) is None
 
 
 def test_a_different_key_cannot_read_it() -> None:
@@ -49,8 +55,8 @@ def test_a_different_key_cannot_read_it() -> None:
     That is the honest cost of one secret instead of a key service, and it is written down."""
     from pydantic import SecretStr
 
-    stored = lock(_settings(), SECRET)
+    stored = lock(_settings(), TOTP_SECRET, SECRET)
 
     rotated = _settings(secret_key=SecretStr("another-secret-at-least-32-characters-long"))
 
-    assert unlock(rotated, stored) is None
+    assert unlock(rotated, TOTP_SECRET, stored) is None

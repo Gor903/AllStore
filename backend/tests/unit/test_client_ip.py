@@ -10,7 +10,7 @@ from typing import Any
 
 from starlette.requests import Request
 
-from app.core.client_ip import UNKNOWN, client_ip
+from app.core.client_ip import UNKNOWN, allowance_key, client_ip
 from app.core.config import Settings, get_settings
 
 PROXY = "10.0.0.5"
@@ -105,3 +105,24 @@ def test_an_unparseable_entry_in_the_configuration_narrows_trust() -> None:
 
     assert client_ip(request, _settings(("", "nonsense", "10.0.0.0/24"))) == "203.0.113.9"
     assert client_ip(request, _settings(("nonsense",))) == PROXY
+
+
+def test_one_ipv6_customer_spends_one_allowance() -> None:
+    """A /64 is what a single subscriber is routinely handed. Counted per address, the next
+    guess comes from the next address and the limit means nothing."""
+    first = allowance_key("2001:db8:1:2::1")
+    second = allowance_key("2001:db8:1:2:dead:beef:dead:beef")
+
+    assert first == second == "2001:db8:1:2::/64"
+    assert allowance_key("2001:db8:1:3::1") != first
+
+
+def test_ipv4_is_counted_whole() -> None:
+    """There one address really is what one caller has."""
+    assert allowance_key("203.0.113.9") == "203.0.113.9"
+
+
+def test_what_is_not_an_address_is_left_alone() -> None:
+    """`UNKNOWN` is the one bucket every peerless connection shares, and it is not an address."""
+    assert allowance_key(UNKNOWN) == UNKNOWN
+    assert allowance_key("not-an-address") == "not-an-address"
