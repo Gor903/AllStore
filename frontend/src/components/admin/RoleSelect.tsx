@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, type ChangeEvent } from "react";
 
+import { useStepUp } from "@/components/auth/useStepUp";
 import type { User } from "@/lib/api";
 import { apiPost } from "@/lib/browser-api";
 
@@ -25,6 +26,7 @@ const ROLES: { value: User["role"]; label: string }[] = [
  */
 export function RoleSelect({ userId, role }: RoleSelectProps) {
   const router = useRouter();
+  const { attempt, prompt } = useStepUp();
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -33,13 +35,16 @@ export function RoleSelect({ userId, role }: RoleSelectProps) {
     if (next === role) {
       return;
     }
+    const select = event.target;
     setBusy(true);
     setMessage(null);
-    const result = await apiPost<User>(`/admin/users/${userId}/role`, { role: next });
+    const result = await attempt(() =>
+      apiPost<User>(`/admin/users/${userId}/role`, { role: next }),
+    );
     setBusy(false);
     if (!result.ok) {
       // the select snaps back: the role on screen must be the role in the database
-      event.target.value = role;
+      select.value = role;
       setMessage(result.error.message);
       return;
     }
@@ -64,6 +69,7 @@ export function RoleSelect({ userId, role }: RoleSelectProps) {
           </option>
         ))}
       </select>
+      {prompt}
       {message === null ? null : (
         <p role="alert" className="max-w-xs text-xs text-danger">
           {message}

@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
+import { useStepUp } from "@/components/auth/useStepUp";
 import { apiPost } from "@/lib/browser-api";
 import type { FormError } from "@/lib/errors";
 
@@ -15,6 +16,7 @@ import type { FormError } from "@/lib/errors";
  */
 export function ResetModeratorPassword({ userId, email }: { userId: string; email: string }) {
   const router = useRouter();
+  const { attempt, prompt } = useStepUp();
   const [open, setOpen] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<FormError | null>(null);
@@ -25,9 +27,10 @@ export function ResetModeratorPassword({ userId, email }: { userId: string; emai
     setPending(true);
     setError(null);
     const form = event.currentTarget;
-    const result = await apiPost(`/admin/moderators/${userId}/password`, {
-      password: new FormData(form).get("password"),
-    });
+    const password = new FormData(form).get("password");
+    const result = await attempt(() =>
+      apiPost(`/admin/moderators/${userId}/password`, { password }),
+    );
     setPending(false);
     if (!result.ok) {
       setError(result.error);
@@ -62,37 +65,41 @@ export function ResetModeratorPassword({ userId, email }: { userId: string; emai
   }
 
   return (
-    <form onSubmit={onSubmit} className="flex flex-wrap items-center gap-2" noValidate>
-      <label className="flex flex-col gap-1 text-sm">
-        <span className="sr-only">Новый временный пароль для {email}</span>
-        <input
-          name="password"
-          type="text"
-          required
-          autoComplete="off"
-          placeholder="Новый временный пароль"
-          className="min-w-56 rounded-lg border border-ink-muted/30 bg-surface px-3 py-2"
-        />
-      </label>
-      <button
-        type="submit"
-        disabled={pending}
-        className="rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-white disabled:opacity-60"
-      >
-        {pending ? "Выдаём…" : "Выдать"}
-      </button>
-      <button
-        type="button"
-        onClick={() => setOpen(false)}
-        className="px-2 py-1.5 text-sm text-ink-muted"
-      >
-        Отмена
-      </button>
-      {error === null ? null : (
-        <p role="alert" className="w-full text-sm text-danger">
-          {error.message}
-        </p>
-      )}
-    </form>
+    // the prompt is a sibling, not a child: it carries its own form, and forms do not nest
+    <div className="flex flex-col gap-2">
+      <form onSubmit={onSubmit} className="flex flex-wrap items-center gap-2" noValidate>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="sr-only">Новый временный пароль для {email}</span>
+          <input
+            name="password"
+            type="text"
+            required
+            autoComplete="off"
+            placeholder="Новый временный пароль"
+            className="min-w-56 rounded-lg border border-ink-muted/30 bg-surface px-3 py-2"
+          />
+        </label>
+        <button
+          type="submit"
+          disabled={pending}
+          className="rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-white disabled:opacity-60"
+        >
+          {pending ? "Выдаём…" : "Выдать"}
+        </button>
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          className="px-2 py-1.5 text-sm text-ink-muted"
+        >
+          Отмена
+        </button>
+        {error === null ? null : (
+          <p role="alert" className="w-full text-sm text-danger">
+            {error.message}
+          </p>
+        )}
+      </form>
+      {prompt}
+    </div>
   );
 }
