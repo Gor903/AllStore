@@ -19,6 +19,8 @@ __pycache__/
 .ruff_cache/
 .pytest_cache/
 .coverage
+# два прогона пишут свои файлы, которые потом объединяются, — см. цель coverage-back
+.coverage.*
 coverage.xml
 htmlcov/
 
