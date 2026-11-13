@@ -4,7 +4,7 @@
 # Бюджет опускается каждой пачкой тестов. Дописать сюда строку можно, но придётся поднять
 # бюджет — и это будет видно в диффе отдельной правкой, а не спрячется среди кода.
 #
-# budget: 123
+# budget: 109
 backend/app/api/accounts.py
 backend/app/api/admin.py
 backend/app/api/assistant.py
@@ -109,22 +109,8 @@ frontend/src/app/(admin)/moderation/incidents/page.tsx
 frontend/src/app/(admin)/moderation/page.tsx
 frontend/src/app/(admin)/moderation/reports/page.tsx
 frontend/src/app/(dashboard)/dashboard/page.tsx
-frontend/src/app/(dashboard)/dashboard/products/new/page.tsx
 frontend/src/app/(dashboard)/dashboard/products/[productId]/page.tsx
 frontend/src/app/(dashboard)/dashboard/store/page.tsx
 frontend/src/app/(dashboard)/onboarding/page.tsx
 frontend/src/app/layout.tsx
-frontend/src/app/(public)/assistant/page.tsx
-frontend/src/app/(public)/catalog/page.tsx
-frontend/src/app/(public)/devices/page.tsx
-frontend/src/app/(public)/email/confirm/page.tsx
-frontend/src/app/(public)/login/page.tsx
-frontend/src/app/(public)/page.tsx
-frontend/src/app/(public)/password/forgot/page.tsx
-frontend/src/app/(public)/password/page.tsx
-frontend/src/app/(public)/password/reset/page.tsx
-frontend/src/app/(public)/p/[productId]/page.tsx
-frontend/src/app/(public)/register/page.tsx
-frontend/src/app/(public)/s/[subdomain]/page.tsx
-frontend/src/app/(public)/stores/page.tsx
 frontend/src/lib/api-types.ts
