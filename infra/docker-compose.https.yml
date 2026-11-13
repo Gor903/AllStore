@@ -41,3 +41,8 @@ services:
     environment:
       NEXT_PUBLIC_API_URL: https://${BASE_DOMAIN:-allstore.localhost}
       NEXT_PUBLIC_SITE_URL: https://${BASE_DOMAIN:-allstore.localhost}
+      # Иначе браузер ищет куки без префикса, которых тут нет: сервер вне local ставит
+      # `__Host-`, а `lib/env.ts` по умолчанию знает только локальные имена. CSRF-заголовок
+      # тогда не отправляется, и любой изменяющий запрос отвечает 403.
+      NEXT_PUBLIC_SESSION_COOKIE: __Host-allstore_session
+      NEXT_PUBLIC_CSRF_COOKIE: __Host-allstore_csrf

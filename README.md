@@ -62,6 +62,24 @@ curl -k https://allstore.localhost/health
 
 Обычный `docker compose up` остаётся на http и ничего про сертификаты не знает.
 
+### Прод-образы
+
+Таргеты `prod` в трёх Dockerfile были написаны и ни разу не собирались: compose везде просит
+`target: dev`. `infra/docker-compose.prod.yml` собирает их — непривилегированный пользователь,
+без перезагрузчика, Next в standalone, миграции отдельным запуском, исходники никуда не
+монтируются. Только вместе с https-профилем: вне local куки `Secure`, а по http браузер их не
+отдаёт, и залогиниться было бы нельзя.
+
+```bash
+./infra/tls/generate-cert.sh
+docker compose -f compose.yaml -f infra/docker-compose.prod.yml -f infra/docker-compose.https.yml up --build -d --wait
+```
+
+`NEXT_PUBLIC_*` для браузерной половины вмораживаются в образ на сборке — это аргументы, а не
+переменные запуска. Имена кук среди них: вне local бэкенд ставит `__Host-`, и фронт должен
+искать их под тем же именем, иначе CSRF-заголовок не уйдёт и любой изменяющий запрос ответит
+403. Это проверяется сценарием `e2e/production-cookies.spec.ts`, который на http пропускается.
+
 ### Переменные окружения
 
 Дефолтов в `compose.yaml` достаточно для локального запуска, файл `.env` не обязателен.
