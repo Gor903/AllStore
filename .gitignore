@@ -4,6 +4,12 @@
 !.env.example
 infra/env/*.env
 !infra/env/*.env.example
+# the https stand's certificate: generated per machine, never shared
+infra/tls/*.crt
+infra/tls/*.key
+# an empty mountpoint docker leaves behind: the https override mounts a file into conf.d,
+# and conf.d is itself a bind mount, so the target appears here. nginx reads it as nothing.
+infra/nginx/conf.d/allstore-tls.conf
 
 # python
 __pycache__/

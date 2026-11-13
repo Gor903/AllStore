@@ -1,0 +1,43 @@
+# The stand as it would be deployed, for the one thing that cannot be checked on http.
+#
+# `__Host-` cookies need `Secure`, `Secure` needs https, and the whole repository is
+# APP_ENV=local — so the cookie shape the platform would actually ship has never run anywhere
+# but in unit tests. Neither has the storefront CORS pattern, which drops the port and demands
+# https as soon as the environment stops being local.
+#
+#   infra/tls/generate-cert.sh
+#   docker compose -f compose.yaml -f infra/docker-compose.https.yml up --build -d --wait
+#
+# Port 443 rather than something higher on purpose: the storefront origin pattern has no port
+# in it outside local, so a storefront on :8443 would be refused for the wrong reason.
+#
+# Mail is cut off here. In production mode letters stop going to the log and start going to
+# the queue, and the `.env` of whoever runs this may well have a working SMTP password in it.
+services:
+  nginx:
+    ports:
+      - "443:443"
+    # paths from the repository root: an override is resolved against the project directory,
+    # not against the file it is written in
+    volumes:
+      - ./infra/nginx/conf.d:/etc/nginx/conf.d
+      - ./infra/nginx/tls/allstore-tls.conf:/etc/nginx/conf.d/allstore-tls.conf:ro
+      - ./infra/tls:/etc/nginx/tls:ro
+
+  backend:
+    environment:
+      APP_ENV: production
+      SITE_URL: https://${BASE_DOMAIN:-allstore.localhost}
+      CORS_ORIGINS: https://${BASE_DOMAIN:-allstore.localhost}
+      SMTP_HOST: ""
+
+  worker:
+    environment:
+      APP_ENV: production
+      SITE_URL: https://${BASE_DOMAIN:-allstore.localhost}
+      SMTP_HOST: ""
+
+  frontend:
+    environment:
+      NEXT_PUBLIC_API_URL: https://${BASE_DOMAIN:-allstore.localhost}
+      NEXT_PUBLIC_SITE_URL: https://${BASE_DOMAIN:-allstore.localhost}
