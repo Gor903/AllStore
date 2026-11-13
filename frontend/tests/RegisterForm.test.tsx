@@ -94,6 +94,12 @@ describe("RegisterForm", () => {
 
 describe("после отправки", () => {
   it("обещает письмо и ничего больше, потому что сервер отвечает одинаково", async () => {
+    // Свой `fetch`, а не чужой: раньше этот тест полагался на подмену из соседнего и
+    // проходил только потому, что тот шёл раньше.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => mockResponse(202)),
+    );
     const user = userEvent.setup();
     render(<RegisterForm />);
 
