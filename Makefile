@@ -1,4 +1,4 @@
-.PHONY: up down logs ps rebuild migrate revision api-types backend-check frontend-check check e2e
+.PHONY: up down logs ps rebuild migrate revision api-types backend-check frontend-check check e2e backup restore-drill
 
 E2E_MODERATOR_EMAIL ?= e2e-moderator@e2e.allstore.am
 E2E_MODERATOR_PASSWORD ?= e2e-password-1
@@ -43,3 +43,9 @@ e2e: ## поднять стек и прогнать сквозной сцена�
 
 api-types:
 	./scripts/gen-api-types.sh
+
+backup: ## снимок базы в объектное хранилище (ADR 29)
+	./infra/backup/backup.sh
+
+restore-drill: ## развернуть последний снимок рядом и сверить с источником
+	./infra/backup/restore-drill.sh

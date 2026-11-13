@@ -14,7 +14,7 @@
 | 3 | Стратегия кэширования публичных страниц | 6 | открыт |
 | 4 | [Типы frontend из OpenAPI](0004-api-types-generation.md) | 2 | accepted |
 | 5 | Провайдер email-уведомлений | 8 | открыт, временно обойдён [ADR 19](0019-transactional-mail.md) |
-| 6 | Стратегия резервного копирования PostgreSQL | 1–9 (до продакшена) | открыт |
+| 6 | [Стратегия резервного копирования PostgreSQL](0029-postgres-backups.md) | 1–9 (до продакшена) | записан как [ADR 29](0029-postgres-backups.md) |
 | 7 | [Порог покрытия тестами](0007-test-coverage-threshold.md) | 2 | accepted |
 
 Решения, принятые по ходу работы и не привязанные к разделу 11:
@@ -36,3 +36,4 @@
 | 26 | [Вход через Google убран](0026-google-sign-in-removed.md) | рефактор auth | accepted, отменяет 20 |
 | 27 | [Письмо заведённому staff-аккаунту](0027-staff-account-letter.md) | рефактор auth | accepted, дополняет 17 |
 | 28 | [Временный пароль staff придумывает площадка](0028-staff-passwords-are-generated.md) | рефактор auth | accepted, уточняет 17 |
+| 29 | [Бэкапы PostgreSQL: pg_dump в объектное хранилище](0029-postgres-backups.md) | 15 | accepted, закрывает решение 6 |
