@@ -1,10 +1,23 @@
-.PHONY: up down logs ps rebuild migrate revision api-types backend-check frontend-check check e2e backup restore-drill
+# Цели lint-* / unit-* / integration-back — это ровно то, что зовёт CI. Один список команд на
+# «линт» и на «тесты», а не два: добавить линтер значит дописать строку здесь, и она тут же
+# работает и в CI, и локально, и в pre-commit. Workflow при этом не меняется.
+.PHONY: up down logs ps rebuild migrate revision api-types api-types-fresh \
+	lint-back lint-front lint-search unit-back integration-back unit-front unit-search \
+	backend-check frontend-check check e2e backup restore-drill
 
 E2E_MODERATOR_EMAIL ?= e2e-moderator@e2e.allstore.am
 E2E_MODERATOR_PASSWORD ?= e2e-password-1
 
 # прогон идёт на отдельной базе: дефолт DATABASE_URL смотрит на базу стенда, и тесты её травят
 TEST_DATABASE_URL ?= postgresql+asyncpg://allstore:allstore@localhost:5433/allstore_test
+
+# Экспорт схемы импортирует приложение, а оно проверяет настройки на импорте. Значения
+# заведомо негодные и ровно те же, что в CI: ничего из этого никуда не ходит, а генератору
+# нужен импортируемый app, не рабочая конфигурация.
+SCHEMA_ENV = APP_ENV=local \
+	SECRET_KEY=ci-secret-value-at-least-32-characters \
+	DATABASE_URL="$(TEST_DATABASE_URL)" \
+	S3_ENDPOINT_URL=http://localhost:9000 S3_ACCESS_KEY=ci S3_SECRET_KEY=ci S3_BUCKET=allstore-ci
 
 up: ## поднять весь локальный стек
 	docker compose up --build -d
@@ -27,11 +40,45 @@ migrate:
 revision:
 	docker compose exec backend alembic revision --autogenerate -m "$(m)"
 
-backend-check:
-	cd backend && uv run ruff check . && uv run ruff format --check . && uv run mypy && DATABASE_URL="$(TEST_DATABASE_URL)" uv run pytest
+lint-back: ## стиль, типы и свежесть сгенерированного
+	cd backend && uv run ruff check .
+	cd backend && uv run ruff format --check .
+	cd backend && uv run mypy
+	$(MAKE) api-types-fresh
 
-frontend-check:
-	cd frontend && npm run lint && npm run format:check && npm run typecheck && npm test
+lint-front:
+	cd frontend && npm run lint
+	cd frontend && npm run format:check
+	cd frontend && npm run typecheck
+
+lint-search:
+	cd search && uv run ruff check .
+	cd search && uv run ruff format --check .
+	cd search && uv run mypy
+
+# Базы здесь нет намеренно: ни один файл в tests/unit к ней не обращается, и это стоит
+# держать правдой — прогон за восемь секунд без сервисов ловит логику раньше всего прочего.
+unit-back:
+	cd backend && COVERAGE_FILE=.coverage.unit uv run pytest -m "not integration" \
+		--cov --cov-branch --cov-report=term-missing
+
+integration-back:
+	cd backend && $(SCHEMA_ENV) uv run alembic upgrade head
+	cd backend && DATABASE_URL="$(TEST_DATABASE_URL)" COVERAGE_FILE=.coverage.integration \
+		uv run pytest -m integration --cov --cov-branch --cov-report=term-missing
+
+unit-front:
+	cd frontend && npm test
+
+# Схема принадлежит бэкенду: сервис поиска читает её, а не заводит свою, поэтому миграции
+# накатываются отсюда — миграция, ломающая поиск, ловится здесь.
+unit-search:
+	cd backend && $(SCHEMA_ENV) uv run alembic upgrade head
+	cd search && DATABASE_URL="$(TEST_DATABASE_URL)" EMBEDDER=fake uv run pytest
+
+backend-check: lint-back unit-back integration-back
+
+frontend-check: lint-front unit-front
 
 check: backend-check frontend-check
 
@@ -42,7 +89,13 @@ e2e: ## поднять стек и прогнать сквозной сцена�
 	port=$$(docker compose port nginx 80 | cut -d: -f2); cd frontend && E2E_BASE_URL=http://localhost:$$port npx playwright test
 
 api-types:
-	./scripts/gen-api-types.sh
+	$(SCHEMA_ENV) ./scripts/gen-api-types.sh
+
+# Проверка свежести сгенерированного файла, а не тест: нужен импортируемый app, но не база.
+# Падает у того PR, который сменил схему, — у него же и перегенерировать.
+api-types-fresh:
+	$(SCHEMA_ENV) ./scripts/gen-api-types.sh
+	git diff --exit-code -- frontend/src/lib/api-types.ts
 
 backup: ## снимок базы в объектное хранилище (ADR 29)
 	./infra/backup/backup.sh
