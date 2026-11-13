@@ -38,10 +38,10 @@ export default defineConfig({
       // Храповик: цифры — то, чего набор достигает сейчас, и они растут по мере закрытия
       // пробелов. Порог выше правды — это порог, который выключают в первую красную пятницу.
       thresholds: {
-        statements: 58,
-        branches: 54,
-        functions: 55,
-        lines: 58,
+        statements: 66,
+        branches: 60,
+        functions: 64,
+        lines: 66,
       },
     },
   },
