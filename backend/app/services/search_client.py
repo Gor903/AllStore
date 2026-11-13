@@ -30,11 +30,13 @@ async def semantic_ids(settings: Settings, query: str, limit: int) -> list[uuid.
         async with httpx.AsyncClient(timeout=settings.search_timeout_seconds) as client:
             response = await client.post(url, json={"query": query, "limit": limit})
             response.raise_for_status()
-            matches = response.json()["matches"]
-    except (httpx.HTTPError, KeyError, ValueError):
+            # Reading the answer is inside the try, like the request itself. It sat outside
+            # until somebody fed it an answer with rubbish in a field: `KeyError` and
+            # `ValueError` escaped this module's promise and answered the catalogue with 500.
+            return [uuid.UUID(match["product_id"]) for match in response.json()["matches"]]
+    except (httpx.HTTPError, KeyError, TypeError, ValueError):
         logger.warning("поиск по смыслу недоступен, выдача осталась точной", exc_info=True)
         return []
-    return [uuid.UUID(match["product_id"]) for match in matches]
 
 
 async def product_changed(settings: Settings, product_id: uuid.UUID) -> None:

@@ -86,7 +86,8 @@ unit-search:
 # Единственное место, где порог применяется: два прогона складываются, и число проверяется
 # по всему проекту. `fail_under` живёт в backend/pyproject.toml.
 coverage-back:
-	cd backend && uv run coverage combine .coverage.unit .coverage.integration
+	# --keep: без него combine съедает слагаемые, и повторный прогон падает на их отсутствии
+	cd backend && uv run coverage combine --keep .coverage.unit .coverage.integration
 	cd backend && uv run coverage report
 
 backend-check: lint-back unit-back integration-back coverage-back

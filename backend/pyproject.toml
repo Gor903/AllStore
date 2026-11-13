@@ -116,8 +116,6 @@ skip_covered = true
 # The ratchet. Set to what the suite actually reaches and raised as gaps close; a gate set
 # above the truth is a gate somebody turns off on their first red Friday.
 #
-# 96, not 97: `app/main.py` used to be omitted here, and dropping that omission cost exactly
-# one point. A gate with a silent omission inside it is not the gate it claims to be, so the
-# point is paid rather than hidden — the module sits at 81%, and what is missing is the
-# start-up path.
-fail_under = 96
+# `app/main.py` is not omitted here: a gate with a silent omission inside it is not the gate
+# it claims to be. The module sits at 81% and what is missing is the start-up path.
+fail_under = 97
