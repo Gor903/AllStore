@@ -227,10 +227,7 @@ jobs:
       # Покрытие изменённых строк (diff-cover) отсюда ушло: оно ничего не говорило о коде,
       # которого PR не касался, а именно там дыры и жили.
       - name: Combine and enforce
-        working-directory: backend
-        run: |
-          uv run coverage combine .coverage.unit .coverage.integration
-          uv run coverage report
+        run: make coverage-back
 
   e2e:
     runs-on: ubuntu-latest
