@@ -35,3 +35,4 @@
 | 25 | [argon2: 64 MiB, взятые из замера](0025-argon2-cost-measured.md) | рефактор auth | accepted, уточняет 2 |
 | 26 | [Вход через Google убран](0026-google-sign-in-removed.md) | рефактор auth | accepted, отменяет 20 |
 | 27 | [Письмо заведённому staff-аккаунту](0027-staff-account-letter.md) | рефактор auth | accepted, дополняет 17 |
+| 28 | [Временный пароль staff придумывает площадка](0028-staff-passwords-are-generated.md) | рефактор auth | accepted, уточняет 17 |
