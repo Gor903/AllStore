@@ -87,18 +87,22 @@ export function StoreImageField({ kind, label, hint, currentUrl }: StoreImageFie
         </div>
       )}
 
-      <label className="flex flex-col gap-1 text-sm">
-        <span className="sr-only">{currentUrl === null ? label : `Заменить: ${label}`}</span>
-        <input
-          ref={input}
-          type="file"
-          accept="image/jpeg,image/png,image/gif,image/webp"
-          onChange={(event) => void onPick(event)}
-          disabled={busy}
-          className="text-sm"
-        />
+      <div className="flex flex-col gap-1 text-sm">
+        {/* Подпись о форматах снаружи label: внутри она входила в имя самого поля, и
+            скринридер читал его как «Логотип JPEG, PNG, GIF или WEBP, до 5 МБ». */}
+        <label className="flex flex-col gap-1">
+          <span className="sr-only">{currentUrl === null ? label : `Заменить: ${label}`}</span>
+          <input
+            ref={input}
+            type="file"
+            accept="image/jpeg,image/png,image/gif,image/webp"
+            onChange={(event) => void onPick(event)}
+            disabled={busy}
+            className="text-sm"
+          />
+        </label>
         <span className="text-ink-muted">JPEG, PNG, GIF или WEBP, до 5 МБ.</span>
-      </label>
+      </div>
 
       {message === null ? null : (
         <p role="alert" className="text-sm text-danger">

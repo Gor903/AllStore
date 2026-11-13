@@ -93,18 +93,21 @@ export function ImageManager({ productId, images, max }: ImageManagerProps) {
         </ul>
       )}
 
-      <label className="flex flex-col gap-1 text-sm">
-        <span className="font-medium">Добавить фото</span>
-        <input
-          ref={input}
-          type="file"
-          accept="image/jpeg,image/png,image/gif,image/webp"
-          onChange={(event) => void onPick(event)}
-          disabled={busy || images.length >= max}
-          className="text-sm"
-        />
+      <div className="flex flex-col gap-1 text-sm">
+        {/* Подпись о форматах снаружи label: внутри она входила в имя самого поля */}
+        <label className="flex flex-col gap-1">
+          <span className="font-medium">Добавить фото</span>
+          <input
+            ref={input}
+            type="file"
+            accept="image/jpeg,image/png,image/gif,image/webp"
+            onChange={(event) => void onPick(event)}
+            disabled={busy || images.length >= max}
+            className="text-sm"
+          />
+        </label>
         <span className="text-ink-muted">JPEG, PNG, GIF или WEBP, до 5 МБ.</span>
-      </label>
+      </div>
 
       {message === null ? null : (
         <p role="alert" className="text-sm text-danger">

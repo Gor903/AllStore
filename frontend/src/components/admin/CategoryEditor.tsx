@@ -87,7 +87,11 @@ export function CategoryCreateForm({ parents }: CategoryCreateFormProps) {
     event.preventDefault();
     setPending(true);
     setError(null);
-    const form = new FormData(event.currentTarget);
+    // The element is held, not read back off the event: `currentTarget` is null once the
+    // dispatch is over, so reading it after the await threw — and took the refresh with it,
+    // leaving the new category off the list until somebody reloaded the page by hand.
+    const element = event.currentTarget;
+    const form = new FormData(element);
     const parent = String(form.get("parent_id") ?? "");
     const result = await apiPost<AdminCategory>("/admin/categories", {
       name: form.get("name"),
@@ -100,7 +104,7 @@ export function CategoryCreateForm({ parents }: CategoryCreateFormProps) {
       setError(result.error);
       return;
     }
-    event.currentTarget.reset();
+    element.reset();
     router.refresh();
   }
 

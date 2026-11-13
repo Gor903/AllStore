@@ -4,7 +4,7 @@
 # Бюджет опускается каждой пачкой тестов. Дописать сюда строку можно, но придётся поднять
 # бюджет — и это будет видно в диффе отдельной правкой, а не спрячется среди кода.
 #
-# budget: 131
+# budget: 123
 backend/app/api/accounts.py
 backend/app/api/admin.py
 backend/app/api/assistant.py
@@ -127,12 +127,4 @@ frontend/src/app/(public)/p/[productId]/page.tsx
 frontend/src/app/(public)/register/page.tsx
 frontend/src/app/(public)/s/[subdomain]/page.tsx
 frontend/src/app/(public)/stores/page.tsx
-frontend/src/components/admin/AccountFilters.tsx
-frontend/src/components/admin/CategoryEditor.tsx
-frontend/src/components/admin/SystemState.tsx
-frontend/src/components/assistant/AssistantChat.tsx
-frontend/src/components/auth/StepUp.tsx
-frontend/src/components/dashboard/BlockedBuyers.tsx
-frontend/src/components/dashboard/ImageManager.tsx
-frontend/src/components/dashboard/StoreImageField.tsx
 frontend/src/lib/api-types.ts
