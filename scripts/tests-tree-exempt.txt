@@ -4,7 +4,7 @@
 # Бюджет опускается каждой пачкой тестов. Дописать сюда строку можно, но придётся поднять
 # бюджет — и это будет видно в диффе отдельной правкой, а не спрячется среди кода.
 #
-# budget: 109
+# budget: 88
 backend/app/api/accounts.py
 backend/app/api/admin.py
 backend/app/api/assistant.py
@@ -92,25 +92,4 @@ backend/app/services/stores.py
 backend/app/services/system_health.py
 backend/app/services/totp.py
 backend/app/worker.py
-frontend/src/app/(admin)/admin/audit/page.tsx
-frontend/src/app/(admin)/admin/categories/page.tsx
-frontend/src/app/(admin)/admin/incidents/page.tsx
-frontend/src/app/(admin)/admin/moderators/page.tsx
-frontend/src/app/(admin)/admin/moderators/[userId]/page.tsx
-frontend/src/app/(admin)/admin/page.tsx
-frontend/src/app/(admin)/admin/promotions/page.tsx
-frontend/src/app/(admin)/admin/security/page.tsx
-frontend/src/app/(admin)/admin/system/page.tsx
-frontend/src/app/(admin)/admin/users/[userId]/page.tsx
-frontend/src/app/(admin)/moderation/accounts/page.tsx
-frontend/src/app/(admin)/moderation/businesses/page.tsx
-frontend/src/app/(admin)/moderation/catalog/page.tsx
-frontend/src/app/(admin)/moderation/incidents/page.tsx
-frontend/src/app/(admin)/moderation/page.tsx
-frontend/src/app/(admin)/moderation/reports/page.tsx
-frontend/src/app/(dashboard)/dashboard/page.tsx
-frontend/src/app/(dashboard)/dashboard/products/[productId]/page.tsx
-frontend/src/app/(dashboard)/dashboard/store/page.tsx
-frontend/src/app/(dashboard)/onboarding/page.tsx
-frontend/src/app/layout.tsx
 frontend/src/lib/api-types.ts
