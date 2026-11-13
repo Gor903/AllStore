@@ -4,7 +4,7 @@
 # Бюджет опускается каждой пачкой тестов. Дописать сюда строку можно, но придётся поднять
 # бюджет — и это будет видно в диффе отдельной правкой, а не спрячется среди кода.
 #
-# budget: 168
+# budget: 148
 backend/app/api/accounts.py
 backend/app/api/admin.py
 backend/app/api/assistant.py
@@ -21,15 +21,11 @@ backend/app/api/storefront.py
 backend/app/api/stores.py
 backend/app/api/totp.py
 backend/app/api/users.py
-backend/app/core/half_sign_in.py
-backend/app/core/logging.py
-backend/app/core/sealed.py
 backend/app/db/base.py
 backend/app/db/session.py
 backend/app/deps/auth.py
 backend/app/deps/business.py
 backend/app/deps/settings.py
-backend/app/deps/tenant.py
 backend/app/main.py
 backend/app/models/account_block.py
 backend/app/models/audit.py
@@ -66,14 +62,6 @@ backend/app/repositories/sessions.py
 backend/app/repositories/stores.py
 backend/app/repositories/totp.py
 backend/app/repositories/users.py
-backend/app/schemas/account.py
-backend/app/schemas/admin.py
-backend/app/schemas/assistant.py
-backend/app/schemas/catalog.py
-backend/app/schemas/customer_block.py
-backend/app/schemas/moderation.py
-backend/app/schemas/report.py
-backend/app/schemas/session.py
 backend/app/services/account_blocks.py
 backend/app/services/admin_bootstrap.py
 backend/app/services/admin_categories.py
@@ -143,27 +131,19 @@ frontend/src/components/admin/AccountFilters.tsx
 frontend/src/components/admin/AdminNav.tsx
 frontend/src/components/admin/CategoryEditor.tsx
 frontend/src/components/admin/EmailChangeForm.tsx
-frontend/src/components/admin/HandedOverPassword.tsx
 frontend/src/components/admin/ResetModeratorPassword.tsx
-frontend/src/components/admin/RoleSelect.tsx
 frontend/src/components/admin/SystemState.tsx
 frontend/src/components/admin/TransferAdmin.tsx
 frontend/src/components/assistant/AssistantChat.tsx
 frontend/src/components/auth/ConfirmEmail.tsx
-frontend/src/components/auth/Field.tsx
 frontend/src/components/auth/ForgotPasswordForm.tsx
-frontend/src/components/auth/LogoutButton.tsx
 frontend/src/components/auth/ResetPasswordForm.tsx
 frontend/src/components/auth/StepUp.tsx
 frontend/src/components/auth/useStepUp.tsx
-frontend/src/components/auth/VerifyEmailNotice.tsx
 frontend/src/components/catalog/CatalogFilters.tsx
-frontend/src/components/catalog/StoreCard.tsx
 frontend/src/components/dashboard/BlockedBuyers.tsx
 frontend/src/components/dashboard/ImageManager.tsx
-frontend/src/components/dashboard/ProductActions.tsx
 frontend/src/components/dashboard/ResubmitBusiness.tsx
-frontend/src/components/dashboard/StatusPill.tsx
 frontend/src/components/dashboard/StoreForm.tsx
 frontend/src/components/dashboard/StoreImageField.tsx
 frontend/src/components/moderation/AccountRows.tsx
