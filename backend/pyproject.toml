@@ -38,6 +38,7 @@ dev = [
     "moto[s3]>=5.2.3",
     "types-psutil>=7.2.2.20260906",
     "celery-types>=0.26.0",
+    "pytest-randomly>=5.1.0",
 ]
 
 [tool.uv]
@@ -92,6 +93,10 @@ disallow_untyped_defs = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+# Порядок перемешивается (pytest-randomly). Порядок, на который тесты опираются, — это
+# зависимость, о которой никто не знает, пока она не сломается в чужом PR; сид печатается в
+# шапке, падение воспроизводится через `--randomly-seed=<сид>`, а заглушается плагин через
+# `-p no:randomly` — например, для прогона мутаций.
 markers = [
     "integration: requires a live PostgreSQL from the environment",
 ]

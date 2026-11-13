@@ -14,6 +14,10 @@ export default defineConfig({
     globals: false,
     setupFiles: ["./vitest.setup.ts"],
     include: ["tests/**/*.test.{ts,tsx}", "src/**/*.test.{ts,tsx}"],
+    // Порядок перемешивается, потому что порядок, на который тесты опираются, — это
+    // зависимость, о которой никто не знает, пока она не сломается в чужом PR. Сид печатается
+    // и воспроизводится через --sequence.seed=<n>.
+    sequence: { shuffle: true },
     coverage: {
       provider: "v8",
       // только исходники: покрытие самих тестов — это число ни о чём
