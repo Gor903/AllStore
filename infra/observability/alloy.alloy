@@ -1,0 +1,36 @@
+// Логи контейнеров — в Loki. Берутся у docker напрямую, через его же сокет: ставить
+// плагин-драйвер значит трогать docker на машине, а читать файлы в /var/lib/docker —
+// зависеть от того, каким драйвером он их пишет.
+
+discovery.docker "containers" {
+	host = "unix:///var/run/docker.sock"
+}
+
+// Правилам нужно имя сервиса, а не идентификатор контейнера: контейнер пересоздаётся при
+// каждом `up --build`, сервис — нет.
+discovery.relabel "containers" {
+	targets = discovery.docker.containers.targets
+
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+		target_label  = "service"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+		regex         = "allstore"
+		action        = "keep"
+	}
+}
+
+loki.source.docker "containers" {
+	host       = "unix:///var/run/docker.sock"
+	targets    = discovery.relabel.containers.output
+	forward_to = [loki.write.local.receiver]
+}
+
+loki.write "local" {
+	endpoint {
+		url = "http://loki:3100/loki/api/v1/push"
+	}
+}

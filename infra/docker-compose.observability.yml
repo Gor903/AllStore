@@ -1,0 +1,65 @@
+# Место, куда приходит алерт.
+#
+# Пункты про алерты стояли невыполненными в трёх фазах плана не потому, что их некому было
+# написать: строки лога площадка пишет с тех пор, как появился код. Не было адресата — и
+# поэтому каждый всплеск неудачных входов, каждый повтор токена и каждая пятисотка
+# оставались замеченными ровно в той мере, в какой кто-то в этот момент смотрел в терминал.
+#
+# Три сервиса и ни одного лишнего: Alloy относит логи контейнеров в Loki, Loki их хранит и
+# сам же считает правила, Alertmanager решает, кому и как часто. Grafana здесь нет намеренно:
+# она нужна глазам, а у алерта глаз нет — и ещё один веб-интерфейс, в который никто не
+# смотрит, ничего не меняет.
+#
+#   docker compose -f compose.yaml -f infra/docker-compose.observability.yml --profile observability up -d
+#
+# Профиль, а не обычный сервис: стенд поднимают по двадцать раз в день, и ждать ещё три
+# контейнера ради того, что нужно раз в неделю, никто не станет.
+services:
+  loki:
+    image: grafana/loki:3.3.2
+    profiles: [observability]
+    command: ["-config.file=/etc/loki/loki.yml"]
+    volumes:
+      - ./infra/observability/loki.yml:/etc/loki/loki.yml:ro
+      # `fake` — имя единственного тенанта, когда авторизация выключена; так ruler ищет свои
+      # правила, и спорить с ним дороже, чем назвать каталог как он хочет
+      - ./infra/observability/rules:/etc/loki/rules/fake:ro
+      - loki-data:/loki
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3100/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  alloy:
+    image: grafana/alloy:v1.5.1
+    profiles: [observability]
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - /etc/alloy/config.alloy
+    volumes:
+      - ./infra/observability/alloy.alloy:/etc/alloy/config.alloy:ro
+      # только чтение: отсюда берутся логи, и ничего больше отсюда не нужно
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      loki:
+        condition: service_healthy
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    profiles: [observability]
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    ports:
+      # наружу — чтобы можно было посмотреть, что сработало, не заходя в контейнер
+      - "${ALERTMANAGER_PORT:-9093}:9093"
+    volumes:
+      - ./infra/observability/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager-data:/alertmanager
+
+volumes:
+  loki-data:
+  alertmanager-data:

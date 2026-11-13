@@ -18,6 +18,7 @@ from redis.asyncio import Redis
 from app.core.client_ip import allowance_key, client_ip
 from app.core.config import Settings
 from app.core.errors import TooManyRequestsError
+from app.core.logging import get_logger
 from app.core.rate_limit import (
     Allowance,
     Delay,
@@ -29,6 +30,8 @@ from app.core.rate_limit import (
     WithALocalFallback,
 )
 from app.deps.auth import CurrentUser, SettingsDep, SignedInUser
+
+logger = get_logger(__name__)
 
 MINUTE = 60.0
 HOUR = 60.0 * MINUTE
@@ -177,6 +180,9 @@ def _caller(request: Request, settings: Settings) -> str:
 async def _enforce(window: Allowance, key: str) -> None:
     decision = await window.check(key)
     if not decision.allowed:
+        # One line per refusal, not per attempt: a refusal only happens once the allowance is
+        # already gone, so nobody can flood the log but the caller an alert would be about.
+        logger.warning("allowance spent by %s", key)
         raise TooManyRequestsError(TOO_MANY, retry_after=decision.retry_after_seconds)
 
 

@@ -1,0 +1,90 @@
+# Правила на те строки, которые площадка уже пишет. Ни одно из них не придумывает новый
+# источник: всё это есть в логе с тех пор, как появился сам код, и до сих пор не читалось.
+#
+# Пороги намеренно грубые. Алерт, который срабатывает на одиночном событии, перестают читать
+# через неделю; здесь каждое правило спрашивает «это происходит со всеми сразу?».
+groups:
+  - name: allstore-auth
+    interval: 1m
+    rules:
+      - alert: ВсплескНеудачныхВходов
+        # Подбор по списку адресов выглядит именно так. Порог заведомо выше того, что может
+        # устроить один адрес: его лимитер останавливает на тридцати за пять минут, так что
+        # сработает это на попытке, размазанной по многим адресам, — на той, против которой
+        # лимитер и бессилен.
+        expr: |
+          sum(count_over_time({service="backend"} |= "sign-in refused for" [5m])) > 50
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Больше 50 неудачных входов за пять минут"
+          description: "Похоже на перебор. Лимитер отбивает, но знать об этом стоит."
+
+      - alert: ПовторТокенаСессии
+        # не всплеск, а единичное событие: один повтор это одна украденная сессия
+        expr: |
+          sum(count_over_time({service="backend"} |= "session token replayed" [10m])) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "Токен сессии предъявлен после замены"
+          description: >-
+            Семья отозвана, владельцу написали. Повторяется у многих сразу — это не одна
+            украденная сессия, а что-то общее.
+
+      - alert: ВсплескОтказовПоКвоте
+        expr: |
+          sum(count_over_time({service="backend"} |= "allowance spent by" [5m])) > 100
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Лимитер отбивает больше 100 запросов за пять минут"
+          description: "Либо по площадке идут, либо что-то своё зациклилось."
+
+      - alert: ПарольАдминистратораЗаменён
+        # break-glass: единственный путь, которым администратор появляется без актора
+        expr: |
+          sum(count_over_time({service="backend"} |= "пароль администратора заменён" [10m])) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "Запущено аварийное восстановление доступа администратора"
+          description: "Если этого никто не делал — доступ к серверу есть у кого-то ещё."
+
+  - name: allstore-health
+    interval: 1m
+    rules:
+      - alert: НеобработанныеОшибки
+        expr: |
+          sum(count_over_time({service=~"backend|worker"} |= "unhandled error on" [5m])) > 5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Больше пяти необработанных ошибок за пять минут"
+          description: "Пятисотки у живых людей. Трассировка — в логе рядом."
+
+      - alert: ОбщийСчётчикНедоступен
+        # лимитер молча переходит на счёт в памяти, и квота тихо умножается на число воркеров
+        expr: |
+          sum(count_over_time({service=~"backend|worker"} |= "shared rate-limit tally is unreachable" [5m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis-счётчик лимитера недоступен"
+          description: "Счёт идёт в памяти процесса, то есть допустимое число попыток выросло."
+
+      - alert: ПисьмаНеУходят
+        expr: |
+          sum(count_over_time({service="worker"} |= "not retrying" [15m])) > 3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Больше трёх писем за пятнадцать минут брошено без повтора"
+          description: >-
+            Адресат отказал или снимок не расшифровался. Восстановление пароля ходит этим же
+            путём.

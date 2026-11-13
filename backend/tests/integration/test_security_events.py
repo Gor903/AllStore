@@ -10,6 +10,7 @@ other line in the journal is somebody doing something and names them; a replayed
 presented by a party nobody can name, and a bootstrap answers to whoever holds the server.
 """
 
+import logging
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -82,6 +83,34 @@ async def test_a_replayed_token_is_recorded_against_nobody(
     # the account it happened to, which is what an administrator searches by
     assert replayed.entity_id is not None
     assert replayed.details["device"]
+
+
+async def test_a_replayed_token_leaves_a_line_an_alert_can_see(
+    committing_api_client: AsyncClient,
+    fresh_session: AsyncSession,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The journal entry and the letter are addressed to one person; this line is for whoever
+    watches the platform as a whole. An alert rule in infra/observability/rules matches it by
+    substring, so rewording it quietly would switch that alert off without touching any."""
+    settings = get_settings()
+    client = committing_api_client
+    await register_buyer(client)
+    stolen = client.cookies[settings.session_cookie]
+    await client.post("/api/v1/auth/renew", headers=csrf_headers(client))
+    await fresh_session.execute(
+        text(
+            "UPDATE sessions SET revoked_at = now() - interval '1 hour' "
+            "WHERE revoked_at IS NOT NULL"
+        )
+    )
+    await fresh_session.commit()
+    client.cookies.set(settings.session_cookie, stolen)
+
+    with caplog.at_level(logging.WARNING):
+        await client.get("/api/v1/users/me")
+
+    assert "session token replayed" in caplog.text
 
 
 async def test_the_owner_hears_about_a_replayed_token(

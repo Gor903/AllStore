@@ -1,0 +1,54 @@
+# Хранилище логов и правила к ним. Один процесс: на объёме одной площадки разносить
+# приёмник, хранилище и ruler по разным контейнерам — усложнение без выигрыша.
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+  log_level: warn
+
+common:
+  instance_addr: 127.0.0.1
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+schema_config:
+  configs:
+    - from: 2024-01-01
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+limits_config:
+  # алерты смотрят назад на час, так что хранить вечно незачем; место кончается тише, чем
+  # о нём узнают
+  retention_period: 168h
+  allow_structured_metadata: false
+
+compactor:
+  working_directory: /loki/compactor
+  retention_enabled: true
+  delete_request_store: filesystem
+
+# Правила живут здесь же и отправляют в Alertmanager. Grafana для алертов не нужна — она
+# нужна глазам, а у алерта глаз нет.
+ruler:
+  storage:
+    type: local
+    local:
+      directory: /etc/loki/rules
+  rule_path: /loki/rules-tmp
+  alertmanager_url: http://alertmanager:9093
+  enable_api: true
+  ring:
+    kvstore:
+      store: inmemory
