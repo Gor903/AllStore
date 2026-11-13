@@ -1,0 +1,99 @@
+# The images the platform would actually ship, built from the `prod` stages.
+#
+# Those stages were written long ago and never built: compose asks for `target: dev`
+# everywhere. So the production image — non-root, no reloader, Next in standalone mode — had
+# the same status as the `__Host-` cookie before the https stand. This file builds it.
+#
+# Always together with the https override: outside local the cookies carry `Secure`, and a
+# browser will not send a Secure cookie over http, so a prod profile on plain http is a
+# profile where nobody can stay signed in.
+#
+#   ./infra/tls/generate-cert.sh
+#   docker compose -f compose.yaml -f infra/docker-compose.prod.yml -f infra/docker-compose.https.yml up --build -d --wait
+#
+# No source is mounted anywhere here on purpose: an image that reads the working tree is not
+# the image that would be deployed. `!override` and not `[]` — compose merges volume lists by
+# target, so an empty list adds nothing and removes nothing, and the bind mounts of the dev
+# stack would survive into the production image unnoticed.
+#
+# The images are named apart from the dev ones. Under one name a plain `docker compose up`
+# finds the production image already built, starts it with the dev command, and the frontend
+# dies on `npm run dev` against an image that has no node_modules — which reads as a broken
+# stand rather than as the wrong image.
+services:
+  # Migrations as their own run, not chained onto the server's command. One process applies
+  # them, it either succeeds or the deploy stops, and nothing serves traffic in between.
+  migrate:
+    image: allstore-backend-prod
+    build:
+      # от корня репозитория: путь в override считается от каталога проекта, а не от файла
+      context: ./backend
+      target: prod
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      APP_ENV: production
+      SECRET_KEY: ${SECRET_KEY:-dev-secret-change-me-not-for-production}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-allstore}:${POSTGRES_PASSWORD:-allstore}@postgres:5432/${POSTGRES_DB:-allstore}
+      S3_ENDPOINT_URL: http://minio:9000
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      S3_BUCKET: ${S3_BUCKET:-allstore-dev}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  backend:
+    image: allstore-backend-prod
+    build:
+      target: prod
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    volumes: !override []
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    image: allstore-backend-prod
+    build:
+      target: prod
+    command: ["celery", "-A", "app.worker", "worker", "--loglevel=INFO", "--concurrency=2"]
+    volumes: !override []
+
+  search:
+    image: allstore-search-prod
+    build:
+      target: prod
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    # the model stays in its volume; the source does not come along
+    volumes: !override
+      - fastembed-cache:/var/cache/fastembed
+    # it counts rows in `product_embeddings` as soon as it comes up, so it has to come up
+    # after the table exists; on the dev stack it merely retries on its own loop and nobody
+    # notices the race
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    image: allstore-frontend-prod
+    build:
+      target: prod
+      # see the ARG block in frontend/Dockerfile: the browser half of these is frozen here
+      args:
+        NEXT_PUBLIC_API_URL: https://${BASE_DOMAIN:-allstore.localhost}
+        NEXT_PUBLIC_BASE_DOMAIN: ${BASE_DOMAIN:-allstore.localhost}
+        NEXT_PUBLIC_SITE_URL: https://${BASE_DOMAIN:-allstore.localhost}
+        NEXT_PUBLIC_SESSION_COOKIE: __Host-allstore_session
+        NEXT_PUBLIC_CSRF_COOKIE: __Host-allstore_csrf
+    environment:
+      NODE_ENV: production
+      INTERNAL_API_URL: http://backend:8000
+    volumes: !override []

@@ -9,6 +9,9 @@ repos:
         args: [--markdown-linebreak-ext=md]
       - id: end-of-file-fixer
       - id: check-yaml
+        # `!override` — тег docker compose, а не YAML: парсер на нём спотыкается, хотя файл
+        # верный. Исключён один файл, а не ослаблена проверка для всех остальных.
+        exclude: ^infra/docker-compose\.prod\.yml$
       - id: check-merge-conflict
       - id: check-added-large-files
       - id: detect-private-key

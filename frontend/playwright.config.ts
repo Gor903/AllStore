@@ -26,6 +26,9 @@ export default defineConfig({
   reporter: ci ? [["list"], ["html", { open: "never" }]] : [["list"]],
   use: {
     baseURL,
+    // the https stand signs its own certificate on purpose — what it exists to check is the
+    // platform's behaviour over https, not who signed it. Plain http runs are unaffected.
+    ignoreHTTPSErrors: baseURL.startsWith("https://"),
     actionTimeout: 30_000,
     navigationTimeout: 60_000,
     trace: "retain-on-failure",
