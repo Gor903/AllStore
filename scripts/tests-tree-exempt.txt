@@ -4,7 +4,7 @@
 # Бюджет опускается каждой пачкой тестов. Дописать сюда строку можно, но придётся поднять
 # бюджет — и это будет видно в диффе отдельной правкой, а не спрячется среди кода.
 #
-# budget: 88
+# budget: 71
 backend/app/api/accounts.py
 backend/app/api/admin.py
 backend/app/api/assistant.py
@@ -27,23 +27,6 @@ backend/app/deps/auth.py
 backend/app/deps/business.py
 backend/app/deps/settings.py
 backend/app/main.py
-backend/app/models/account_block.py
-backend/app/models/audit.py
-backend/app/models/auth.py
-backend/app/models/business.py
-backend/app/models/category.py
-backend/app/models/contact.py
-backend/app/models/customer_block.py
-backend/app/models/email_verification.py
-backend/app/models/embedding.py
-backend/app/models/moderation.py
-backend/app/models/product.py
-backend/app/models/product_revision.py
-backend/app/models/report.py
-backend/app/models/session.py
-backend/app/models/store.py
-backend/app/models/totp.py
-backend/app/models/user.py
 backend/app/repositories/account_blocks.py
 backend/app/repositories/audit.py
 backend/app/repositories/auth_tokens.py
