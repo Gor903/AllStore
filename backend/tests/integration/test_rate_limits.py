@@ -6,6 +6,7 @@ And the owner of an account must never be shut out of it by somebody else's gues
 is why the per-account limit slows instead of refusing.
 """
 
+import logging
 import time
 import uuid
 
@@ -27,6 +28,22 @@ WRONG = "not-the-password-at-all"
 async def _failed_login(client: AsyncClient, email: str) -> int:
     response = await client.post(LOGIN_URL, json={"email": email, "password": WRONG})
     return response.status_code
+
+
+async def test_a_refusal_leaves_a_line_an_alert_can_see(
+    api_client: AsyncClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    """One line per refusal, not per attempt: a refusal only happens once the allowance is
+    already gone. An alert rule in infra/observability/rules matches this line by substring,
+    so rewording it quietly would switch that alert off without touching any alert."""
+    with caplog.at_level(logging.WARNING):
+        for _ in range(LOGIN_ATTEMPTS + 1):
+            await api_client.post(
+                "/api/v1/auth/login",
+                json={"email": "nobody@example.com", "password": "wrong-password-1"},
+            )
+
+    assert "allowance spent by" in caplog.text
 
 
 async def test_a_flood_from_one_address_is_refused(api_client: AsyncClient) -> None:

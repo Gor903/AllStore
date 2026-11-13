@@ -33,9 +33,12 @@ from app.core import geo
 from app.core.config import Settings
 from app.core.errors import AccountNotActiveError, AuthenticationError
 from app.core.geo import Place
+from app.core.logging import get_logger
 from app.core.security import csrf_token_for, generate_token, hash_token
 from app.models import AuthMethod, Session, User
 from app.repositories import sessions as repo
+
+logger = get_logger(__name__)
 
 # What a revocation says about itself, for the device list and for anybody reading the table.
 RENEWED = "renewed"
@@ -222,6 +225,10 @@ async def _answer_for_a_retired_token(
     if row.replaced_by_id is not None and now - retired_at <= _grace(settings):
         # a tab that was a moment late; the jar it shares already holds the replacement
         return Live(session=row)
+    # The journal entry and the letter to the owner are the caller's. This line is for
+    # whoever watches the platform as a whole: one replay is one stolen session, ten in an
+    # hour is something happening to everybody at once, and letters cannot show the second.
+    logger.warning("session token replayed, family %s revoked", row.family_id)
     await repo.revoke_family(db, row.family_id, REPLAYED)
     return Replayed(user_id=row.user_id, family_id=row.family_id)
 
