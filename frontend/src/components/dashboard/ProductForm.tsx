@@ -79,33 +79,38 @@ export function ProductForm({ categories, product }: ProductFormProps) {
         error={error?.fieldErrors["name"]}
       />
 
-      <label className="flex flex-col gap-1 text-sm">
-        <span className="font-medium">Категория</span>
-        <select
-          name="category_id"
-          defaultValue={moderated?.category_id ?? ""}
-          required
-          className={field}
-        >
-          <option value="" disabled>
-            Выберите категорию
-          </option>
-          {categories.map((root) => (
-            <optgroup key={root.slug} label={root.name}>
-              {root.children.map((child) => (
-                <option key={child.slug} value={child.id}>
-                  {child.name}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
+      <div className="flex flex-col gap-1 text-sm">
+        {/* Отказ снаружи label — иначе он входит в имя поля, как было в Field */}
+        <label className="flex flex-col gap-1">
+          <span className="font-medium">Категория</span>
+          <select
+            name="category_id"
+            defaultValue={moderated?.category_id ?? ""}
+            required
+            aria-invalid={error?.fieldErrors["category_id"] ? true : undefined}
+            aria-describedby={error?.fieldErrors["category_id"] ? "category_id-error" : undefined}
+            className={field}
+          >
+            <option value="" disabled>
+              Выберите категорию
+            </option>
+            {categories.map((root) => (
+              <optgroup key={root.slug} label={root.name}>
+                {root.children.map((child) => (
+                  <option key={child.slug} value={child.id}>
+                    {child.name}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        </label>
         {error?.fieldErrors["category_id"] ? (
-          <span role="alert" className="text-danger">
+          <span id="category_id-error" role="alert" className="text-danger">
             {error.fieldErrors["category_id"]}
           </span>
         ) : null}
-      </label>
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Field
