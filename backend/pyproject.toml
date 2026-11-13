@@ -101,4 +101,18 @@ source = ["app"]
 # SQLAlchemy async runs ORM internals in a greenlet; without this coverage loses the
 # trace function on the first switch and reports executed request code as uncovered
 concurrency = ["greenlet", "thread"]
-omit = ["app/main.py"]
+# Branches, not just lines: a line that only ever ran one way through an `if` is a line
+# nobody has tested, and the number that says otherwise is the number we would trust.
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+# The ratchet. Set to what the suite actually reaches and raised as gaps close; a gate set
+# above the truth is a gate somebody turns off on their first red Friday.
+#
+# 96, not 97: `app/main.py` used to be omitted here, and dropping that omission cost exactly
+# one point. A gate with a silent omission inside it is not the gate it claims to be, so the
+# point is paid rather than hidden — the module sits at 81%, and what is missing is the
+# start-up path.
+fail_under = 96

@@ -210,10 +210,7 @@ jobs:
     timeout-minutes: 10
     needs: [unit-back, integration-back]
     steps:
-      # diff-cover сравнивает с базовой веткой, ему нужна история
       - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
       - uses: astral-sh/setup-uv@v10.1.0
         with:
           enable-cache: true
@@ -226,21 +223,14 @@ jobs:
           pattern: coverage-*
           path: backend
           merge-multiple: true
-      - name: Combine
+      # Порог — на всём проекте и с ветвями, `fail_under` живёт в backend/pyproject.toml.
+      # Покрытие изменённых строк (diff-cover) отсюда ушло: оно ничего не говорило о коде,
+      # которого PR не касался, а именно там дыры и жили.
+      - name: Combine and enforce
         working-directory: backend
         run: |
           uv run coverage combine .coverage.unit .coverage.integration
           uv run coverage report
-          uv run coverage xml
-      # Порог пока прежний — покрытие изменённых строк. Храповик на общее число включается
-      # отдельным шагом плана, чтобы эта перестройка не меняла поведение.
-      - name: Coverage on changed lines
-        working-directory: backend
-        env:
-          BASE_REF: ${{ github.base_ref || 'main' }}
-        run: |
-          git fetch --no-tags origin "${BASE_REF}:refs/remotes/origin/${BASE_REF}" || true
-          uv run diff-cover coverage.xml --compare-branch="origin/${BASE_REF}" --fail-under=80
 
   e2e:
     runs-on: ubuntu-latest

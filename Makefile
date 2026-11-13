@@ -60,15 +60,16 @@ lint-search:
 # держать правдой — прогон за восемь секунд без сервисов ловит логику раньше всего прочего.
 unit-back:
 	cd backend && COVERAGE_FILE=.coverage.unit uv run pytest -m "not integration" \
-		--cov --cov-branch --cov-report=term-missing
+		--cov --cov-report=term-missing
 
 integration-back:
 	cd backend && $(SCHEMA_ENV) uv run alembic upgrade head
 	cd backend && DATABASE_URL="$(TEST_DATABASE_URL)" COVERAGE_FILE=.coverage.integration \
-		uv run pytest -m integration --cov --cov-branch --cov-report=term-missing
+		uv run pytest -m integration --cov --cov-report=term-missing
 
+# с покрытием: пороги живут в vitest.config.mts и без этого флага не применяются
 unit-front:
-	cd frontend && npm test
+	cd frontend && npm run test:coverage
 
 # Схема принадлежит бэкенду: сервис поиска читает её, а не заводит свою, поэтому миграции
 # накатываются отсюда — миграция, ломающая поиск, ловится здесь.
