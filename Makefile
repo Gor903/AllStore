@@ -45,12 +45,14 @@ lint-back: ## стиль, типы и свежесть сгенерирован�
 	cd backend && uv run ruff check .
 	cd backend && uv run ruff format --check .
 	cd backend && uv run mypy
+	python3 scripts/check_tests_tree.py backend
 	$(MAKE) api-types-fresh
 
 lint-front:
 	cd frontend && npm run lint
 	cd frontend && npm run format:check
 	cd frontend && npm run typecheck
+	python3 scripts/check_tests_tree.py frontend
 
 lint-search:
 	cd search && uv run ruff check .
