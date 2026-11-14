@@ -1,10 +1,23 @@
-# Модули без зеркального теста. Список только сокращается: скрипт падает, если у модуля из
-# него тест уже появился, если модуля больше нет, и если строк стало больше бюджета ниже.
+# Модули без зеркального unit-теста, и почему.
 #
-# Бюджет опускается каждой пачкой тестов. Дописать сюда строку можно, но придётся поднять
-# бюджет — и это будет видно в диффе отдельной правкой, а не спрячется среди кода.
+# Список только сокращается: скрипт падает, если у модуля из него тест уже появился, если
+# модуля больше нет, и если строк стало больше бюджета ниже. Дописать строку можно, но тогда
+# придётся поднять бюджет — и это будет видно в диффе отдельной правкой, а не спрячется
+# среди кода.
 #
-# budget: 71
+# Что здесь осталось — это не «руки не дошли». Это модули, у которых поведения без базы нет:
+# unit-тест на них был бы набором моков, проверяющим, что код вызывает те функции, которые
+# он вызывает. Такой тест не ловит ошибок и мешает менять код. Их поведение проверяют 973
+# интеграционных теста на настоящей postgres, и объединённое покрытие бэкенда это видит.
+#
+# Граница проведена так: если модуль можно спросить без базы — у него есть зеркальный тест
+# (схемы, модели, конверт ошибок, лимитер, подписанное состояние, ключи устройств, ассистент,
+# фабрика приложения, движок, воркер). Если нельзя — он здесь, под своим заголовком.
+#
+# budget: 60
+
+# Маршруты: объявление зависимостей и схем. Поведение маршрута — это HTTP плюс база, то есть
+# ровно то, что делает интеграционный тест.
 backend/app/api/accounts.py
 backend/app/api/admin.py
 backend/app/api/assistant.py
@@ -21,12 +34,9 @@ backend/app/api/storefront.py
 backend/app/api/stores.py
 backend/app/api/totp.py
 backend/app/api/users.py
-backend/app/db/base.py
-backend/app/db/session.py
-backend/app/deps/auth.py
-backend/app/deps/business.py
-backend/app/deps/settings.py
-backend/app/main.py
+
+# Репозитории: построители запросов. Проверять их без базы значит сравнивать строки SQL —
+# тест, который ломается от переименования алиаса и молчит, когда запрос вернул не то.
 backend/app/repositories/account_blocks.py
 backend/app/repositories/audit.py
 backend/app/repositories/auth_tokens.py
@@ -45,22 +55,20 @@ backend/app/repositories/sessions.py
 backend/app/repositories/stores.py
 backend/app/repositories/totp.py
 backend/app/repositories/users.py
+
+# Сервисы: оркестровка вокруг сессии базы. Там, где в сервисе была логика без базы, она уже
+# вынесена и покрыта — core/totp.py, core/security.py, core/rate_limit.py, assistant/*.
 backend/app/services/account_blocks.py
 backend/app/services/admin_bootstrap.py
 backend/app/services/admin_categories.py
 backend/app/services/admin_users.py
-backend/app/services/assistant/client.py
-backend/app/services/assistant/conversation.py
-backend/app/services/assistant/prompt.py
-backend/app/services/assistant/tools.py
 backend/app/services/audit.py
 backend/app/services/auth.py
-backend/app/services/businesses.py
 backend/app/services/business_moderation.py
+backend/app/services/businesses.py
 backend/app/services/catalog.py
 backend/app/services/contacts.py
 backend/app/services/customer_blocks.py
-backend/app/services/device_keys.py
 backend/app/services/email_verification.py
 backend/app/services/incidents.py
 backend/app/services/moderation_queue.py
@@ -74,5 +82,10 @@ backend/app/services/store_branding.py
 backend/app/services/stores.py
 backend/app/services/system_health.py
 backend/app/services/totp.py
-backend/app/worker.py
+
+# Зависимость сессии: читает куку, достаёт строку сессии, продлевает её. Всё интересное в ней
+# происходит против базы; отдельно покрыты куки, CSRF, лимитер и ключи устройств.
+backend/app/deps/auth.py
+
+# Сгенерирован из схемы бэкенда (ADR 4) и исключён из покрытия: тестировать нечего.
 frontend/src/lib/api-types.ts
