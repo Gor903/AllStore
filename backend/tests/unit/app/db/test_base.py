@@ -17,15 +17,25 @@ from sqlalchemy.orm import DeclarativeBase
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 
-class _Row(UUIDPrimaryKeyMixin, TimestampMixin, Base):
-    __tablename__ = "_rows_for_the_mixin_test"
+class _Base(DeclarativeBase):
+    """A registry of its own. On the platform's `Base` this throwaway table would join the
+    metadata every integration test truncates from — and TRUNCATE on a table no migration
+    created is how the whole integration suite went red once."""
+
+
+class _Row(UUIDPrimaryKeyMixin, TimestampMixin, _Base):
+    __tablename__ = "rows_for_the_mixin_test"
 
 
 def test_the_base_is_what_alembic_reads_the_schema_from() -> None:
     """Every model inherits from it so autogenerate sees the metadata; a model that did not
-    would be a table nobody migrates."""
+    would be a table nobody migrates — and `app/models/__init__.py` imports every one of them
+    for exactly this reason."""
+    import app.models  # noqa: F401 — the import is the thing being tested
+
     assert issubclass(Base, DeclarativeBase)
-    assert Base.metadata.tables
+    assert "users" in Base.metadata.tables
+    assert "products" in Base.metadata.tables
 
 
 def test_an_identifier_is_not_a_number_anybody_can_count_on() -> None:
