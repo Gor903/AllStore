@@ -259,6 +259,11 @@ jobs:
       - name: Scenario
         run: npx playwright test
         working-directory: frontend
+      # Зелёный прогон, в котором что-то прошло со второй попытки, — это прогон, после
+      # которого никто не чинит сценарий. Здесь он становится красным.
+      - name: Flaky
+        if: success()
+        run: python3 scripts/flaky-e2e.py
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
