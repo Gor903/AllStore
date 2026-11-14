@@ -23,7 +23,15 @@ export default defineConfig({
   // the stack runs Next.js in dev mode, so a route pays for its first compile
   timeout: 180_000,
   expect: { timeout: 20_000 },
-  reporter: ci ? [["list"], ["html", { open: "never" }]] : [["list"]],
+  // json as well as html: the flaky check reads it, and a run where something passed only on
+  // the second attempt has to come out red — see scripts/flaky-e2e.py
+  reporter: ci
+    ? [
+        ["list"],
+        ["html", { open: "never" }],
+        ["json", { outputFile: "playwright-report/results.json" }],
+      ]
+    : [["list"]],
   use: {
     baseURL,
     // the https stand signs its own certificate on purpose — what it exists to check is the
@@ -31,7 +39,9 @@ export default defineConfig({
     ignoreHTTPSErrors: baseURL.startsWith("https://"),
     actionTimeout: 30_000,
     navigationTimeout: 60_000,
-    trace: "retain-on-failure",
+    // in CI the retry is the attempt with evidence worth keeping; locally there is no retry,
+    // so the failure itself is
+    trace: ci ? "on-first-retry" : "retain-on-failure",
     screenshot: "only-on-failure",
   },
   projects: [{ name: "chromium", use: { ...(devices["Desktop Chrome"] ?? {}) } }],
