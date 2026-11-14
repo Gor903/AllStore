@@ -110,6 +110,14 @@ make backend-check  # ruff + ruff format + mypy strict + pytest
 make frontend-check # eslint + prettier + tsc --noEmit + vitest
 ```
 
+Мутации — отдельно и не в CI: ими смотрят на пакет перед тем, как его менять, и после того,
+как написали на него тесты. Что это уже нашло и как читать выживших — `docs/mutation-testing.md`.
+
+```bash
+make mutate-module M=app.core.totp   # один модуль или пакет
+make mutate-report                   # кто выжил
+```
+
 Установить git-хук (запускает те же линтеры на commit):
 
 ```bash

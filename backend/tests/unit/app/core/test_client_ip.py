@@ -78,9 +78,19 @@ def test_a_chain_that_is_all_ours_names_its_far_end() -> None:
     nearest the caller. Naming the proxy that just handed us the request instead would name
     the one address we know for certain is not theirs — and put every visitor in one bucket.
     """
-    request = _request(PROXY, forwarded="10.0.0.8, 10.0.0.9")
+    request = _request(PROXY, forwarded="10.0.0.7, 10.0.0.8, 10.0.0.9")
 
     assert client_ip(request, _settings(PROXIES)) == "10.0.0.9"
+
+
+def test_a_peer_that_is_not_an_address_vouches_for_nothing() -> None:
+    """A transport that gives no address at all — an ASGI test client, a unix socket — is not
+    a proxy, and a header arriving over one has to be ignored like any stranger's. Found by a
+    surviving mutant: `_vouched_for` returning true for an unparseable address made every such
+    caller trusted, and with it every value anybody typed into the header."""
+    request = _request("testclient", forwarded="203.0.113.7")
+
+    assert client_ip(request, _settings(PROXIES)) == "testclient"
 
 
 def test_no_header_at_all_falls_back_to_the_peer() -> None:

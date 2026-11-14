@@ -61,6 +61,18 @@ def test_the_screen_can_say_which_one_is_this_one() -> None:
     assert SessionRead.of(row, current=False).current is False
 
 
+def test_a_device_is_named_by_what_its_browser_said_it_was() -> None:
+    """Found by a surviving mutant: every assertion here was about the empty case, so a
+    `SessionRead` that dropped the user agent entirely passed — and the screen people are told
+    to check when something feels wrong would have shown them a list of blank lines."""
+    row = _row(user_agent="Firefox на Linux", ip="203.0.113.7")
+
+    read = SessionRead.of(row, current=False)
+
+    assert read.user_agent == "Firefox на Linux"
+    assert read.ip == "203.0.113.7"
+
+
 def test_a_device_nobody_can_name_is_still_a_device() -> None:
     """A browser that sends no user agent and a request with no address recorded are both
     ordinary; refusing to list them would hide a session from its owner."""
