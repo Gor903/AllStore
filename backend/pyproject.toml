@@ -39,6 +39,7 @@ dev = [
     "types-psutil>=7.2.2.20260906",
     "celery-types>=0.26.0",
     "pytest-randomly>=5.1.0",
+    "mutmut>=3.8.1",
 ]
 
 [tool.uv]
@@ -119,3 +120,35 @@ skip_covered = true
 # `app/main.py` is not omitted here: a gate with a silent omission inside it is not the gate
 # it claims to be. The module sits at 81% and what is missing is the start-up path.
 fail_under = 97
+
+# Мутационное тестирование: мера не покрытия, а того, ловят ли тесты что-нибудь. mutmut
+# портит код по одной правке за раз и смотрит, покраснел ли набор. Выживший мутант — строка,
+# которую тесты исполняют и не проверяют.
+#
+# В CI не входит и порога не имеет: это инструмент, которым смотрят на пакет перед тем, как
+# его трогать, а не галочка. Как запускать — docs/mutation-testing.md.
+[tool.mutmut]
+source_paths = ["app/"]
+# Из них мутируется то, что покрывают unit-тесты, — зеркально списку scripts/tests-tree-exempt.txt.
+# Мутант в маршруте или репозитории выжил бы не потому, что тест плох, а потому, что его
+# проверяют интеграционные тесты, которых здесь не запускают: шум, в котором тонет сигнал.
+only_mutate = [
+    "app/core/*",
+    "app/db/*",
+    "app/deps/business.py",
+    "app/deps/rate_limit.py",
+    "app/deps/settings.py",
+    "app/deps/tenant.py",
+    "app/main.py",
+    "app/models/*",
+    "app/schemas/*",
+    "app/services/assistant/*",
+    "app/services/device_keys.py",
+    "app/services/search_client.py",
+    "app/worker.py",
+]
+# Только unit: интеграционным нужна база, а прогон на каждый мутант её бы не пережил.
+pytest_add_cli_args_test_selection = ["tests/unit/"]
+# Порядок фиксирован и покрытие выключено: мутанту нужен быстрый ответ «красный или зелёный»,
+# а не отчёт и не свой сид на каждый прогон.
+pytest_add_cli_args = ["-p", "no:randomly", "-q", "--no-cov", "-x"]

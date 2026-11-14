@@ -21,6 +21,8 @@ __pycache__/
 .coverage
 # два прогона пишут свои файлы, которые потом объединяются, — см. цель coverage-back
 .coverage.*
+# рабочий каталог mutmut: копия исходников с одной правкой за раз
+backend/mutants/
 coverage.xml
 htmlcov/
 

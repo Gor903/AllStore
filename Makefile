@@ -3,7 +3,7 @@
 # работает и в CI, и локально, и в pre-commit. Workflow при этом не меняется.
 .PHONY: up down logs ps rebuild migrate revision api-types api-types-fresh \
 	lint-back lint-front lint-search unit-back integration-back unit-front unit-search \
-	coverage-back \
+	coverage-back mutate mutate-module mutate-report \
 	backend-check frontend-check check e2e backup restore-drill
 
 E2E_MODERATOR_EMAIL ?= e2e-moderator@e2e.allstore.am
@@ -89,6 +89,17 @@ coverage-back:
 	# --keep: без него combine съедает слагаемые, и повторный прогон падает на их отсутствии
 	cd backend && uv run coverage combine --keep .coverage.unit .coverage.integration
 	cd backend && uv run coverage report
+
+# Мутации: мера не покрытия, а того, ловят ли тесты что-нибудь. В CI не входит и порога не
+# имеет — этим смотрят на пакет перед тем, как его трогать. См. docs/mutation-testing.md.
+mutate:
+	cd backend && uv run mutmut run
+
+mutate-module: ## make mutate-module M=app.core.totp
+	cd backend && uv run mutmut run "$(M).*"
+
+mutate-report:
+	cd backend && uv run mutmut results | grep -v "not checked" || echo "выживших нет"
 
 backend-check: lint-back unit-back integration-back coverage-back
 
